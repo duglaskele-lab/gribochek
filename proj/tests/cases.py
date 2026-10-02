@@ -482,7 +482,9 @@ def raith(c):
         for l in (1,2,3,4):
             c.start(l,1); c.sim(1.5,"g.P.inv=1e9;")
             assert c.js("return g.P.h")==76, l
-        c.start(1,2)
+        c.js("g.setHero('grib')");c.start(1,2)
+        gd=c.js("const R=g.P;R.inv=1e9;g.sim(.3,()=>{R.inv=1e9});const x0=R.x;g.dash();g.sim(.3,()=>{R.inv=1e9;R.vy=0});return R.x-x0")
+        c.js("g.setHero('raith')");c.start(1,2)
         r=c.js("""const P=g.P,out={};P.inv=1e9;g.enemies.length=0;
           let e=g.spawn('orc',P.x+70,P.y+P.h);e.hp=20;e.face=1;P.face=1;g.punch();g.sim(.4,()=>{P.inv=1e9});out.punch=20-e.hp;g.enemies.length=0;
           // the strong punch: a wave that reaches a foe ~200 px away
@@ -493,12 +495,18 @@ def raith(c):
           // a long fall: no heavy-landing lock
           const Q=g.P;Q.inv=1e9;g.sim(1.5,()=>{Q.inv=1e9});Q.y-=400;Q.vy=0;Q.onGround=false;let lock=0;g.sim(1.5,()=>{if(Q.heavyT>0)lock++});out.heavy=lock;
           out.shop=g.shopIds();
+          // the dash is 15% longer than the mushroom girl's; her punch sends a short, tall shockwave
+          const dashLen=()=>{const R=g.P;R.inv=1e9;R.vx=0;R.vy=0;g.sim(.3,()=>{R.inv=1e9});const x0=R.x;g.dash();g.sim(.3,()=>{R.inv=1e9;R.vy=0});return R.x-x0};
+          out.dash=dashLen();
+          {const R=g.P;R.shootCD=0;g.punch();g.sim(.1,()=>{R.inv=1e9});const w=g.pwaves[0];out.wave=!!w&&w.tall>1.2&&w.life0<.11}
           // dying: the fog, then back at the checkpoint
           Q.inv=0;Q.hp=0;Q.dead=true;Q.deadT=0;Q.fell=false;g.sim(1.5);out.stillDead=g.P===Q;g.sim(.5);out.back=g.P!==Q;
           return out""")
-        assert r['punch']==1.5 and r['strong'][0]==5 and r['strong'][1]==40 and r['stomp']==2, r
-        assert r['heavy']==0 and r['shop']==['heal','maxhp'] and r['stillDead'] and r['back'], r
-        return 'all levels run; punch 1.5, strong punch 5 for 10 mana, stomp 2; hearts-only shop; fog death'
+        r['gribDash']=gd
+        assert r['punch']==1.5 and r['strong'][0]==5 and r['strong'][1]==35 and r['stomp']==2, r
+        assert r['heavy']==0 and r['shop']==['heal','maxhp','manaUp'] and r['stillDead'] and r['back'], r
+        assert abs(r['dash']/r['gribDash']-1.15)<.06 and r['wave'], r
+        return 'all levels run; punch 1.5 + short tall wave, dash x1.15, strong punch 5 for 15 mana, stomp 2; shop: hearts + mana; fog death'
     finally:
         c.js("g.setHero('grib')")
 

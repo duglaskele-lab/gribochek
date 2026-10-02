@@ -23,7 +23,7 @@ function raithAnim(p){
   if(!p.onGround){
     if(p.inWater) return['run',Math.floor(time*6)%6];
     if(p.jumpT<.07) return['jump',0];
-    return['jump',p.vy<-260?1:p.vy<260?2:3];
+    return['jump',p.vy<0?1:3];   // frame 2 (arms up at the top) is left out for now
   }
   if(p.landT>0) return['jump',4];
   if(Math.abs(p.vx)>25) return Math.abs(p.vx)<200?['walk',Math.floor(p.runPh*1.3)%8]:['run',Math.floor(p.runPh)%6];

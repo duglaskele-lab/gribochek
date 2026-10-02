@@ -8,7 +8,8 @@ const airDashMax=()=>hasCloak?2:1;
 // K: a punch with a shockwave (1 damage); every punch that lands on a foe gives mana back
 function punch(){
   const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();p.strong=false;sfx('punch');
-  if(HERO().wave) pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});
+  const wv=HERO().wave;
+  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE*wv.len,hit:p.punchHit,dmg:HERO().punch,tall:wv.tall});
 }
 // Raithwyn's L: a strong punch for mana that sends a big shockwave over a medium distance
 function strongPunch(){
@@ -94,7 +95,7 @@ function updateWaves(dt){
       continue }
     w.life-=dt; w.x+=w.vx*dt;
     {const wc=Math.floor((w.x+w.face*10)/TS),wr=Math.floor(w.y/TS);if(solid(wc,wr)){breakWall(wc,wr);w.life=0;burst(w.x,w.y,6,'#fff',140);continue}}
-    const box=w.big?{x:w.x-28,y:w.y-52,w:56,h:96}:{x:w.x-16,y:w.y-24,w:32,h:48}, WD=w.dmg||DMG_PUNCH;
+    const th=24*(w.tall||1), box=w.big?{x:w.x-28,y:w.y-52,w:56,h:96}:{x:w.x-16,y:w.y-th,w:32,h:th*2}, WD=w.dmg||DMG_PUNCH;
     for(const e of enemies){ if(e.dead||w.hit.has(e)) continue;
       if(enemyHurtBoxes(e).some(b=>overlap(box,b))){w.hit.add(e);
         if(attackEnemy(e,WD,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
@@ -163,7 +164,7 @@ function updatePlayer(dt){
   if(fc){acc=fc.acc;dec=fc.dec;maxv*=fc.maxv||1}
   if(p.onGround) p.airDash=airDashMax();
   if(dashEdge&&ctl&&p.dashCD<=0&&p.dashT<=0&&(p.onGround||p.airDash)){
-    p.dashDir=dir||p.face; p.face=p.dashDir; p.dashT=DASH_T; p.dashCD=.45; p.ghostT=0; p.vy=0; p.turnT=0;
+    p.dashDir=dir||p.face; p.face=p.dashDir; p.dashT=DASH_T*HERO().dash; p.dashCD=.45; p.ghostT=0; p.vy=0; p.turnT=0;
     if(!p.onGround){p.airDash--;if(hasCloak&&!p.airDash)burst(p.x+p.w/2,p.y+p.h/2,10,'#8a5ac8',200,300,[3,5])}
     dust(p.x+p.w/2,p.y+p.h-4,6,-p.dashDir); sfx('dash'); shake(.05,2);
   }
