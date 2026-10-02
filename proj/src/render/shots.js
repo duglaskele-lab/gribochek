@@ -43,7 +43,7 @@ function drawEShots(){
 }
 function drawWaves(){
   for(const w of pwaves){ if(w.delay>0) continue;
-    const k=w.life/(w.life0||WAVE_LIFE), r=(14+(1-k)*14)*(w.big?2.4:1);
+    const k=w.life/(w.life0||WAVE_LIFE), r=(14+(1-k)*14)*(w.big?2.4:w.tall||1);
     ctx.save(); ctx.translate(w.x,w.y); ctx.scale(w.face,1); ctx.lineCap='round';
     if(w.big){ctx.fillStyle=`rgba(150,90,220,${.28*k})`;ctx.beginPath();ctx.ellipse(-10,0,r*.9,r*1.25,0,0,7);ctx.fill()}
     for(let j=0;j<3;j++){

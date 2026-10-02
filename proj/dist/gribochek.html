@@ -1239,13 +1239,14 @@ function repairColumn(n){
 // ==== core/heroes.js ====
 /* ---------- heroes: who the player plays ---------- */
 // grib: the mushroom girl. raith: Raithwyn, a tall wolf girl (1.4 times the mushroom girl's height): a heavier
-// punch without a shockwave, a heavier stomp, no thrown mushrooms - L is a strong punch (10 mana) that sends out a big
-// shockwave over a medium distance - and no slowdown after a long fall. In the shop she can only buy hearts.
+// punch with a shorter but taller shockwave, a longer dash, a heavier stomp, no thrown mushrooms - L is a strong punch (10 mana) that sends out a big
+// shockwave over a medium distance - and no slowdown after a long fall. In the shop: hearts and more mana.
 // The choice is made on the level-select screen and remembered; it applies from the next start of a level.
 const HEROES={
-  grib:{w:30,h:58,punch:DMG_PUNCH,stomp:DMG_STOMP,reach:52,wave:true,heavyLand:true,umbrella:true,shop:null},
-  raith:{w:32,h:76,punch:1.5,stomp:2,reach:66,wave:false,heavyLand:false,umbrella:false,shop:['heal','maxhp'],
-    strong:{cost:10,dmg:5,life:.42,t:.42}},
+  // wave: the punch's shockwave, len/tall scale its reach and height; dash: scales the dash length
+  grib:{w:30,h:58,punch:DMG_PUNCH,stomp:DMG_STOMP,reach:52,wave:{len:1,tall:1},dash:1,heavyLand:true,umbrella:true,shop:null},
+  raith:{w:32,h:76,punch:1.5,stomp:2,reach:66,wave:{len:.7,tall:1.3},dash:1.15,heavyLand:false,umbrella:false,shop:['heal','maxhp','manaUp'],
+    strong:{cost:15,dmg:5,life:.42,t:.42}},
 };
 let hero='grib';
 try{const v=localStorage.getItem('grib-hero');if(v&&HEROES[v])hero=v}catch(e){}
@@ -1262,7 +1263,8 @@ const airDashMax=()=>hasCloak?2:1;
 // K: a punch with a shockwave (1 damage); every punch that lands on a foe gives mana back
 function punch(){
   const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();p.strong=false;sfx('punch');
-  if(HERO().wave) pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});
+  const wv=HERO().wave;
+  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE*wv.len,hit:p.punchHit,dmg:HERO().punch,tall:wv.tall});
 }
 // Raithwyn's L: a strong punch for mana that sends a big shockwave over a medium distance
 function strongPunch(){
@@ -1348,7 +1350,7 @@ function updateWaves(dt){
       continue }
     w.life-=dt; w.x+=w.vx*dt;
     {const wc=Math.floor((w.x+w.face*10)/TS),wr=Math.floor(w.y/TS);if(solid(wc,wr)){breakWall(wc,wr);w.life=0;burst(w.x,w.y,6,'#fff',140);continue}}
-    const box=w.big?{x:w.x-28,y:w.y-52,w:56,h:96}:{x:w.x-16,y:w.y-24,w:32,h:48}, WD=w.dmg||DMG_PUNCH;
+    const th=24*(w.tall||1), box=w.big?{x:w.x-28,y:w.y-52,w:56,h:96}:{x:w.x-16,y:w.y-th,w:32,h:th*2}, WD=w.dmg||DMG_PUNCH;
     for(const e of enemies){ if(e.dead||w.hit.has(e)) continue;
       if(enemyHurtBoxes(e).some(b=>overlap(box,b))){w.hit.add(e);
         if(attackEnemy(e,WD,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
@@ -1417,7 +1419,7 @@ function updatePlayer(dt){
   if(fc){acc=fc.acc;dec=fc.dec;maxv*=fc.maxv||1}
   if(p.onGround) p.airDash=airDashMax();
   if(dashEdge&&ctl&&p.dashCD<=0&&p.dashT<=0&&(p.onGround||p.airDash)){
-    p.dashDir=dir||p.face; p.face=p.dashDir; p.dashT=DASH_T; p.dashCD=.45; p.ghostT=0; p.vy=0; p.turnT=0;
+    p.dashDir=dir||p.face; p.face=p.dashDir; p.dashT=DASH_T*HERO().dash; p.dashCD=.45; p.ghostT=0; p.vy=0; p.turnT=0;
     if(!p.onGround){p.airDash--;if(hasCloak&&!p.airDash)burst(p.x+p.w/2,p.y+p.h/2,10,'#8a5ac8',200,300,[3,5])}
     dust(p.x+p.w/2,p.y+p.h-4,6,-p.dashDir); sfx('dash'); shake(.05,2);
   }
@@ -4244,7 +4246,7 @@ function raithAnim(p){
   if(!p.onGround){
     if(p.inWater) return['run',Math.floor(time*6)%6];
     if(p.jumpT<.07) return['jump',0];
-    return['jump',p.vy<-260?1:p.vy<260?2:3];
+    return['jump',p.vy<0?1:3];   // frame 2 (arms up at the top) is left out for now
   }
   if(p.landT>0) return['jump',4];
   if(Math.abs(p.vx)>25) return Math.abs(p.vx)<200?['walk',Math.floor(p.runPh*1.3)%8]:['run',Math.floor(p.runPh)%6];
@@ -4414,7 +4416,7 @@ function drawEShots(){
 }
 function drawWaves(){
   for(const w of pwaves){ if(w.delay>0) continue;
-    const k=w.life/(w.life0||WAVE_LIFE), r=(14+(1-k)*14)*(w.big?2.4:1);
+    const k=w.life/(w.life0||WAVE_LIFE), r=(14+(1-k)*14)*(w.big?2.4:w.tall||1);
     ctx.save(); ctx.translate(w.x,w.y); ctx.scale(w.face,1); ctx.lineCap='round';
     if(w.big){ctx.fillStyle=`rgba(150,90,220,${.28*k})`;ctx.beginPath();ctx.ellipse(-10,0,r*.9,r*1.25,0,0,7);ctx.fill()}
     for(let j=0;j<3;j++){
@@ -6413,7 +6415,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
     get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
-    croc:()=>crocChoose(),setHero:k=>setHero(k),get hero(){return hero},strongPunch:()=>strongPunch(),shopIds:()=>shopItems().map(i=>i.id),dragon:()=>dragonChoose(),snowman:()=>smChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
+    croc:()=>crocChoose(),setHero:k=>setHero(k),get hero(){return hero},strongPunch:()=>strongPunch(),shopIds:()=>shopItems().map(i=>i.id),dragon:()=>dragonChoose(),snowman:()=>smChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get pwaves(){return pwaves},dash:()=>{dashEdge=true},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
 // ==== main.js ====
 /* ---------- main loop (render capped at 60 fps, fixed 120 Hz physics) ---------- */
 newGame();
