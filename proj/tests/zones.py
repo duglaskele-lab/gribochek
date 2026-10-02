@@ -2,7 +2,7 @@
 # A changed file under src/ that matches nothing makes --changed run every test.
 ALWAYS={'smoke'}
 ZONES=[
-  ('src/levels/ice/snowman.js', {'boss4','snowman_throw','snowman_moves'}),
+  ('src/levels/ice/snowman.js', {'boss4','snowman_throw','snowman_moves','snowman_phase3'}),
   ('src/levels/ice/foes.js',    {'ice_foes','boss4','witch_flake'}),          # boss4: the snowman shares the ice projectiles
   ('src/levels/ice/gen.js',     {'gen4','ice_physics','boss4','snowman_throw','snow_fill'}),
   ('src/levels/ice/draw.js',    {'render'}),
@@ -15,14 +15,14 @@ ZONES=[
   ('src/bosses/croc.js',        {'boss1','croc_rules'}),
   ('src/bosses/dragon.js',      {'boss2','dragon_armor','dragon_gust'}),
   ('src/bosses/hydra.js',       {'boss3'}),
-  ('src/bosses/*',              {'boss1','boss2','boss3','boss4','magnet','croc_rules','boss_start'}),
+  ('src/bosses/*',              {'boss1','boss2','boss3','boss4','magnet','croc_rules','boss_start','boss_knockback'}),
   ('src/enemies/*',             {'enemies','ice_foes','bigslime','frog_warn','caterpillar_bite'}),
   ('src/core/player.js',        {'player','ice_physics','ice_foes','respawn','pickup','mana'}),
   ('src/core/projectiles.js',   {'enemies','ice_foes','boss1','boss2','boss3','boss4','magnet','pickup'}),
   ('src/core/step.js',          {'player','boss1','boss2','boss3','boss4'}),
   ('src/core/*',                {'player','enemies','respawn','magnet'}),
   ('src/render/water.js',       {'render','water'}),
-  ('src/render/*',              {'render'}),
+  ('src/render/*',              {'render','sand_idle'}),
   ('src/ui/*',                  {'ui','mana'}),
   ('src/style.css',             {'ui'}),
   ('src/page.html',             {'ui'}),

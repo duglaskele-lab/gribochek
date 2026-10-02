@@ -3,7 +3,8 @@
 // Attacks: overhead slam, long diagonal punch, a volley of snowballs spat from the head, a big hop that brings icicles
 // down, the split (the balls roll at you one by one and stack up again at the far end), the head throw (the head
 // bounces like a ball to the wall of the arena and back onto the body), the clap high over its head and,
-// in phase 2, a beam of frost breath. A hit pushes it back a few pixels.
+// in phase 2, a beam of frost breath. Phase 3 (the last third of its health) hops more and attacks more often.
+// A hit pushes it back a few pixels.
 const SM_R=[62,46,36];
 function makeSnowman(){return{kind:'snowman',x:ARENA_L+18*TS,y:FLOOR-262,w:124,h:262,hp:76,max:76,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
   sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,melt:0,wob:0,stompCD:0,throwCD:4}}
@@ -16,21 +17,24 @@ function smBalls(){
 const smBox=b=>({x:b.x-b.r*.85,y:b.y-b.r*.85,w:b.r*1.7,h:b.r*1.7});
 function smKick(k){for(let i=0;i<3;i++)B.sqv[i]+=k*(1-i*.15)}
 function smShoulders(){const b=smBalls()[1],f=B.face;return{fx:b.x+f*b.r*.82,fy:b.y-6,bx:b.x-f*b.r*.82,by:b.y-6}}
-function smMult(){return B.phase===2?.72:1}
+function smMult(){return B.phase>=2?.72:1}
 function smChoose(){
-  const cx=smCX(),pcx=P.x+P.w/2,d=Math.abs(pcx-cx),p2=B.phase===2;
+  const cx=smCX(),pcx=P.x+P.w/2,d=Math.abs(pcx-cx),p2=B.phase>=2;
   B.face=pcx>cx?1:-1;
   const room=B.face>0?ARENA_R-90-cx:cx-(ARENA_L+90);
   const o=[];
   if(d<270)o.push(['slam',3]);
   if(d>190&&d<640)o.push(['punch',2.4]);
   if(B.throwCD<=0&&d>200)o.push(['throw',p2?2.4:1.8]);
-  o.push(['clap',d<480?2.4:1]);
-  if(p2&&d>140)o.push(['frost',2.2]);
+  // the clap and the frost breath only when she is within half a screen
+  if(d<=VW/2)o.push(['clap',d<480?2.4:1]);
+  if(p2&&d>140&&d<=VW/2)o.push(['frost',2.2]);
   if(d>230)o.push(['volley',2]);
   o.push(['hop',d>380?2.6:1.1]);
   if(B.splitCD<=0&&d>150&&room>420)o.push(['split',p2?2.6:1.6]);
   const f=o.filter(q=>q[0]!==B.last),L=f.length?f:o;
+  // phase 3: the hop is 30% of all its attacks
+  if(B.phase===3){const hp=L.find(q=>q[0]==='hop');if(hp){const rest=L.reduce((a,q)=>a+(q===hp?0:q[1]),0);hp[1]=rest*.3/.7}}
   let s=0;for(const q of L)s+=q[1];let r=Math.random()*s,k=L[L.length-1][0];for(const q of L){r-=q[1];if(r<=0){k=q[0];break}}
   B.last=k;const m=smMult();B.hitDone=false;
   switch(k){
@@ -59,19 +63,19 @@ function smSnowball(i,n){
 }
 function smLand(){
   B.vx=0;shake(.45,10);sfx('boom');smKick(6);const cx=smCX();snowPuff(cx-50,FLOOR-6,8);snowPuff(cx+50,FLOOR-6,8);
-  const p2=B.phase===2,n=p2?5:3;
+  const p2=B.phase>=2,n=p2?5:3;
   for(let i=0;i<n;i++)eshots.push({k:'icicle',x:rand(ARENA_L+60,ARENA_R-60),y:iceCeil+6,st:'warn',t:.6+i*.15,vy:0,r:11});
   eshots.push({k:'icicle',x:clamp(P.x+P.w/2,ARENA_L+40,ARENA_R-40),y:iceCeil+6,st:'warn',t:.75,vy:0,r:11});
   if(p2)for(const s of [-1,1])eshots.push({k:'iwave',x:cx+s*80,y:FLOOR,vx:s*360,life:3,h:0});
 }
 function smSplitStart(){
-  const bs=smBalls(),dir=B.face,p2=B.phase===2;
+  const bs=smBalls(),dir=B.face,p2=B.phase>=2;
   B.tx=dir>0?ARENA_R-90:ARENA_L+90;B.splitDir=dir;
   B.pieces=bs.map((b,i)=>({i,x:b.x,y:b.y,r:b.r,vx:0,vy:0,delay:i*(p2?.45:.55),st:'wait',rot:0,k:0}));
   B.state='split';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];sfx('roar');shake(.3,6);
 }
 function smSplitUpdate(dt){
-  const dir=B.splitDir,tx=B.tx,stackY=[FLOOR-62,FLOOR-156,FLOOR-228],p2=B.phase===2;
+  const dir=B.splitDir,tx=B.tx,stackY=[FLOOR-62,FLOOR-156,FLOOR-228],p2=B.phase>=2;
   let support=FLOOR;B.t+=dt;
   for(const p of B.pieces){
     if(p.st==='wait'){ // the rest of the stack drops when the ball under it rolls away
@@ -106,7 +110,7 @@ function smFrostAim(k){const f=B.face,h=smBalls()[2],mx=h.x+f*h.r*.6,my=h.y+10,n
    the arena and back, and drops onto the body again. The body waits headless. */
 const smStackY=i=>FLOOR-[62,156,228][i];   // centres of the balls when stacked
 function smThrowStart(){
-  const bs=smBalls(),f=B.face,p2=B.phase===2;
+  const bs=smBalls(),f=B.face,p2=B.phase>=2;
   B.pieces=bs.map((b,i)=>({i,x:bs[0].x,y:smStackY(i),r:b.r,vx:0,vy:0,st:'done',rot:0,k:0}));   // the body stays put
   const hd=B.pieces[2];hd.x=bs[2].x;hd.y=bs[2].y;hd.st='ball';hd.vx=f*(p2?470:420);hd.vy=-560;
   B.sx=bs[0].x;B.splitDir=f;B.state='headThrow';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];B.throwCD=p2?7:9;
@@ -132,7 +136,7 @@ function smThrowUpdate(dt){
   }
 }
 function updateSnowman(dt){
-  const p2=B.phase===2,m=smMult(),pcx=P.x+P.w/2;
+  const p2=B.phase>=2,m=smMult(),pcx=P.x+P.w/2;
   // springy balls
   for(let i=0;i<3;i++){const a=-220*B.sq[i]-14*B.sqv[i];B.sqv[i]+=a*dt;B.sq[i]=clamp(B.sq[i]+B.sqv[i]*dt,-.25,.35)}
   if(B.splitCD>0)B.splitCD-=dt;if(B.stompCD>0)B.stompCD-=dt;if(B.throwCD>0)B.throwCD-=dt;
@@ -165,10 +169,12 @@ function updateSnowman(dt){
     case 'intro': B.t-=dt;B.mouth=.6;tf=[sh.fx+f*40,sh.fy-80+Math.sin(time*14)*20];tb=[sh.bx-f*40,sh.by-80+Math.sin(time*14+2)*20];
       if(Math.random()<.08)smKick(2);if(B.t<=0){B.state='idle';B.t=.6}break;
     case 'idle':{
-      B.t-=dt;const d=Math.abs(pcx-cx);if(d>12)B.face=pcx>cx?1:-1;
+      // phase 3 is 15% more aggressive: the pause between attacks runs out sooner
+      B.t-=dt*(B.phase===3?1.15:1);const d=Math.abs(pcx-cx);if(d>12)B.face=pcx>cx?1:-1;
       B.vx=approach(B.vx,d>420?B.face*85:0,400*dt);
       if(Math.abs(B.vx)>20){B.wob-=dt;if(B.wob<=0){B.wob=.32;smKick(2.2);snowPuff(cx,FLOOR-4,2)}}
       if(B.phase===1&&B.hp<=B.max/2){B.state='enrage';B.t=1.3;B.vx=0;sfx('roar');shake(1,7);break}
+      if(B.phase===2&&B.hp<=B.max/3) B.phase=3;   // the last third: phase 3, without a show
       if(B.aboveT>.5){B.state='hopWind';B.t=.4*m;B.vx=0;B.aboveT=0;B.last='hop';break}   // she hangs above it: it jumps
       if(B.t<=0){B.vx=0;smChoose()}
       break}
