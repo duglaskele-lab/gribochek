@@ -158,5 +158,5 @@ function drawCroc(){
   if(B.state==='stun') for(let k=0;k<3;k++){const a=time*5+k*2.1;drawStar(cx+f*60+Math.cos(a)*40,B.y-10+Math.sin(a)*10,7,time*4)}
 }
 
-registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
+registerBoss('croc',{spriteBox:()=>({x:B.x+B.w/2-220,y:B.y-10,w:440,h:B.h+10}),make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
   dmgMult:()=>B.state==='enrage'?.75:1});   // while it changes into phase 2 it takes only 75% of the damage

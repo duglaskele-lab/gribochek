@@ -4,7 +4,7 @@ let grid, flow;
 let P,B,enemies,shots,eshots,parts,items,plats,dynPlats,checks,shops,door,camX,time,shakeT,shakeM,hitstop,
     arenaLocked,bossDead,cp,sporeTotal,spores,sporesGot,runTime,floaters,ghosts,powerSpots,pwaves,
     nearShop=null,shopMsg='',hasBag=false,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH,
-    enemySnap=[],magnetT=0;   // enemySnap: the level's foes as generated (brought back when the player dies); magnetT: see collectSporesOnScreen
+    enemySnap=[],magnetT=0,arenaIn=false;   // enemySnap: the level's foes as generated (brought back when the player dies); magnetT: see collectSporesOnScreen
 
 let SKY_TILE=T_EMPTY;   // what lies above the top row: open sky, or rock for levels with a roof (level def: roof:true)
 const tile=(c,r)=>c<0||c>=COLS?T_SOLID:(r<0?SKY_TILE:r>=ROWS?T_EMPTY:grid[r][c]);

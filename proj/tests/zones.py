@@ -15,7 +15,7 @@ ZONES=[
   ('src/bosses/croc.js',        {'boss1','croc_rules'}),
   ('src/bosses/dragon.js',      {'boss2','dragon_armor'}),
   ('src/bosses/hydra.js',       {'boss3'}),
-  ('src/bosses/*',              {'boss1','boss2','boss3','boss4','magnet','croc_rules'}),
+  ('src/bosses/*',              {'boss1','boss2','boss3','boss4','magnet','croc_rules','boss_start'}),
   ('src/enemies/*',             {'enemies','ice_foes','bigslime','frog_warn'}),
   ('src/core/player.js',        {'player','ice_physics','ice_foes','respawn','pickup'}),
   ('src/core/projectiles.js',   {'enemies','ice_foes','boss1','boss2','boss3','boss4','magnet','pickup'}),

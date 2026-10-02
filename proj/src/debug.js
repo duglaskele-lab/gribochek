@@ -6,7 +6,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
   dbg:{start:(l,s)=>{startAtLevel(1);startLevel(l,s||1);snapshotLevel()},get P(){return P},get B(){return B},get enemies(){return enemies},get plats(){return plats},get springs(){return springs},
     get arena(){return[ARENA_L,ARENA_R]},get grid(){return grid},get cam(){return[camX,camY]},get checks(){return checks},get items(){return items},get shops(){return shops},get zones(){return secretZones},get covers(){return covers},get switches(){return switches},buy:id=>buy(id),openShop:()=>openShop(),setSpores:n=>{spores=n},validate:()=>(LV().validate||validateLevel)(),bossPrep:()=>bossPrep(),get flow(){return flow},setPoison:v=>{poisonLvl=v},
     hit:(i,d)=>{B.lastHead=B.heads[i];hitBoss(d,B.heads[i].x,B.heads[i].y)},get state(){return state},get eshots(){return eshots},get poison(){return poisonLvl},get dead(){return bossDead},
-    lock:()=>{arenaLocked=true;playSong(B.kind);B.state='intro';B.t=2},
+    lock:()=>{if(!arenaLocked)startBossFight()},
     // ---- for tests: run the game without waiting for real time ----
     freeze:on=>{DBG_FREEZE=on!==false},            // stop the real-time loop from stepping (rendering goes on)
     sim:(sec,each)=>{const n=Math.round(sec*120);for(let i=0;i<n;i++){if(each&&each(i)===false)break;if(state==='play')step(1/120)}},
@@ -19,4 +19,4 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
     get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
-    croc:()=>crocChoose()}};   // the crocodile picks its next move now
+    croc:()=>crocChoose(),bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now

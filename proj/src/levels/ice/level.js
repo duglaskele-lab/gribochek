@@ -35,7 +35,7 @@ registerLevel(4,{
   },
 });
 
-registerBoss('snowman',{make:makeSnowman,update:updateSnowman,draw:drawSnowman,hitMult:smHitMult,contact:smContact,
+registerBoss('snowman',{onHit:smOnHit,make:makeSnowman,update:updateSnowman,draw:drawSnowman,hitMult:smHitMult,contact:smContact,
   burst:'#eef6ff',nameKey:'boss4',introT:1.8,camBottom:true,
   dmgMult:()=>B.state==='split'||B.state==='headThrow'?.25:1});   // falling apart (split, head throw): 75% less damage
 

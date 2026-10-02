@@ -123,7 +123,7 @@ def snowman_moves(c):
       g.sim(2,()=>{g.P.inv=1e9;if(B.frost&&B.state==='frost')xs.push(B.frost.gx);if(B.state==='idle')return false});
       out.frostNear=xs[0]-mid;out.frostFar=xs[xs.length-1]-mid;
       // after reassembly the arms start short
-      reset();B.forceThrow='roll';g.P.x=mid+400;B.state='throwWind';B.t=.05;B.tMax=.05;let arm=null;
+      reset();g.P.x=mid+400;B.state='throwWind';B.t=.05;B.tMax=.05;let arm=null;
       g.sim(10,()=>{g.P.inv=1e9;if(B.state==='reform'&&arm===null&&B.hf){const b=B.pieces;arm=1}if(B.state==='reform'&&B.hf&&arm===1){arm=Math.hypot(B.hf.x-(B.x+B.w/2),B.hf.y-(B.y+80))}if(B.state==='idle'&&arm!==null)return false});
       out.arm=arm;return out""")
     assert r['clapAir'] and not r['clapGround'], r
@@ -134,18 +134,18 @@ def snowman_moves(c):
 
 @test('snowman_throw','boss4','ice')
 def snowman_throw(c):
-    # every head-throw variant ends with the snowman whole again; the hall has no ledges; after the fight the ice wall
+    # the head throw ends with the snowman whole again; the hall has no ledges; after the fight the ice wall
     # opens and the door, one screen to the right of the hall, can be reached
     c.js('g.startBoss(4);g.freeze();')
     c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
     r=c.js("""const B=g.B,P=g.P,out={};
       const G=g.grid,a0=g.arena[0]/40,a1=g.arena[1]/40;let planks=0;for(const row of G)for(let c=a0;c<a1;c++)if(row[c]===2)planks++;out.planks=planks;
-      for(const kind of ['bounce','roll','fling']){let ok=0;
-        for(let n=0;n<4;n++){B.x=(g.arena[0]+g.arena[1])/2-B.w/2+(n-1.5)*120;B.y=g.B.y;P.x=B.x+(n%2?500:-350);P.vx=0;
-          B.forceThrow=kind;B.state='throwWind';B.t=.05;B.tMax=.05;let seen=false;
-          g.sim(10,()=>{P.inv=1e9;if(B.state==='headThrow')seen=true;else if(seen)return false});
-          if(seen&&B.state==='reform'&&!B.pieces)ok++;B.state='idle';B.t=5}
-        out[kind]=ok}
+      let ok=0;   // only the bouncing head is left
+      for(let n=0;n<4;n++){B.x=(g.arena[0]+g.arena[1])/2-B.w/2+(n-1.5)*120;P.x=B.x+(n%2?500:-350);P.vx=0;
+        B.state='throwWind';B.t=.05;B.tMax=.05;let seen=false;
+        g.sim(10,()=>{P.inv=1e9;if(B.state==='headThrow')seen=true;else if(seen)return false});
+        if(seen&&B.state==='reform'&&!B.pieces)ok++;B.state='idle';B.t=5}
+      out.bounce=ok;
       // beat it: the gate opens and the door can be entered
       g.hitBoss(999,B.x+B.w/2,B.y+B.h/2);g.sim(4,()=>{P.inv=1e9});
       out.dead=g.dead;out.gateOpen=G[G.length-3][a1]===0;
@@ -153,9 +153,9 @@ def snowman_throw(c):
       P.x=g.arena[1]-200;P.y=P.y;g.key('r',1);let entered=false;g.sim(6,()=>{if(g.P.entering)entered=true});g.key('r',0);
       out.entered=entered;return out""")
     assert r['planks']==0, r
-    assert r['bounce']==4 and r['roll']==4 and r['fling']==4, r
+    assert r['bounce']==4, r
     assert r['dead'] and r['gateOpen'] and r['doorPast'] and r['entered'], r
-    return 'all three head throws reassemble; gate opens, door reached'
+    return 'the bouncing head always comes back; gate opens, door reached'
 
 # ------------------------------------------------------------------ ice cave
 @test('ice_physics','ice')
@@ -307,17 +307,18 @@ def croc_rules(c):
 
 @test('dragon_armor','boss2')
 def dragon_armor(c):
-    # the inferno that opens phase 2 takes 75% less damage until its breath ends; a later inferno has no armour
+    # every inferno takes 75% less damage, from its wind-up to the end of its breath
     c.js('g.startBoss(2);g.freeze();')
     c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
     r=c.js("""const B=g.B,P=g.P,hit=()=>{const h=B.hp;g.hitBoss(4,B.x+B.w/2,B.y+B.h/2);return h-B.hp};
       g.hitBoss(B.hp-B.max/2+1,B.x+B.w/2,B.y+B.h/2);   // down to half: it enrages
+      g.sim(5,()=>{P.inv=1e9;if(B.state==='infernoWind')return false});const wind=hit();
       g.sim(5,()=>{P.inv=1e9;if(B.state==='inferno')return false});const first=hit();
       g.sim(5,()=>{P.inv=1e9;if(B.state==='hover')return false});const after=hit();
       B.infCD=0;B.state='infernoWind';B.t=1;B.infDir=1;g.sim(1.1,()=>{P.inv=1e9});const second=hit();
-      return [first,after,second,B.state]""")
-    assert abs(r[0]-1)<.01 and abs(r[1]-4)<.01 and abs(r[2]-4)<.01, r
-    return 'first inferno armoured, later ones not'
+      return [first,after,second,wind]""")
+    assert abs(r[0]-1)<.01 and abs(r[1]-4)<.01 and abs(r[2]-1)<.01 and abs(r[3]-1)<.01, r
+    return 'every inferno armoured, wind-up included'
 
 @test('witch_flake','ice')
 def witch_flake(c):
@@ -329,6 +330,26 @@ def witch_flake(c):
       return [inRock,Math.hypot(b.vx,b.vy),b.dead]""")
     assert r[0]>60 and r[1]>500 and not r[2], r
     return f'through rock for {r[0]} steps, speed 230 -> {r[1]:.0f}'
+
+@test('boss_start','boss')
+def boss_start(c):
+    # every boss fight starts once its sprite comes into view, wherever the player is, without the crash and roar
+    out=[]
+    for l in (1,2,3,4):
+        c.js(f'g.startBoss({l});g.freeze();')
+        r=c.js("""const P=g.P,G=g.grid;P.inv=1e9;let at=null;
+          // put her at the last checkpoint before the arena, then run to the right
+          const cp=g.checks.reduce((a,q)=>q.x<g.arena[0]&&(!a||q.x>a.x)?q:a,null);P.x=cp.x-P.w/2-120;P.y=cp.y-P.h;P.vy=0;g.look();
+          const seenAtStart=g.bossSeen(0);
+          g.sim(.5,()=>{P.inv=1e9});const lockedEarly=g.arenaLocked;
+          // levels 1-2: run right until it starts; 3-4 have drops and walls on the way, so she is put at the arena's door
+          if(g.level>2){P.x=g.arena[0]+30;P.y=g.B.y+g.B.h-P.h-2;P.vy=0}
+          g.sim(30,i=>{P.inv=1e9;g.key('r',1);if(g.arenaLocked){at=P.x;return false}});g.key('r',0);
+          if(lockedEarly)return [false,false,'early',seenAtStart];
+          return [g.arenaLocked,at!==null&&g.bossSeen(0),g.B.state,seenAtStart]""")
+        assert r[0] and r[1] and r[2]=='intro' and not r[3], (l,r)
+        out.append(l)
+    return 'levels %s: the fight starts when the boss comes into view'%out
 
 @test('frog_warn','enemies')
 def frog_warn(c):

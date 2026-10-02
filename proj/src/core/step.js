@@ -24,9 +24,8 @@ function step(dt){
     if(!stomped) for(const hb of ct.hurt) if(overlap(hb,pb)){hurt(hb.x+hb.w/2);break}
   }
   enemies=enemies.filter(e=>!e.dead);
-  if(!arenaLocked&&!bossDead&&!P.dead&&P.onGround&&P.x>ARENA_L&&P.y>ARENA_TRIG_Y&&bossOnScreen()){
-    arenaLocked=true;playSong(B.kind);B.state='intro';B.t=BOSSES[B.kind].introT||1.8;shake(.8,6);sfx('roar');
-  }
+  if(!arenaLocked&&!bossDead&&!P.dead&&B&&B.state==='sleep'&&bossSeen()) startBossFight();
+  if(arenaLocked&&!arenaIn&&P.x>=ARENA_L) arenaIn=true;   // the hall closes behind her only once she is inside
   updateBoss(dt);
   if(magnetT>0){magnetT-=dt;if(magnetT<=0)collectSporesOnScreen(it=>it.bonus)}   // after a boss fight: its spores too
   if(!P.dead&&bossContact(pb)) hurt(B.x+B.w/2);
@@ -45,9 +44,9 @@ function step(dt){
    const ty=camTargetY();camY+=(ty-camY)*Math.min(1,dt*6);camY=clamp(camY,0,Math.max(0,WH-VH/camZ))}
   const vw=VW/camZ;
   let minX=0,maxX=COLS*TS-vw;
-  if(arenaLocked&&!bossDead){minX=ARENA_L-TS;maxX=ARENA_R-vw;if(maxX<minX){minX=maxX=(ARENA_L-TS+ARENA_R-vw)/2}}
+  if(arenaLocked&&!bossDead&&arenaIn){minX=ARENA_L-TS;maxX=ARENA_R-vw;if(maxX<minX){minX=maxX=(ARENA_L-TS+ARENA_R-vw)/2}}
   if(!(LV().exitRight&&bossDead)) maxX=Math.min(maxX,ARENA_R+TS-vw);
-  if(arenaLocked&&!bossDead&&B.kind==='hydra') minX=maxX=(ARENA_L+ARENA_R-vw)/2;   // the whole hydra arena on one screen
+  if(arenaLocked&&!bossDead&&arenaIn&&B.kind==='hydra') minX=maxX=(ARENA_L+ARENA_R-vw)/2;   // the whole hydra arena on one screen
   const target=clamp(P.x+P.w/2-vw/2+P.face*70,minX,Math.max(minX,maxX));
   camX+=(target-camX)*Math.min(1,dt*7);
   camX=clamp(camX,minX,Math.max(minX,maxX));

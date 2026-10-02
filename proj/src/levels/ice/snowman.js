@@ -1,10 +1,9 @@
 /* ---------- boss 4: the snowman ---------- */
 // three balls of snow on springs (they squash on landings), a bucket, a carrot and two branch arms.
 // Attacks: overhead slam, long diagonal punch, a volley of snowballs spat from the head, a big hop that brings icicles
-// down, the split (the balls roll at you one by one and stack up again at the far end) and the head throw:
-// it pulls its head off and throws it. Either the head bounces like a ball to the wall of the arena and back onto the
-// body, or it lands on the floor and stays there; then the body comes over to it, rolling or flinging its balls
-// through the air one by one, stacks up next to it and the head hops back on top.
+// down, the split (the balls roll at you one by one and stack up again at the far end), the head throw (the head
+// bounces like a ball to the wall of the arena and back onto the body), the clap high over its head and,
+// in phase 2, a beam of frost breath. A hit pushes it back a few pixels.
 const SM_R=[62,46,36];
 function makeSnowman(){return{kind:'snowman',x:ARENA_L+18*TS,y:FLOOR-262,w:124,h:262,hp:76,max:76,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
   sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,melt:0,wob:0,stompCD:0,throwCD:4}}
@@ -97,87 +96,38 @@ function smSplitUpdate(dt){
 }
 /* the clap: it whirls its arms (0.3 s), flings them out wide and claps them together high over its head.
    The arms sweep everything above the height of a standing player, far to both sides: stay on the ground. */
-const SM_CLAP_WIND=.3, SM_CLAP_REACH=330, SM_CLAP_LOW=72;   // reach to each side; the sweep stays this high above the floor
+const SM_CLAP_WIND=.5, SM_CLAP_T=.3, SM_CLAP_REACH=330, SM_CLAP_LOW=72;   // reach to each side; the sweep stays this high above the floor
 function smClapZone(){const cx=smCX();return{x:cx-SM_CLAP_REACH,y:iceCeil,w:SM_CLAP_REACH*2,h:FLOOR-SM_CLAP_LOW-iceCeil}}
 /* phase 2: frost breath, a beam from the mouth to the floor; the spot it hits walks away from the snowman */
-const SM_FROST_T=1.7;
+const SM_FROST_T=1.2;   // short enough to dodge however far it reaches
 function smFrostAim(k){const f=B.face,h=smBalls()[2],mx=h.x+f*h.r*.6,my=h.y+10,near=mx+f*90,far=f>0?ARENA_R-30:ARENA_L+30,
   gx=near+(far-near)*k;B.frost={mx,my,gx:f>0?Math.min(gx,far):Math.max(gx,far),gy:FLOOR-4}}
-/* the head throw */
-// centres of the balls when stacked
-const smStackY=i=>FLOOR-[62,156,228][i];
+/* the head throw: it pulls its head off and throws it; the head bounces along the floor like a ball, off the wall of
+   the arena and back, and drops onto the body again. The body waits headless. */
+const smStackY=i=>FLOOR-[62,156,228][i];   // centres of the balls when stacked
 function smThrowStart(){
-  const bs=smBalls(),f=B.face,p2=B.phase===2,pcx=P.x+P.w/2;
-  B.pieces=bs.map((b,i)=>({i,x:b.x,y:b.y,r:b.r,vx:0,vy:0,st:'wait',rot:0,k:0}));
-  const hd=B.pieces[2];B.splitDir=f;B.state='headThrow';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];B.throwCD=p2?7:9;
-  sfx('throwb');sfx('roar');
-  const kind=B.forceThrow||(Math.random()<.45?'bounce':Math.random()<.5?'roll':'fling');   // forceThrow: for tests
-  if(kind==='bounce'){ // a bouncing head: off to the wall and back
-    B.throwKind='bounce';hd.st='ball';hd.vx=f*(p2?470:420);hd.vy=-560;B.sx=bs[0].x;
-    for(const p of [B.pieces[0],B.pieces[1]]){p.st='done';p.x=B.sx;p.y=smStackY(p.i)}   // the body stays put
-  }else{ // thrown in an arc at the player; it stays where it lands
-    B.throwKind=kind;hd.st='fly';
-    const tx=clamp(pcx,ARENA_L+60,ARENA_R-60),ty=FLOOR-hd.r,Tt=clamp(Math.abs(tx-hd.x)/430,.7,1.25),g=G*.8;
-    hd.vx=(tx-hd.x)/Tt;hd.vy=(ty-hd.y-.5*g*Tt*Tt)/Tt;
-  }
-}
-// pieces of the body that wait in a stack drop down when the ball under them goes away
-function smSettle(p,support,dt){
-  const ty=support-p.r+(support<FLOOR?12:0);
-  if(p.y<ty){p.vy+=G*dt;p.y+=p.vy*dt;if(p.y>=ty){p.y=ty;if(p.vy>300)snowPuff(p.x,p.y+p.r,4);p.vy=0}}
-  return p.y-p.r;
+  const bs=smBalls(),f=B.face,p2=B.phase===2;
+  B.pieces=bs.map((b,i)=>({i,x:bs[0].x,y:smStackY(i),r:b.r,vx:0,vy:0,st:'done',rot:0,k:0}));   // the body stays put
+  const hd=B.pieces[2];hd.x=bs[2].x;hd.y=bs[2].y;hd.st='ball';hd.vx=f*(p2?470:420);hd.vy=-560;
+  B.sx=bs[0].x;B.splitDir=f;B.state='headThrow';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];B.throwCD=p2?7:9;
+  sfx('throwb');
 }
 function smStackAnim(p,dt,dur,arc){
   p.k=Math.min(1,p.k+dt/dur);p.x=p.x0+(p.tx-p.x0)*p.k;p.y=p.y0+(smStackY(p.i)-p.y0)*p.k-Math.sin(p.k*Math.PI)*arc;p.rot+=dt*6*(p.tx>p.x0?1:-1);
-  if(p.k>=1){p.st='done';p.x=p.tx;p.y=smStackY(p.i);if(p.i)snowPuff(p.x,p.y+p.r,4);sfx('land')}
+  if(p.k>=1){p.st='done';p.x=p.tx;p.y=smStackY(p.i);snowPuff(p.x,p.y+p.r,4);sfx('land')}
 }
 const smToStack=(p,tx)=>{p.st='stack';p.k=0;p.x0=p.x;p.y0=p.y;p.tx=tx};
 function smThrowUpdate(dt){
-  const [b0,b1,hd]=B.pieces,p2=B.phase===2,g=G*.8;B.t+=dt;
-  switch(hd.st){
-    case 'ball':{ // bounces along the floor; turns back at a wall of the arena and drops back onto the body
-      hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;B.splitDir=Math.sign(hd.vx)||B.splitDir;
-      if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=-Math.max(560,Math.abs(hd.vy)*.85);snowPuff(hd.x,FLOOR-4,3);sfx('land');shake(.1,3)}
-      const wall=hd.x<ARENA_L+hd.r?1:hd.x>ARENA_R-hd.r?-1:0;
-      if(wall){hd.x=wall>0?ARENA_L+hd.r:ARENA_R-hd.r;hd.vx=wall*Math.abs(hd.vx);hd.back=true;shake(.25,6);sfx('clang');snowPuff(hd.x-wall*hd.r,hd.y,5)}
-      if(hd.back&&Math.abs(hd.x-B.sx)<220) smToStack(hd,B.sx);
-      break}
-    case 'fly':
-      hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;
-      if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=0;hd.vx=0;hd.st='rest';hd.t=.45;shake(.3,7);sfx('boom');snowPuff(hd.x,FLOOR-6,8);
-        // the body stacks up next to the head, on the side it comes from
-        const d=Math.sign(hd.x-b0.x)||1;B.sx=clamp(Math.abs(hd.x-b0.x)<SM_R[0]+hd.r+10?b0.x:hd.x-d*(SM_R[0]+hd.r+6),ARENA_L+70,ARENA_R-70);
-        B.splitDir=-d}
-      break;
-    case 'rest': hd.t-=dt;
-      if(hd.t<=0&&!B.moving){B.moving=true;b0.delay=0;b1.delay=p2?.35:.45;   // the body sets off towards the head
-        if(B.throwKind==='roll')sfx('jump');}
-      if(b0.st==='done'&&b1.st==='done'){smToStack(hd,B.sx);sfx('jump')}
-      break;
-    case 'stack': smStackAnim(hd,dt,hd.back?.4:.5,hd.back?40:110);break;
-  }
-  // the body: waits as a stack (in the bounce variant it just waits for its head), or travels to the stacking spot
-  let support=FLOOR;const dir=Math.sign(B.sx-b0.x)||1;
-  for(const p of [b0,b1]){
-    if(p.st==='wait'){
-      support=smSettle(p,support,dt);
-      if(B.moving&&(p.delay-=dt)<=0){
-        if(Math.abs(B.sx-p.x)<4){p.x=B.sx;smToStack(p,B.sx)}
-        else if(B.throwKind==='roll'){p.st='go';p.vy=p.i?-420:0;sfx('jump')}
-        else{p.st='arc';const Tt=.75,ty=smStackY(p.i);p.vx=(B.sx-p.x)/Tt;p.vy=(ty-p.y-.5*G*Tt*Tt)/Tt;p.tArc=Tt;sfx('throwb');smKick(2)}}
-    }else if(p.st==='go'){ // rolls over like in the split
-      const sp=[430,390][p.i]*(p2?1.1:1);p.x+=dir*sp*dt;p.rot+=dir*sp*dt/p.r;p.vy+=G*dt;p.y+=p.vy*dt;
-      if(p.y>=FLOOR-p.r){p.y=FLOOR-p.r;p.vy=p.i===0?0:-380;if(p.i)snowPuff(p.x,FLOOR-4,3)}
-      if(p.i===0&&Math.random()<.5)snowPuff(p.x-dir*p.r*.6,FLOOR-4,1);
-      if(dir*(p.x-B.sx)>=0) smToStack(p,B.sx);
-    }else if(p.st==='arc'){ // flung through the air, it lands right on the stacking spot
-      p.tArc-=dt;p.vy+=G*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.rot+=dt*8;
-      if(p.tArc<=0){p.st='done';p.x=B.sx;p.y=smStackY(p.i);shake(p.i?.2:.35,p.i?5:9);sfx('boom');snowPuff(p.x,p.y+p.r,6);
-        if(p.i===0&&p2)for(const s of [-1,1])eshots.push({k:'iwave',x:p.x+s*70,y:FLOOR,vx:s*340,life:2.4,h:0})}
-    }else if(p.st==='stack') smStackAnim(p,dt,.3,p.i?60:0);
-  }
+  const hd=B.pieces[2],g=G*.8;B.t+=dt;
+  if(hd.st==='ball'){ // bounces along the floor; turns back at a wall of the arena and drops back onto the body
+    hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;B.splitDir=Math.sign(hd.vx)||B.splitDir;
+    if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=-Math.max(560,Math.abs(hd.vy)*.85);snowPuff(hd.x,FLOOR-4,3);sfx('land');shake(.1,3)}
+    const wall=hd.x<ARENA_L+hd.r?1:hd.x>ARENA_R-hd.r?-1:0;
+    if(wall){hd.x=wall>0?ARENA_L+hd.r:ARENA_R-hd.r;hd.vx=wall*Math.abs(hd.vx);hd.back=true;shake(.25,6);sfx('clang');snowPuff(hd.x-wall*hd.r,hd.y,5)}
+    if(hd.back&&Math.abs(hd.x-B.sx)<220) smToStack(hd,B.sx);
+  }else if(hd.st==='stack') smStackAnim(hd,dt,.4,40);
   if(B.pieces.every(p=>p.st==='done')||B.t>9){
-    B.x=B.sx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.moving=false;B.state='reform';B.t=.5*smMult();B.hf=B.hb=null;
+    B.x=B.sx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.state='reform';B.t=.5*smMult();B.hf=B.hb=null;
     B.face=(P.x+P.w/2>B.sx)?1:-1;smKick(5);shake(.25,5);sfx('land');
   }
 }
@@ -253,10 +203,10 @@ function updateSnowman(dt){
       B.mouth=.4;if(B.t<=0){B.state='clapOut';B.t=.22;sfx('creak')}break}
     case 'clapOut': // arms flung out wide
       B.t-=dt;rate=30;tf=[cx+f*SM_CLAP_REACH,sh.fy-20];tb=[cx-f*SM_CLAP_REACH,sh.by-20];B.mouth=.6;
-      if(B.t<=0){B.state='clap';B.t=.28;B.hitDone=false}break;
-    case 'clap':{ // they sweep up and meet over the head
-      B.t-=dt;rate=24;tf=[cx+f*8,headTop-60];tb=[cx-f*8,headTop-60];B.mouth=1;
-      if(B.t<.16&&!B.hitDone){B.hitDone=true;sfx('boom');shake(.35,8);snowPuff(cx,headTop-60,10);iceShards(cx,headTop-60,12,260)}
+      if(B.t<=0){B.state='clap';B.t=SM_CLAP_T;B.hitDone=false}break;
+    case 'clap':{ // they sweep up, slowly, and meet over the head
+      B.t-=dt;rate=9;tf=[cx+f*8,headTop-60];tb=[cx-f*8,headTop-60];B.mouth=1;
+      if(B.t<.08&&!B.hitDone){B.hitDone=true;sfx('boom');shake(.35,8);snowPuff(cx,headTop-60,10);iceShards(cx,headTop-60,12,260)}
       if(!P.dead&&B.t>.04&&overlap(smClapZone(),{x:P.x+3,y:P.y+6,w:P.w-6,h:P.h-6})) hurt(cx);
       if(B.t<=0){B.state='idle';B.t=p2?.45:.7}break}
     case 'frostWind': // aims at the floor right in front, frost gathering at the mouth
@@ -287,6 +237,9 @@ function updateSnowman(dt){
   const k=Math.min(1,dt*rate);B.hf.x+=(tf[0]-B.hf.x)*k;B.hf.y+=(tf[1]-B.hf.y)*k;
   const kb=Math.min(1,dt*Math.min(rate,30));B.hb.x+=(tb[0]-B.hb.x)*kb;B.hb.y+=(tb[1]-B.hb.y)*kb;
 }
+// a hit pushes it back a few pixels (not while it is apart or dying)
+function smOnHit(x){if(B.pieces||B.state==='dying'||B.state==='sleep')return;const d=Math.sign(smCX()-x)||-B.face;
+  B.x=clamp(B.x+d*4,ARENA_L+10,ARENA_R-10-B.w);B.lean+=d*5;smKick(1.2)}
 function smHitMult(test){
   if(B.pieces){for(const p of B.pieces)if(test(smBox(p)))return p.i===2?1.3:1;return 0}
   const bs=smBalls();if(test(smBox(bs[2])))return 1.3;if(test(smBox(bs[1]))||test(smBox(bs[0])))return 1;return 0;
@@ -341,9 +294,6 @@ function drawSnowman(){
   if(B.state==='punchWind'&&B.aim){const k=clamp(1-B.t/B.tMax,0,1);if(k>.25){const s=smShoulders();ctx.save();ctx.setLineDash([10,8]);ctx.lineDashOffset=-time*60;
     ctx.strokeStyle=`rgba(255,90,70,${.25+.5*k})`;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(s.fx,s.fy);ctx.lineTo(B.aim.x,B.aim.y);ctx.stroke();ctx.restore();
     ctx.fillStyle=`rgba(255,90,70,${.2+.3*k})`;ctx.beginPath();ctx.ellipse(B.aim.x,FLOOR-3,26,6,0,0,7);ctx.fill()}}
-  if(B.state==='clapOut'||B.state==='clap'){ // the swept zone: everything above a standing player
-    const z=smClapZone(),a=B.state==='clap'?.22:.12+.1*Math.sin(time*30);ctx.fillStyle=`rgba(120,200,255,${a})`;ctx.fillRect(z.x,z.y,z.w,z.h);
-    ctx.save();ctx.setLineDash([12,8]);ctx.strokeStyle='rgba(60,150,230,.7)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(z.x,z.y+z.h);ctx.lineTo(z.x+z.w,z.y+z.h);ctx.stroke();ctx.restore()}
   if(B.frost&&(B.state==='frostWind'||B.state==='frost')){const fr=B.frost;
     if(B.state==='frostWind'){ctx.save();ctx.setLineDash([8,8]);ctx.lineDashOffset=-time*50;ctx.strokeStyle='rgba(160,225,255,.75)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(fr.mx,fr.my);ctx.lineTo(fr.gx,fr.gy);ctx.stroke();ctx.restore()}
     else{const w=20+Math.sin(time*40)*3;ctx.lineCap='round';
