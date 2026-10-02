@@ -28,6 +28,7 @@ function step(dt){
     arenaLocked=true;playSong(B.kind);B.state='intro';B.t=BOSSES[B.kind].introT||1.8;shake(.8,6);sfx('roar');
   }
   updateBoss(dt);
+  if(magnetT>0){magnetT-=dt;if(magnetT<=0)collectSporesOnScreen(it=>it.bonus)}   // after a boss fight: its spores too
   if(!P.dead&&bossContact(pb)) hurt(B.x+B.w/2);
   if(LV().update) LV().update(dt);   // per-level effects: rising poison, falling snow...
   updateShots(dt);

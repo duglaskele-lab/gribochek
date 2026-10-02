@@ -314,7 +314,8 @@ let COLS=240, ARENA_L=0, ARENA_R=0, BIOME='forest', LEVEL=1, SEED=1;
 let grid, flow;
 let P,B,enemies,shots,eshots,parts,items,plats,dynPlats,checks,shops,door,camX,time,shakeT,shakeM,hitstop,
     arenaLocked,bossDead,cp,sporeTotal,spores,sporesGot,runTime,floaters,ghosts,powerSpots,pwaves,
-    nearShop=null,shopMsg='',hasBag=false,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH;
+    nearShop=null,shopMsg='',hasBag=false,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH,
+    enemySnap=[],magnetT=0;   // enemySnap: the level's foes as generated (brought back when the player dies); magnetT: see collectSporesOnScreen
 
 let SKY_TILE=T_EMPTY;   // what lies above the top row: open sky, or rock for levels with a roof (level def: roof:true)
 const tile=(c,r)=>c<0||c>=COLS?T_SOLID:(r<0?SKY_TILE:r>=ROWS?T_EMPTY:grid[r][c]);
@@ -824,6 +825,9 @@ function buildLevel(level,seed,attempt){
      if(taken.some(q=>Math.abs(q-c)<(PROPS.has(spawns.find(z=>z.c===q)?.type)?7:2))) continue;
      spawn(pick(kinds),c);taken.push(c);nb--;
      if(chance(.3)&&boxCols.indexOf(c+1)>=0){spawn(pick(kinds),c+1);taken.push(c+1)}}}
+  // mummies get stuck inside the ruined buildings: inside the ruined town they are replaced by other desert foes
+  const inRuins=c=>ruins.some(q=>c*TS+TS>=q.x0-TS&&c*TS<=q.x1+TS);
+  for(const s of spawns) if(s.type==='mummy'&&inRuins(s.c)) s.type=pick(['scorpion','scarab']);
   for(const s of spawns){
     if(s.c<22||(s.type!=='parrot'&&!PROPS.has(s.type)&&!(s.extra&&s.extra.force)&&safe.some(c=>Math.abs(c-s.c)<5))) continue;
     const e=makeEnemy(s.type,s.c,s.extra);if(!e) continue; enemies.push(e);
@@ -1257,6 +1261,10 @@ function respawn(){
   const keepMax=P.maxhp;
   P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.inv=1.2;
   eshots=[];pwaves=[];
+  // every foe comes back as it was at the start of the level: the killed ones return, the wounded ones heal.
+  // Breakable boxes and huts stay as they are; whatever a foe spawned (slime kids, hut lizards) goes away.
+  for(const e of enemies) if(!e.prop) e.dead=true;
+  enemies=enemies.filter(e=>e.prop&&!e.dead).concat(structuredClone(enemySnap));
   for(const [x,y] of powerSpots) if(!items.some(i=>i.k==='power'&&i.x===x)) items.push({k:'power',x,y,ph:0});
   if(arenaLocked&&!bossDead){arenaLocked=false;playSong('level');B=makeBoss();skyHeat=0}
   camZ=1;camX=clamp(P.x-VW/2,0,COLS*TS-VW);camY=camTargetY();
@@ -2695,6 +2703,7 @@ function bossHittable(){return B&&['sleep','dead','dying','revive','meteorUp','m
 function hitBoss(dmg,x,y){
   if(!bossHittable()) return;
   if(B.kind==='hydra'){hydraHit(dmg,x,y);return}
+  const dm=BOSSES[B.kind].dmgMult; if(dm) dmg*=dm();   // boss def dmgMult(): e.g. tougher while changing phase
   B.hp-=dmg;B.flash=.08;burst(x,y,6,'#fff',150);sfx('hit');
   if(B.kind==='dragon'&&B.phase===1&&B.hp<=B.max/2&&B.hp>EPS&&B.state!=='enrage') dragonEnrage();
   if(B.hp<=EPS){B.hp=0;B.state='dying';B.t=2;B.vx=0;eshots=eshots.filter(s=>s.k==='banana'||s.k==='needle');hitstop=.12;shake(.4,9)}
@@ -2720,7 +2729,7 @@ function bossDefeated(){
   const cx=B.x+B.w/2,cy=B.y+B.h/2;
   burst(cx,cy,50,BOSSES[B.kind].burst,420);stars(cx,cy,20);
   sporeTotal+=10;for(let i=0;i<10;i++) items.push({k:'spore',x:cx+rand(-60,60),y:Math.min(cy,FLOOR-60),ph:0,vy:rand(-600,-300),vx:rand(-160,160),drop:true,bonus:true});
-  eshots=[];skyHeat=0;
+  eshots=[];skyHeat=0;magnetT=.5;   // half a second later the spores fly to the player by themselves
   floater(door.x+door.w/2,door.y-30,T('fDoor'));
 }
 function updateBoss(dt){
@@ -2732,10 +2741,21 @@ function drawBoss(){if(!B||B.state==='dead')return; BOSSES[B.kind].draw()}
 
 // ==== bosses/croc.js ====
 /* ---------- crocodile ---------- */
-function makeCroc(){return{kind:'croc',x:ARENA_L+22*TS,y:FLOOR-112,w:270,h:112,hp:44,max:44,face:-1,state:'sleep',t:0,vx:0,vy:0,jaw:0,flash:0,leg:0,aboveT:0,last:'',repeat:0,windMax:.85,high:false,phase:1,spitCD:0,shots:0}}
+function makeCroc(){return{kind:'croc',x:ARENA_L+22*TS,y:FLOOR-112,w:270,h:112,hp:44,max:44,face:-1,state:'sleep',t:0,vx:0,vy:0,jaw:0,flash:0,leg:0,aboveT:0,last:'',repeat:0,windMax:.85,high:false,phase:1,spitCD:0,shots:0,chompRun:0}}
 function crocBody(){return{x:B.x+18,y:B.y+26,w:B.w-30,h:B.h-26}}
 function crocTail(){const cx=B.x+B.w/2,by=B.y+B.h;return B.face>0?{x:cx-218,y:by-82,w:101,h:70}:{x:cx+117,y:by-82,w:101,h:70}}
 function crocBite(){const hx=B.face>0?B.x+B.w-30:B.x-80;return{x:hx,y:B.y+10,w:110,h:70}}
+const CHOMP_LUNGE=62;   // how far the bite lunge carries it forward (420 px/s braking at 1400 px/s² for .28 s)
+const CHOMP_MAX=2;      // never more than two bites in a row
+// the danger zone of the bite, drawn while it opens its jaws: where the bite will land after the lunge
+function drawCrocBiteZone(){
+  const wind=B.state==='chompWind', b=crocBite(), k=wind?clamp(1-B.t/.45,0,1):1;
+  const x=b.x+(wind?B.face*CHOMP_LUNGE:0), a=wind?.12+.22*k:.38, pulse=.75+.25*Math.sin(time*30);
+  ctx.save();ctx.fillStyle=`rgba(230,40,30,${a*pulse})`;ctx.strokeStyle=`rgba(200,20,10,${(a+.25)*pulse})`;ctx.lineWidth=3;ctx.setLineDash([10,7]);
+  ctx.beginPath();ctx.roundRect(x,b.y,b.w,FLOOR-b.y,12);ctx.fill();ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle=`rgba(200,20,10,${(a+.15)*pulse})`;ctx.beginPath();ctx.ellipse(x+b.w/2,FLOOR-2,b.w/2,6,0,0,7);ctx.fill();
+  ctx.restore();
+}
 function crocMouth(){return{x:B.x+B.w/2+B.face*172,y:B.y+B.h-52}}
 // one rock of the spit burst: a fast arc that always lands at least MIN_D ahead of the mouth
 // and flies high over anything closer, so standing next to the crocodile is safe
@@ -2764,9 +2784,12 @@ function crocChoose(){
   const p2=B.phase===2;
   const dx=P.x+P.w/2-(B.x+B.w/2), adx=Math.abs(dx), above=playerAbove();
   B.face=dx>0?1:-1;
-  if(above&&B.aboveT>aboveLimit()) return crocLeap(true);
-  const opts=[];
-  if(!above&&adx<270) opts.push(['chomp',5]);
+  if(above&&B.aboveT>aboveLimit()){B.chompRun=0;return crocLeap(true)}
+  // the player is pressed against a wall of the arena: usually jump, so she can slip out under it instead of being pinned
+  if(!above&&Math.min(P.x-ARENA_L,ARENA_R-(P.x+P.w))<200&&Math.random()<.75){B.last='leap';B.repeat=0;B.chompRun=0;return crocLeap(false)}
+  const opts=[], biteOk=B.chompRun<CHOMP_MAX;
+  if(!above&&adx<270&&biteOk) opts.push(['chomp',5]);
+  if(!above&&adx<=180&&!biteOk) opts.push(['leap',3]);   // too many bites already: something else, even up close
   if(!above&&adx>280) opts.push(['charge',3]);
   if(adx>180||above) opts.push(['leap',above?3:2]);
   if(!above&&adx>320) opts.push(['walk',1.5]);
@@ -2776,7 +2799,7 @@ function crocChoose(){
   for(const o of opts) if(o[0]===B.last) o[1]*=B.repeat>=1?.15:.6;
   let r=Math.random()*opts.reduce((a,o)=>a+o[1],0), pk=opts[0][0];
   for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
-  B.repeat=pk===B.last?B.repeat+1:0; B.last=pk;
+  B.repeat=pk===B.last?B.repeat+1:0; B.last=pk; B.chompRun=pk==='chomp'?B.chompRun+1:0;
   if(pk==='chomp'){B.state='chompWind';B.t=p2?.34:.45}
   else if(pk==='charge'){B.state='windup';B.t=B.windMax=p2?.65:.85}
   else if(pk==='leap') crocLeap(false);
@@ -2800,13 +2823,13 @@ function updateCroc(dt){
       if(B.t<=0) crocChoose();break;
     case 'walk': {const dx=P.x+P.w/2-(B.x+B.w/2);B.face=dx>0?1:-1;B.vx=B.face*140*mult;B.t-=dt;
       if(playerAbove()&&B.aboveT>aboveLimit()){B.state='idle';B.t=.1}
-      else if(Math.abs(dx)<220&&!playerAbove()){B.state='chompWind';B.t=.4}else if(B.t<=0){B.state='idle';B.t=.3}}break;
+      else if(Math.abs(dx)<220&&!playerAbove()&&B.chompRun<CHOMP_MAX){B.state='chompWind';B.t=.4;B.chompRun++;B.last='chomp'}else if(B.t<=0){B.state='idle';B.t=.3}}break;
     case 'leapWind': B.vx=approach(B.vx,0,2000*dt);B.t-=dt;B.face=(P.x+P.w/2>B.x+B.w/2)?1:-1;
       if(Math.random()<.3) dust(B.x+B.w/2+rand(-100,100),FLOOR,1);
       if(B.t<=0) crocLaunch();break;
     case 'windup': B.vx=0;B.t-=dt;B.jaw=.25;
       if(Math.random()<.4) parts.push({x:B.x+B.w/2+B.face*150,y:B.y+45,vx:B.face*rand(40,120),vy:rand(-40,0),g:-30,c:'rgba(255,255,255,.8)',s:rand(4,7),life:.4,max:0,t:'puff'});
-      if(B.t<=0){B.state='charge';B.vx=B.face*580*mult;sfx('roar');B.jaw=.6}break;
+      if(B.t<=0){B.state='charge';B.vx=B.face*760*mult;sfx('roar');B.jaw=.6}break;
     case 'charge': if(Math.random()<.5)dust(B.x+B.w/2-B.face*100,FLOOR,1,-B.face);
       if(wall){B.state='stun';B.t=1.3;B.vx=0;B.jaw=0;shake(.45,13);sfx('boom');
         const n=p2?5:3;for(let i=0;i<n;i++)eshots.push({k:'rock',x:rand(ARENA_L+60,ARENA_R-60),y:-40-i*90,vy:0,g:1300,r:17})}break;
@@ -2873,10 +2896,12 @@ function drawCroc(){
   else{ctx.beginPath();ctx.ellipse(15,-37,2.5,6,0,0,7);ctx.fill();ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-2,-50);ctx.lineTo(26,-44);ctx.stroke()}
   ctx.restore();
   ctx.restore();
+  if(B.state==='chompWind'||B.state==='chomp') drawCrocBiteZone();
   if(B.state==='stun') for(let k=0;k<3;k++){const a=time*5+k*2.1;drawStar(cx+f*60+Math.cos(a)*40,B.y-10+Math.sin(a)*10,7,time*4)}
 }
 
-registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6});
+registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
+  dmgMult:()=>B.state==='enrage'?.4:1});   // while it changes into phase 2 it takes 60% less damage
 // ==== bosses/dragon.js ====
 /* ---------- dragon ---------- */
 // big animated wind swooshes blowing away from the dragon during the gust attack
@@ -3572,7 +3597,9 @@ function updateItems(dt){
   const cx=P.x+P.w/2, cy=P.y+P.h/2;
   for(const it of items){
     it.ph+=dt*3;
-    if(it.drop){it.vy+=1400*dt;it.y+=it.vy*dt;if(it.vx){it.x+=it.vx*dt;if(it.bonus)it.x=clamp(it.x,ARENA_L+20,ARENA_R-20)}
+    if(it.magnet){ // flies to the player faster and faster
+      const dx=cx-it.x,dy=cy-it.y,d=Math.hypot(dx,dy)||1;it.mv+=2800*dt;const s=Math.min(d,it.mv*dt);it.x+=dx/d*s;it.y+=dy/d*s}
+    else if(it.drop){it.vy+=1400*dt;it.y+=it.vy*dt;if(it.vx){it.x+=it.vx*dt;if(it.bonus)it.x=clamp(it.x,ARENA_L+20,ARENA_R-20)}
       const r=Math.floor((it.y+12)/TS),c=Math.floor(it.x/TS),t=tile(c,r);
       if(it.vy>0&&isFloorT(t)){it.y=r*TS-14;it.vy=0;it.vx=0;it.drop=false}
       else if(t===T_SAND&&it.vy>0){it.taken=true;dust(it.x,it.y,4)}
@@ -3583,11 +3610,17 @@ function updateItems(dt){
       if(it.k==='spore'){spores++;sporesGot++;sfx('coin');burst(it.x,it.y,6,'#ffcf6b',120,300,[2,4])}
       else if(it.k==='gold'){spores+=5;sporesGot+=5;sfx('power');stars(it.x,it.y,10);floater(it.x,it.y-30,'+5')}
       else if(it.k==='heart'){if(P.hp<P.maxhp)P.hp++;else{spores+=2;floater(it.x,it.y-30,T('fHeartFull'))}sfx('coin');burst(it.x,it.y,10,'#ff6b7a',160)}
-      else if(it.k==='power'){const was=P.power;P.power=Math.min(powerCap(),P.power+1);P.lockT=1.05;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);
+      else if(it.k==='power'){const was=P.power;P.power=Math.min(powerCap(),P.power+1);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);
         floater(it.x,it.y-40,T(P.power>was?['','fPower1','fPower2','fPower3'][P.power]:'fPowerMax'))}
     }
   }
   items=items.filter(i=>!i.taken);
+}
+// quick spore pick-up: the spores fly to the player by themselves. collectSporesOnScreen() takes every spore in view;
+// also(it) adds others, e.g. the boss's spores after the fight wherever they fell (see bossDefeated)
+function collectSporesOnScreen(also){
+  const vw=VW/camZ,vh=VH/camZ,inView=it=>it.x>camX-20&&it.x<camX+vw+20&&it.y>camY-60&&it.y<camY+vh+20;
+  for(const it of items) if(it.k==='spore'&&!it.taken&&!it.magnet&&!(it.hid&&!it.hid.found)&&(inView(it)||(also&&also(it)))){it.magnet=true;it.drop=false;it.mv=200}
 }
 // rotten branches: shake when stepped on, drop into the bog, grow back a few seconds later
 function updateCrumble(pl,dt){
@@ -3658,6 +3691,7 @@ function step(dt){
     arenaLocked=true;playSong(B.kind);B.state='intro';B.t=BOSSES[B.kind].introT||1.8;shake(.8,6);sfx('roar');
   }
   updateBoss(dt);
+  if(magnetT>0){magnetT-=dt;if(magnetT<=0)collectSporesOnScreen(it=>it.bonus)}   // after a boss fight: its spores too
   if(!P.dead&&bossContact(pb)) hurt(B.x+B.w/2);
   if(LV().update) LV().update(dt);   // per-level effects: rising poison, falling snow...
   updateShots(dt);
@@ -3691,6 +3725,7 @@ function startLevel(level,seed){
   P=newPlayer(3*TS,y);
   if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.power=carry.power} // a new level starts at full health
   cp={x:P.x,y:P.y};camX=0;poisonLvl=0;camZ=1;camY=camTargetY();
+  enemySnap=structuredClone(enemies.filter(e=>!e.prop));magnetT=0;
   playSong('level');
 }
 function newGame(){
@@ -4028,7 +4063,7 @@ function drawPlayer(){
   p._fr=null;
   if(p.dead){ if(p.fell) return; n=p.deadT<.25?'hurt':'death'; i=0 }
   else if(p.entering){n='door';i=p.enterT<.35?0:1}
-  else if(p.pickT>=0){const t=p.pickT; if(t<.15){n='pickup';i=0}else if(t<.35){n='pickup';i=1}else if(t<.55){n='pickup';i=2}else if(t<.8){n='special';i=1}else{n='special';i=2}}
+  else if(p.pickT>=0){const t=p.pickT; if(t<.15){n='pickup';i=0}else if(t<.35){n='pickup';i=1}else{n='pickup';i=2}}
   else if(p.heavyT>0){const e=HEAVY_T-p.heavyT; if(e<HEAVY_T*.68){n='fall';i=e<HEAVY_T*.34?0:1}else{n='land';i=0}}
   else if(p.dashT>0){n='run';i=1}
   else if(p.punchT>0){n='attack';i=p.punchT>PUNCH_ACTIVE[0]?0:1}
@@ -4780,7 +4815,8 @@ function togglePause(){
 /* ---------- level 1 mini-boss: the giant purple slime ---------- */
 // It sleeps in a clearing in the second half of the forest (the generator builds the clearing, see level.miniboss).
 // Woken up, it hops after the player, crouches and leaps high to land on her (the landing sends a wave of goo
-// along the floor both ways), and spits blobs of goo that a punch can knock away. Every third of its health it sheds
+// along the floor both ways), rams her, sliding fast along the floor (it stops before any drop), and spits blobs
+// of goo that a punch can knock away. Every third of its health it sheds
 // a small purple slime, and when it dies it bursts into two more. It falls through one-way planks, so they are
 // no safe refuge, and it never leaves its clearing.
 const BS_W=150, BS_H=112;
@@ -4845,9 +4881,16 @@ function bsUpdate(e,dt){
       if(adx>20) e.face=Math.sign(dx);
       if(e.t<=0&&e.onGround&&!P.dead){
         if(e.hops>=(rage?1:2)){e.hops=0;
-          if(adx>140&&(e.cd<=0||Math.random()<.55)){e.state='crouch';e.t=rage?.4:.55;e.cd=0;sfx('creak')}
-          else{e.state='spitWind';e.t=rage?.4:.55;e.cd=-1}}
-        else{e.hops++;e.vy=rage?-560:-500;e.vx=e.face*(rage?210:165);e.onGround=false;e.state='air';e.big=false}
+          const opts=[['spit',2]];
+          if(adx>140) opts.push(['leap',e.last==='leap'?1:3]);
+          if(adx>180&&Math.abs(dy)<70) opts.push(['ram',e.last==='ram'?1:rage?4:3]);   // only when she is on its floor
+          let r=Math.random()*opts.reduce((a,o)=>a+o[1],0),pk=opts[0][0];for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
+          e.last=pk;
+          if(pk==='leap'){e.state='crouch';e.t=rage?.4:.55;sfx('creak')}
+          else if(pk==='ram'){e.state='ramWind';e.t=rage?.45:.6;e.face=Math.sign(dx)||e.face;sfx('creak')}
+          else{e.state='spitWind';e.t=rage?.4:.55}}
+        else{e.hops++;const vy=rage?560:500,vx=rage?210:165,reach=vx*2*vy/G;   // a hop never ends over a drop: then it hops in place
+          e.vy=-vy;e.vx=groundAhead(e,e.face,reach*2)?e.face*vx:0;e.onGround=false;e.state='air';e.big=false}
       }
       break;
     case 'crouch': // squeezes down, trembling, then jumps at the player
@@ -4861,6 +4904,20 @@ function bsUpdate(e,dt){
         else{e.squash=.18;shake(.12,3);dust(cx,e.y+e.h,4);sfx('land');e.state='idle';e.t=rage?.25:.35}
         e.vx=0}
       break;
+    case 'ramWind': // backs up a little, trembling and scraping the ground
+      e.vx=groundAhead(e,-e.face,TS*.4)?-e.face*45:0;
+      if(Math.random()<.4) dust(cx-e.face*e.w*.4,e.y+e.h,1,-e.face);
+      if(e.t<=0){e.state='ram';e.t=1.6;e.rx=cx;e.vx=e.face*(rage?660:560);sfx('roar');shake(.15,4)}
+      break;
+    case 'ram':{ // slides at her; stops before a drop, at the edge of the clearing or at a wall
+      e.vx=e.face*(rage?660:560);
+      if(Math.random()<.6) dust(cx-e.face*e.w*.45,e.y+e.h,1,-e.face);
+      const edge=e.face>0?e.x+e.w>=e.x1-2:e.x<=e.x0+2, passed=e.face*(cx-(P.x+P.w/2))>240;
+      if(e.hitWall||edge||!groundAhead(e,e.face,TS*.6)||passed||e.t<=0){
+        const hard=e.hitWall||edge;e.vx=0;e.state='ramStop';e.t=hard?.7:.45;e.squash=.25;
+        shake(hard?.3:.12,hard?7:3);sfx(hard?'boom':'land');dust(cx+e.face*e.w*.45,e.y+e.h,6,e.face)}
+      break}
+    case 'ramStop': e.vx=0;if(e.t<=0){e.state='idle';e.t=rage?.25:.4}break;
     case 'spitWind':
       e.vx=0;if(adx>20) e.face=Math.sign(dx);
       if(e.t<=0){bsSpit(e);e.state='idle';e.t=rage?.6:.85}
@@ -4874,8 +4931,12 @@ function bsDraw(e){
   else if(e.state==='air') sx=e.vy<0?.82:.9;
   else if(e.squash>0) sx=1+e.squash;
   else if(e.state==='spitWind') sx=.94;
+  else if(e.state==='ramWind') sx=.9+Math.sin(time*45)*.02;
+  else if(e.state==='ram') sx=1.14;
   const hw=e.w/2*sx,hh=e.h*.96/sx;
-  ctx.save();ctx.translate(cx,by);if(e.state==='crouch')ctx.translate(rand(-1.5,1.5),0);
+  ctx.save();ctx.translate(cx,by);if(e.state==='crouch'||e.state==='ramWind')ctx.translate(rand(-1.5,1.5),0);
+  if(e.state==='ram') ctx.transform(1,0,f*.22,1,0,0);          // leans forward into the charge
+  else if(e.state==='ramWind') ctx.transform(1,0,-f*.1,1,0,0);  // leans back before it
   shadow(0,0,hw);
   // body, with a darker core and bubbles floating up inside it
   blob(0,0,hw,hh);
@@ -4955,7 +5016,7 @@ function drawGoo(b){
 registerLevel(1,{biome:'forest',boss:'croc',song:'forest',miniboss:'bigSlime',
   i18n:{ru:{fBigSlime:'огромный слайм проснулся!'},en:{fBigSlime:'the giant slime wakes up!'}}});
 
-registerEnemy('bigSlime',{size:{w:BS_W,h:BS_H,hp:16},update:bsUpdate,draw:bsDraw,init:bsInit,heart:1,deathColor:'#b77ee0',
+registerEnemy('bigSlime',{size:{w:BS_W,h:BS_H,hp:48},update:bsUpdate,draw:bsDraw,init:bsInit,heart:1,deathColor:'#b77ee0',
   // the top of the dome is soft: a stomp hurts it but does not squash it flat
   contact:e=>({hurt:[shrink(e,12)],stomp:{x:e.x+20,y:e.y,w:e.w-40,h:30},dmg:2}),
   onHit:e=>bsWake(e),
@@ -5972,7 +6033,8 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     hitBoss:(d,x,y)=>hitBoss(d,x,y),
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
-    get arenaLocked(){return arenaLocked},get spores(){return spores}}};
+    get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},
+    croc:()=>crocChoose()}};   // the crocodile picks its next move now
 // ==== main.js ====
 /* ---------- main loop (render capped at 60 fps, fixed 120 Hz physics) ---------- */
 newGame();

@@ -6,6 +6,7 @@ function bossHittable(){return B&&['sleep','dead','dying','revive','meteorUp','m
 function hitBoss(dmg,x,y){
   if(!bossHittable()) return;
   if(B.kind==='hydra'){hydraHit(dmg,x,y);return}
+  const dm=BOSSES[B.kind].dmgMult; if(dm) dmg*=dm();   // boss def dmgMult(): e.g. tougher while changing phase
   B.hp-=dmg;B.flash=.08;burst(x,y,6,'#fff',150);sfx('hit');
   if(B.kind==='dragon'&&B.phase===1&&B.hp<=B.max/2&&B.hp>EPS&&B.state!=='enrage') dragonEnrage();
   if(B.hp<=EPS){B.hp=0;B.state='dying';B.t=2;B.vx=0;eshots=eshots.filter(s=>s.k==='banana'||s.k==='needle');hitstop=.12;shake(.4,9)}
@@ -31,7 +32,7 @@ function bossDefeated(){
   const cx=B.x+B.w/2,cy=B.y+B.h/2;
   burst(cx,cy,50,BOSSES[B.kind].burst,420);stars(cx,cy,20);
   sporeTotal+=10;for(let i=0;i<10;i++) items.push({k:'spore',x:cx+rand(-60,60),y:Math.min(cy,FLOOR-60),ph:0,vy:rand(-600,-300),vx:rand(-160,160),drop:true,bonus:true});
-  eshots=[];skyHeat=0;
+  eshots=[];skyHeat=0;magnetT=.5;   // half a second later the spores fly to the player by themselves
   floater(door.x+door.w/2,door.y-30,T('fDoor'));
 }
 function updateBoss(dt){

@@ -33,6 +33,10 @@ function respawn(){
   const keepMax=P.maxhp;
   P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.inv=1.2;
   eshots=[];pwaves=[];
+  // every foe comes back as it was at the start of the level: the killed ones return, the wounded ones heal.
+  // Breakable boxes and huts stay as they are; whatever a foe spawned (slime kids, hut lizards) goes away.
+  for(const e of enemies) if(!e.prop) e.dead=true;
+  enemies=enemies.filter(e=>e.prop&&!e.dead).concat(structuredClone(enemySnap));
   for(const [x,y] of powerSpots) if(!items.some(i=>i.k==='power'&&i.x===x)) items.push({k:'power',x,y,ph:0});
   if(arenaLocked&&!bossDead){arenaLocked=false;playSong('level');B=makeBoss();skyHeat=0}
   camZ=1;camX=clamp(P.x-VW/2,0,COLS*TS-VW);camY=camTargetY();

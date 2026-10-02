@@ -125,7 +125,9 @@ function updateItems(dt){
   const cx=P.x+P.w/2, cy=P.y+P.h/2;
   for(const it of items){
     it.ph+=dt*3;
-    if(it.drop){it.vy+=1400*dt;it.y+=it.vy*dt;if(it.vx){it.x+=it.vx*dt;if(it.bonus)it.x=clamp(it.x,ARENA_L+20,ARENA_R-20)}
+    if(it.magnet){ // flies to the player faster and faster
+      const dx=cx-it.x,dy=cy-it.y,d=Math.hypot(dx,dy)||1;it.mv+=2800*dt;const s=Math.min(d,it.mv*dt);it.x+=dx/d*s;it.y+=dy/d*s}
+    else if(it.drop){it.vy+=1400*dt;it.y+=it.vy*dt;if(it.vx){it.x+=it.vx*dt;if(it.bonus)it.x=clamp(it.x,ARENA_L+20,ARENA_R-20)}
       const r=Math.floor((it.y+12)/TS),c=Math.floor(it.x/TS),t=tile(c,r);
       if(it.vy>0&&isFloorT(t)){it.y=r*TS-14;it.vy=0;it.vx=0;it.drop=false}
       else if(t===T_SAND&&it.vy>0){it.taken=true;dust(it.x,it.y,4)}
@@ -136,11 +138,17 @@ function updateItems(dt){
       if(it.k==='spore'){spores++;sporesGot++;sfx('coin');burst(it.x,it.y,6,'#ffcf6b',120,300,[2,4])}
       else if(it.k==='gold'){spores+=5;sporesGot+=5;sfx('power');stars(it.x,it.y,10);floater(it.x,it.y-30,'+5')}
       else if(it.k==='heart'){if(P.hp<P.maxhp)P.hp++;else{spores+=2;floater(it.x,it.y-30,T('fHeartFull'))}sfx('coin');burst(it.x,it.y,10,'#ff6b7a',160)}
-      else if(it.k==='power'){const was=P.power;P.power=Math.min(powerCap(),P.power+1);P.lockT=1.05;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);
+      else if(it.k==='power'){const was=P.power;P.power=Math.min(powerCap(),P.power+1);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);
         floater(it.x,it.y-40,T(P.power>was?['','fPower1','fPower2','fPower3'][P.power]:'fPowerMax'))}
     }
   }
   items=items.filter(i=>!i.taken);
+}
+// quick spore pick-up: the spores fly to the player by themselves. collectSporesOnScreen() takes every spore in view;
+// also(it) adds others, e.g. the boss's spores after the fight wherever they fell (see bossDefeated)
+function collectSporesOnScreen(also){
+  const vw=VW/camZ,vh=VH/camZ,inView=it=>it.x>camX-20&&it.x<camX+vw+20&&it.y>camY-60&&it.y<camY+vh+20;
+  for(const it of items) if(it.k==='spore'&&!it.taken&&!it.magnet&&!(it.hid&&!it.hid.found)&&(inView(it)||(also&&also(it)))){it.magnet=true;it.drop=false;it.mv=200}
 }
 // rotten branches: shake when stepped on, drop into the bog, grow back a few seconds later
 function updateCrumble(pl,dt){

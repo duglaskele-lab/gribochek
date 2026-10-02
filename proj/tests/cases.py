@@ -149,20 +149,102 @@ def bigslime(c):
     r=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;
       P.x=e.x-260;P.y=e.y+e.h-P.h;P.vx=0;P.vy=0;
       const seen=new Set(),shots=new Set();let kids=0;
-      g.sim(14,()=>{P.inv=1e9;seen.add(e.state);for(const b of g.eshots)shots.add(b.k)});
+      g.sim(40,i=>{P.inv=1e9;seen.add(e.state);if(i%360===0){P.x=(i/360)%2?e.x1-60:e.x0+30;P.y=e.y+e.h-P.h}   // she keeps changing sides
+        for(const b of g.eshots)shots.add(b.k)});
       const out={states:[...seen].sort().join(','),shots:[...shots].sort().join(','),inRange:e.x>=e.x0-1&&e.x+e.w<=e.x1+1};
-      for(let i=0;i<40&&!e.dead;i++){g.attack(e,1.25,e.x-10);g.sim(.05,()=>{P.inv=1e9})}
+      for(let i=0;i<60&&!e.dead;i++){g.attack(e,1.25,e.x-10);g.sim(.05,()=>{P.inv=1e9})}
       out.dead=e.dead;out.kids=g.enemies.filter(k=>k.mini).length;
       g.sim(3,()=>{P.inv=1e9});
       return out""")
     assert r['dead'] and r['kids']>=3 and r['inRange'], r
-    for s in ('wake','crouch','air','spitWind'): assert s in r['states'], r
+    for s in ('wake','crouch','air','spitWind','ramWind','ram','ramStop'): assert s in r['states'], r
     assert 'goo' in r['shots'] and 'gooWave' in r['shots'], r
+    # the ram never carries it off its clearing, whatever the seed
+    for seed in range(1,11):
+        c.start(1,seed)
+        rr=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;let rams=0,out=false;
+          for(let k=0;k<6;k++){const side=k%2?1:-1;P.x=side>0?e.x1+400:e.x0-400;P.y=e.y+e.h-P.h;
+            e.state='ramWind';e.t=.1;e.face=side;g.sim(2.5,()=>{P.inv=1e9;P.vy=0;if(e.state==='ram')rams++;if(e.x<e.x0-1||e.x+e.w>e.x1+1)out=true})}
+          return [e.hp,rams>0,out,!e.dead,e.onGround]""")
+        assert rr[0]==48 and rr[1] and not rr[2] and rr[3], (seed,rr)
+    # with a pit dug in front of it (and its clearing limits taken away) the ram still stops at the edge
+    c.start(1,2)
+    gap=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime'),G=g.grid;
+      const c0=Math.floor((e.x+e.w)/40)+3;for(let c=c0;c<c0+3;c++)for(let r=0;r<G.length;r++)G[r][c]=0;
+      e.x0=0;e.x1=1e6;P.inv=1e9;P.x=c0*40+400;e.state='ramWind';e.t=.05;e.face=1;g.sim(3,()=>{P.inv=1e9});
+      return c0*40-(e.x+e.w)""")
+    assert 0<=gap<40, gap
     c.start(1,4)
     c.js("const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.x=e.x-200;P.y=e.y+e.h-P.h;P.inv=1e9;g.sim(.4,()=>{P.inv=1e9})")
     c.shot('bigslime_sleep')
     c.js("const P=g.P;g.sim(2.2,()=>{P.inv=1e9})"); c.shot('bigslime_awake')
     return f"states {r['states']}; kids {r['kids']}"
+
+@test('respawn','player','enemies')
+def respawn(c):
+    # when the player dies, killed foes come back and wounded ones heal
+    for l in (1,2,3,4):
+        c.start(l,2)
+        r=c.js("""const P=g.P,foes=()=>g.enemies.filter(e=>!e.prop),n0=foes().length,a=foes();
+          a[0].dead=true;a[1].hp=.01;
+          g.sim(.02,()=>{P.inv=1e9});const n2=foes().length;
+          P.inv=0;P.hp=0;P.dead=true;P.deadT=0;P.fell=true;g.sim(2);   // she dies and comes back at the checkpoint
+          const after=foes();return {n0,n2,n3:after.length,healed:after.every(e=>e.hp>.01)}""")
+        assert r['n2']==r['n0']-1 and r['n3']==r['n0'] and r['healed'], (l,r)
+    return 'killed foes return after the player dies on levels 1-4'
+
+@test('pickup','player')
+def pickup(c):
+    # picking up the power mushroom locks the player only for the pick-up part of the animation
+    c.start(1,1)
+    t=c.js("""const P=g.P;g.items.push({k:'power',x:P.x+P.w/2,y:P.y+P.h/2,ph:0});let t=0;
+      g.sim(2,i=>{if(P.pickT<0&&i>2)return false;t=i/120});return t""")
+    assert t<.6, t
+    return f'locked for {t:.2f} s'
+
+@test('magnet','boss1')
+def magnet(c):
+    # after the boss dies its spores fly to the player by themselves
+    c.js('g.startBoss(1);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+120;g.lock();g.sim(2.5,()=>{P.inv=1e9});g.hitBoss(999,g.B.x+g.B.w/2,g.B.y+g.B.h/2)")
+    r=c.js("""const P=g.P,bonus=()=>g.items.filter(i=>i.bonus);g.sim(5,()=>{P.inv=1e9;if(g.dead)return false});
+      const n0=bonus().length;g.sim(.4,()=>{P.inv=1e9});const early=bonus().filter(i=>i.magnet).length;
+      g.sim(.2,()=>{P.inv=1e9});const pulled=bonus().filter(i=>i.magnet).length;
+      g.sim(2,()=>{P.inv=1e9});return [g.dead,n0,early,pulled,bonus().length]""")
+    assert r[0] and r[1]==10 and r[2]==0 and r[3]>0 and r[4]==0, r
+    return 'all 10 boss spores collected automatically'
+
+@test('croc_rules','boss1')
+def croc_rules(c):
+    c.js('g.startBoss(1);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P,out={};
+      // 60% less damage while turning into phase 2
+      B.state='enrage';B.t=1;let h=B.hp;g.hitBoss(10,B.x+B.w/2,B.y+B.h/2);out.enrage=h-B.hp;
+      B.state='idle';h=B.hp;g.hitBoss(10,B.x+B.w/2,B.y+B.h/2);out.normal=h-B.hp;
+      // never three bites in a row, even with the player right in front of it
+      let run=0,worst=0;for(let i=0;i<300;i++){B.state='idle';B.t=0;B.x=(g.arena[0]+g.arena[1])/2-B.w/2;
+        P.x=B.x+B.w+20;P.y=g.P.y;B.aboveT=0;g.croc();const bite=B.state==='chompWind';run=bite?run+1:0;worst=Math.max(worst,run)}
+      out.worst=worst;
+      // player against a wall: it mostly jumps
+      let leaps=0;for(let i=0;i<400;i++){B.state='idle';B.t=0;B.chompRun=0;B.x=g.arena[0]+300;P.x=g.arena[0]+40;g.croc();if(B.state==='leapWind')leaps++}
+      out.wall=leaps/400;return out""")
+    assert abs(r['enrage']-4)<.01 and abs(r['normal']-10)<.01, r
+    assert r['worst']<=2, r
+    assert .65<r['wall']<.9, r
+    return f"bites in a row <= {r['worst']}, near wall leaps {r['wall']:.0%}"
+
+@test('mummy_ruins','gen2')
+def mummy_ruins(c):
+    # no mummy is placed inside the ruined town of level 2
+    n=0
+    for seed in range(1,21):
+        c.js(f'g.start(2,{seed})')
+        r=c.js("""const R=g.ruins;return g.enemies.filter(e=>e.type==='mummy').map(e=>e.x+e.w/2).filter(x=>R.some(q=>x>=q.x0-40&&x<=q.x1+40)).length""")
+        assert r==0, (seed,r)
+        n+=c.js("return g.enemies.filter(e=>e.type==='mummy').length")
+    assert n>0, 'no mummies at all'
+    return f'{n} mummies on 20 maps, none in the ruins'
 
 # ------------------------------------------------------------------ rendering / ui (screenshots for a human look)
 @test('render')

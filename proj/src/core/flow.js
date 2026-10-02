@@ -7,6 +7,7 @@ function startLevel(level,seed){
   P=newPlayer(3*TS,y);
   if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.power=carry.power} // a new level starts at full health
   cp={x:P.x,y:P.y};camX=0;poisonLvl=0;camZ=1;camY=camTargetY();
+  enemySnap=structuredClone(enemies.filter(e=>!e.prop));magnetT=0;
   playSong('level');
 }
 function newGame(){

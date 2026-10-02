@@ -4,7 +4,7 @@
 registerLevel(1,{biome:'forest',boss:'croc',song:'forest',miniboss:'bigSlime',
   i18n:{ru:{fBigSlime:'огромный слайм проснулся!'},en:{fBigSlime:'the giant slime wakes up!'}}});
 
-registerEnemy('bigSlime',{size:{w:BS_W,h:BS_H,hp:16},update:bsUpdate,draw:bsDraw,init:bsInit,heart:1,deathColor:'#b77ee0',
+registerEnemy('bigSlime',{size:{w:BS_W,h:BS_H,hp:48},update:bsUpdate,draw:bsDraw,init:bsInit,heart:1,deathColor:'#b77ee0',
   // the top of the dome is soft: a stomp hurts it but does not squash it flat
   contact:e=>({hurt:[shrink(e,12)],stomp:{x:e.x+20,y:e.y,w:e.w-40,h:30},dmg:2}),
   onHit:e=>bsWake(e),
