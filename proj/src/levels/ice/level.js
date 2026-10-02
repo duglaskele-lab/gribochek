@@ -36,7 +36,8 @@ registerLevel(4,{
 });
 
 registerBoss('snowman',{make:makeSnowman,update:updateSnowman,draw:drawSnowman,hitMult:smHitMult,contact:smContact,
-  burst:'#eef6ff',nameKey:'boss4',introT:1.8,camBottom:true});
+  burst:'#eef6ff',nameKey:'boss4',introT:1.8,camBottom:true,
+  dmgMult:()=>B.state==='split'||B.state==='headThrow'?.25:1});   // falling apart (split, head throw): 75% less damage
 
 registerEnemy('iceSlime',{size:{w:62,h:46,hp:3},update:ICE_EUPD.iceSlime,draw:ICE_EDRAW.iceSlime,heart:.15,deathColor:'#9fdcf5',
   init:e=>{e.bcd=2+RNG()*4;e.t=.4+RNG();e.breathK=0},

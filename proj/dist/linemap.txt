@@ -42,9 +42,9 @@
 5074-5075	levels/swamp/level.js
 5077-5371	levels/ice/gen.js
 5373-5472	levels/ice/draw.js
-5474-5741	levels/ice/foes.js
-5743-6077	levels/ice/snowman.js
-6079-6109	levels/ice/music.js
-6111-6174	levels/ice/level.js
-6176-6197	debug.js
-6199-6213	main.js
+5474-5744	levels/ice/foes.js
+5746-6124	levels/ice/snowman.js
+6126-6156	levels/ice/music.js
+6158-6222	levels/ice/level.js
+6224-6245	debug.js
+6247-6261	main.js

@@ -2,8 +2,8 @@
 # A changed file under src/ that matches nothing makes --changed run every test.
 ALWAYS={'smoke'}
 ZONES=[
-  ('src/levels/ice/snowman.js', {'boss4','snowman_throw'}),
-  ('src/levels/ice/foes.js',    {'ice_foes','boss4'}),          # boss4: the snowman shares the ice projectiles
+  ('src/levels/ice/snowman.js', {'boss4','snowman_throw','snowman_moves'}),
+  ('src/levels/ice/foes.js',    {'ice_foes','boss4','witch_flake'}),          # boss4: the snowman shares the ice projectiles
   ('src/levels/ice/gen.js',     {'gen4','ice_physics','boss4','snowman_throw'}),
   ('src/levels/ice/draw.js',    {'render'}),
   ('src/levels/ice/music.js',   set()),

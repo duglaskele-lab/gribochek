@@ -26,7 +26,8 @@ function flyMove(e,dt){
   const oy=e.y;e.y+=e.vy*dt;if(flyBlocked(e)){e.y=oy;e.vy*=-.3;e.hitV=1}else e.hitV=0;
 }
 function witchTip(e){return{x:e.x+e.w/2+e.face*20,y:e.y+4}}
-// a big glowing snowflake that homes in for a moment, then flies straight; punches cannot knock it away
+// a big glowing snowflake that homes in for a moment, then flies straight, faster and faster; it passes through
+// rock and ice; punches cannot knock it away
 function witchFlake(e){
   const t=witchTip(e),dx=P.x+P.w/2-t.x,dy=P.y+P.h/2-t.y,l=Math.hypot(dx,dy)||1,sp=230;
   eshots.push({k:'flake',x:t.x,y:t.y,vx:dx/l*sp,vy:dy/l*sp,sp,home:.7,r:17,life:4,rot:0});sfx('flake');
@@ -230,9 +231,11 @@ function updateIceShot(b,dt,pb){
     case 'flake':{
       b.life-=dt;b.rot+=dt*3;
       if(b.home>0){b.home-=dt;const tx=P.x+P.w/2-b.x,ty=P.y+P.h/2-b.y,l=Math.hypot(tx,ty)||1,k=Math.min(1,dt*3.2);b.vx+=(tx/l*b.sp-b.vx)*k;b.vy+=(ty/l*b.sp-b.vy)*k}
+      if(b.home<=0){const k=Math.min(1.9,1+dt*.9);if(Math.hypot(b.vx,b.vy)*k<720){b.vx*=k;b.vy*=k}}   // speeds up
+      else b.sp+=dt*120;
       b.x+=b.vx*dt;b.y+=b.vy*dt;
       if(Math.random()<.5)parts.push({x:b.x+rand(-10,10),y:b.y+rand(-10,10),vx:0,vy:20,g:0,c:'rgba(200,240,255,.8)',s:rand(2,4),life:.35,max:0,t:'dot'});
-      if(b.life<=0||solid(Math.floor(b.x/TS),Math.floor(b.y/TS))){b.dead=true;iceShards(b.x,b.y,10,170);sfx('shatter')}
+      if(b.life<=0||b.y>WH+40||b.y<-200){b.dead=true;if(b.life<=0)iceShards(b.x,b.y,10,170)}   // flies through walls and floors
       else if(!P.dead&&circleBox(b.x,b.y,b.r*.8,pb)){hurt(b.x);b.dead=true;iceShards(b.x,b.y,10,170);sfx('shatter')}
       return}
     case 'snowball':

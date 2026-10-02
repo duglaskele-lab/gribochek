@@ -5499,7 +5499,8 @@ function flyMove(e,dt){
   const oy=e.y;e.y+=e.vy*dt;if(flyBlocked(e)){e.y=oy;e.vy*=-.3;e.hitV=1}else e.hitV=0;
 }
 function witchTip(e){return{x:e.x+e.w/2+e.face*20,y:e.y+4}}
-// a big glowing snowflake that homes in for a moment, then flies straight; punches cannot knock it away
+// a big glowing snowflake that homes in for a moment, then flies straight, faster and faster; it passes through
+// rock and ice; punches cannot knock it away
 function witchFlake(e){
   const t=witchTip(e),dx=P.x+P.w/2-t.x,dy=P.y+P.h/2-t.y,l=Math.hypot(dx,dy)||1,sp=230;
   eshots.push({k:'flake',x:t.x,y:t.y,vx:dx/l*sp,vy:dy/l*sp,sp,home:.7,r:17,life:4,rot:0});sfx('flake');
@@ -5703,9 +5704,11 @@ function updateIceShot(b,dt,pb){
     case 'flake':{
       b.life-=dt;b.rot+=dt*3;
       if(b.home>0){b.home-=dt;const tx=P.x+P.w/2-b.x,ty=P.y+P.h/2-b.y,l=Math.hypot(tx,ty)||1,k=Math.min(1,dt*3.2);b.vx+=(tx/l*b.sp-b.vx)*k;b.vy+=(ty/l*b.sp-b.vy)*k}
+      if(b.home<=0){const k=Math.min(1.9,1+dt*.9);if(Math.hypot(b.vx,b.vy)*k<720){b.vx*=k;b.vy*=k}}   // speeds up
+      else b.sp+=dt*120;
       b.x+=b.vx*dt;b.y+=b.vy*dt;
       if(Math.random()<.5)parts.push({x:b.x+rand(-10,10),y:b.y+rand(-10,10),vx:0,vy:20,g:0,c:'rgba(200,240,255,.8)',s:rand(2,4),life:.35,max:0,t:'dot'});
-      if(b.life<=0||solid(Math.floor(b.x/TS),Math.floor(b.y/TS))){b.dead=true;iceShards(b.x,b.y,10,170);sfx('shatter')}
+      if(b.life<=0||b.y>WH+40||b.y<-200){b.dead=true;if(b.life<=0)iceShards(b.x,b.y,10,170)}   // flies through walls and floors
       else if(!P.dead&&circleBox(b.x,b.y,b.r*.8,pb)){hurt(b.x);b.dead=true;iceShards(b.x,b.y,10,170);sfx('shatter')}
       return}
     case 'snowball':
@@ -5768,6 +5771,8 @@ function smChoose(){
   if(d<270)o.push(['slam',3]);
   if(d>190&&d<640)o.push(['punch',2.4]);
   if(B.throwCD<=0&&d>200)o.push(['throw',p2?2.4:1.8]);
+  o.push(['clap',d<480?2.4:1]);
+  if(p2&&d>140)o.push(['frost',2.2]);
   if(d>230)o.push(['volley',2]);
   o.push(['hop',d>380?2.6:1.1]);
   if(B.splitCD<=0&&d>150&&room>420)o.push(['split',p2?2.6:1.6]);
@@ -5777,6 +5782,8 @@ function smChoose(){
   switch(k){
     case 'slam': B.state='slamWind';B.t=.7*m;sfx('creak');break;
     case 'throw': B.state='throwWind';B.t=.65*m;B.tMax=B.t;sfx('creak');break;
+    case 'clap': B.state='clapWind';B.t=SM_CLAP_WIND;sfx('creak');break;
+    case 'frost': B.state='frostWind';B.t=.7;smFrostAim(0);sfx('breath');break;
     case 'punch': B.state='punchWind';B.t=.75*m;B.tMax=B.t;smAimPunch();break;
     case 'volley': B.state='volleyWind';B.t=.6*m;break;
     case 'hop': B.state='hopWind';B.t=.5*m;break;
@@ -5830,9 +5837,17 @@ function smSplitUpdate(dt){
     }
   }
   if(B.pieces.every(p=>p.st==='done')||B.t>7){
-    B.x=tx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.state='reform';B.t=.55*smMult();B.face=-dir;smKick(5);shake(.25,5);sfx('land');B.splitCD=p2?7:9;
+    B.x=tx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.state='reform';B.t=.55*smMult();B.hf=B.hb=null;B.face=-dir;smKick(5);shake(.25,5);sfx('land');B.splitCD=p2?7:9;
   }
 }
+/* the clap: it whirls its arms (0.3 s), flings them out wide and claps them together high over its head.
+   The arms sweep everything above the height of a standing player, far to both sides: stay on the ground. */
+const SM_CLAP_WIND=.3, SM_CLAP_REACH=330, SM_CLAP_LOW=72;   // reach to each side; the sweep stays this high above the floor
+function smClapZone(){const cx=smCX();return{x:cx-SM_CLAP_REACH,y:iceCeil,w:SM_CLAP_REACH*2,h:FLOOR-SM_CLAP_LOW-iceCeil}}
+/* phase 2: frost breath, a beam from the mouth to the floor; the spot it hits walks away from the snowman */
+const SM_FROST_T=1.7;
+function smFrostAim(k){const f=B.face,h=smBalls()[2],mx=h.x+f*h.r*.6,my=h.y+10,near=mx+f*90,far=f>0?ARENA_R-30:ARENA_L+30,
+  gx=near+(far-near)*k;B.frost={mx,my,gx:f>0?Math.min(gx,far):Math.max(gx,far),gy:FLOOR-4}}
 /* the head throw */
 // centres of the balls when stacked
 const smStackY=i=>FLOOR-[62,156,228][i];
@@ -5847,7 +5862,7 @@ function smThrowStart(){
     for(const p of [B.pieces[0],B.pieces[1]]){p.st='done';p.x=B.sx;p.y=smStackY(p.i)}   // the body stays put
   }else{ // thrown in an arc at the player; it stays where it lands
     B.throwKind=kind;hd.st='fly';
-    const tx=clamp(pcx+P.vx*.3,ARENA_L+60,ARENA_R-60),ty=FLOOR-hd.r,Tt=clamp(Math.abs(tx-hd.x)/430,.7,1.25),g=G*.8;
+    const tx=clamp(pcx,ARENA_L+60,ARENA_R-60),ty=FLOOR-hd.r,Tt=clamp(Math.abs(tx-hd.x)/430,.7,1.25),g=G*.8;
     hd.vx=(tx-hd.x)/Tt;hd.vy=(ty-hd.y-.5*g*Tt*Tt)/Tt;
   }
 }
@@ -5907,7 +5922,7 @@ function smThrowUpdate(dt){
     }else if(p.st==='stack') smStackAnim(p,dt,.3,p.i?60:0);
   }
   if(B.pieces.every(p=>p.st==='done')||B.t>9){
-    B.x=B.sx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.moving=false;B.state='reform';B.t=.5*smMult();
+    B.x=B.sx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.moving=false;B.state='reform';B.t=.5*smMult();B.hf=B.hb=null;
     B.face=(P.x+P.w/2>B.sx)?1:-1;smKick(5);shake(.25,5);sfx('land');
   }
 }
@@ -5955,7 +5970,8 @@ function updateSnowman(dt){
     case 'enrage': B.t-=dt;B.mouth=.8+.2*Math.sin(time*24);B.lean=Math.sin(time*30)*4;tf=[sh.fx+f*30,sh.fy-90];tb=[sh.bx-f*30,sh.by-90];
       if(Math.random()<.4)snowPuff(head.x+rand(-30,30),head.y-head.r,1);
       if(B.t<=0){B.phase=2;B.state='idle';B.t=.3;B.splitCD=Math.min(B.splitCD,1.5);floater(cx,B.y-40,T('fPhase2s'))}break;
-    case 'reform': B.t-=dt;if(B.t<=0){B.state='idle';B.t=.35*m}break;
+    case 'reform': B.t-=dt;rate=3.5;   // the arms grow back out of the shoulders, slowly
+      tf=[sh.fx+f*40,sh.fy+24];tb=[sh.bx-f*40,sh.by+20];if(B.t<=0){B.state='idle';B.t=.35*m}break;
     case 'slamWind':{const k=clamp(1-B.t/(.7*m),0,1);B.t-=dt;B.lean=-f*10*k;
       tf=[sh.fx+f*(30-k*40),sh.fy-60-k*80];tb=[sh.bx+f*(40*k),sh.by-60-k*80];rate=14;
       if(B.t<=0){B.state='slam';B.t=.55}break}
@@ -5977,6 +5993,28 @@ function updateSnowman(dt){
       B.t-=dt;const k=clamp(1-B.t/B.tMax,0,1);rate=16;B.lean=-f*8*k;
       tf=[head.x+f*head.r*.9,head.y-k*20];tb=[head.x-f*head.r*.9,head.y-k*20];B.sqv[2]-=k*dt*30;
       if(B.t<=0)smThrowStart();break}
+    case 'clapWind':{ // the arms whirl round the shoulders
+      B.t-=dt;rate=40;const a=time*22;tf=[sh.fx+Math.cos(a)*50,sh.fy+Math.sin(a)*50];tb=[sh.bx+Math.cos(a+Math.PI)*50,sh.by+Math.sin(a+Math.PI)*50];
+      B.mouth=.4;if(B.t<=0){B.state='clapOut';B.t=.22;sfx('creak')}break}
+    case 'clapOut': // arms flung out wide
+      B.t-=dt;rate=30;tf=[cx+f*SM_CLAP_REACH,sh.fy-20];tb=[cx-f*SM_CLAP_REACH,sh.by-20];B.mouth=.6;
+      if(B.t<=0){B.state='clap';B.t=.28;B.hitDone=false}break;
+    case 'clap':{ // they sweep up and meet over the head
+      B.t-=dt;rate=24;tf=[cx+f*8,headTop-60];tb=[cx-f*8,headTop-60];B.mouth=1;
+      if(B.t<.16&&!B.hitDone){B.hitDone=true;sfx('boom');shake(.35,8);snowPuff(cx,headTop-60,10);iceShards(cx,headTop-60,12,260)}
+      if(!P.dead&&B.t>.04&&overlap(smClapZone(),{x:P.x+3,y:P.y+6,w:P.w-6,h:P.h-6})) hurt(cx);
+      if(B.t<=0){B.state='idle';B.t=p2?.45:.7}break}
+    case 'frostWind': // aims at the floor right in front, frost gathering at the mouth
+      B.t-=dt;B.mouth=approach(B.mouth,1,dt*3);B.lean=-f*6;smFrostAim(0);
+      if(Math.random()<.6)parts.push({x:B.frost.mx+rand(-8,8),y:B.frost.my+rand(-8,8),vx:f*rand(20,60),vy:rand(-20,20),g:0,c:'rgba(220,245,255,.9)',s:rand(3,6),life:.3,max:0,t:'puff'});
+      if(B.t<=0){B.state='frost';B.t=SM_FROST_T;sfx('breath')}break;
+    case 'frost':{ // the beam: the spot it hits on the floor moves further and further away
+      B.t-=dt;B.mouth=1;const k=1-B.t/SM_FROST_T;smFrostAim(k);B.lean=f*4*k;const fr=B.frost;
+      if(Math.random()<.8)iceShards(fr.gx,fr.gy,1,120);
+      if(Math.random()<.5)parts.push({x:fr.gx+rand(-14,14),y:fr.gy-rand(0,20),vx:rand(-40,40),vy:rand(-90,-30),g:0,c:'rgba(225,245,255,.9)',s:rand(5,10),life:.4,max:0,t:'puff'});
+      if(Math.random()<.12)sfx('breath');
+      if(!P.dead&&segDist(pcx,P.y+P.h/2,fr.mx,fr.my,fr.gx,fr.gy)<30) hurt(fr.gx);
+      if(B.t<=0){B.state='idle';B.t=.6;B.frost=null}break}
     case 'volleyWind': B.t-=dt;B.mouth=approach(B.mouth,1,dt*3);B.lean=-f*10;   // no arm movement: only the mouth opens
       if(B.t<=0){B.state='volley';B.shots=0;B.t=0}break;
     case 'volley':{B.t-=dt;B.mouth=1;B.lean=-f*6;const n=p2?6:4;
@@ -5990,7 +6028,7 @@ function updateSnowman(dt){
       if(B.t<=0)smSplitStart();break}
   }
   if(B.state==='split'||B.state==='headThrow') return;
-  if(!B.hf)B.hf={x:tf[0],y:tf[1]};if(!B.hb)B.hb={x:tb[0],y:tb[1]};
+  if(!B.hf)B.hf={x:sh.fx+f*8,y:sh.fy+4};if(!B.hb)B.hb={x:sh.bx-f*8,y:sh.by+4};   // (re)born arms start as stubs at the shoulders
   const k=Math.min(1,dt*rate);B.hf.x+=(tf[0]-B.hf.x)*k;B.hf.y+=(tf[1]-B.hf.y)*k;
   const kb=Math.min(1,dt*Math.min(rate,30));B.hb.x+=(tb[0]-B.hb.x)*kb;B.hb.y+=(tb[1]-B.hb.y)*kb;
 }
@@ -6048,6 +6086,15 @@ function drawSnowman(){
   if(B.state==='punchWind'&&B.aim){const k=clamp(1-B.t/B.tMax,0,1);if(k>.25){const s=smShoulders();ctx.save();ctx.setLineDash([10,8]);ctx.lineDashOffset=-time*60;
     ctx.strokeStyle=`rgba(255,90,70,${.25+.5*k})`;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(s.fx,s.fy);ctx.lineTo(B.aim.x,B.aim.y);ctx.stroke();ctx.restore();
     ctx.fillStyle=`rgba(255,90,70,${.2+.3*k})`;ctx.beginPath();ctx.ellipse(B.aim.x,FLOOR-3,26,6,0,0,7);ctx.fill()}}
+  if(B.state==='clapOut'||B.state==='clap'){ // the swept zone: everything above a standing player
+    const z=smClapZone(),a=B.state==='clap'?.22:.12+.1*Math.sin(time*30);ctx.fillStyle=`rgba(120,200,255,${a})`;ctx.fillRect(z.x,z.y,z.w,z.h);
+    ctx.save();ctx.setLineDash([12,8]);ctx.strokeStyle='rgba(60,150,230,.7)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(z.x,z.y+z.h);ctx.lineTo(z.x+z.w,z.y+z.h);ctx.stroke();ctx.restore()}
+  if(B.frost&&(B.state==='frostWind'||B.state==='frost')){const fr=B.frost;
+    if(B.state==='frostWind'){ctx.save();ctx.setLineDash([8,8]);ctx.lineDashOffset=-time*50;ctx.strokeStyle='rgba(160,225,255,.75)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(fr.mx,fr.my);ctx.lineTo(fr.gx,fr.gy);ctx.stroke();ctx.restore()}
+    else{const w=20+Math.sin(time*40)*3;ctx.lineCap='round';
+      ctx.strokeStyle='rgba(150,215,255,.5)';ctx.lineWidth=w+14;ctx.beginPath();ctx.moveTo(fr.mx,fr.my);ctx.lineTo(fr.gx,fr.gy);ctx.stroke();
+      ctx.strokeStyle='rgba(215,242,255,.9)';ctx.lineWidth=w;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=w*.35;ctx.stroke();
+      ctx.fillStyle='rgba(230,248,255,.85)';ctx.beginPath();ctx.ellipse(fr.gx,fr.gy,34,10,0,0,7);ctx.fill()}}
   if(melt>0){ctx.fillStyle='rgba(200,230,250,.8)';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.ellipse(smCX(),FLOOR-2,40+melt*90,5+melt*6,0,0,7);ctx.fill();ctx.stroke()}
   if(B.pieces){
     for(const p of B.pieces){const sh=p.i===0?1:1;shadow(p.x,FLOOR,p.r*.9*sh);
@@ -6146,7 +6193,8 @@ registerLevel(4,{
 });
 
 registerBoss('snowman',{make:makeSnowman,update:updateSnowman,draw:drawSnowman,hitMult:smHitMult,contact:smContact,
-  burst:'#eef6ff',nameKey:'boss4',introT:1.8,camBottom:true});
+  burst:'#eef6ff',nameKey:'boss4',introT:1.8,camBottom:true,
+  dmgMult:()=>B.state==='split'||B.state==='headThrow'?.25:1});   // falling apart (split, head throw): 75% less damage
 
 registerEnemy('iceSlime',{size:{w:62,h:46,hp:3},update:ICE_EUPD.iceSlime,draw:ICE_EDRAW.iceSlime,heart:.15,deathColor:'#9fdcf5',
   init:e=>{e.bcd=2+RNG()*4;e.t=.4+RNG();e.breathK=0},
