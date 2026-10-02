@@ -38,6 +38,7 @@ ui/shop.js
 ui/screens.js
 
 # ---- content: levels register themselves (after the engine, so every table exists) ----
+levels/forest/bigslime.js
 levels/forest/level.js
 levels/desert/level.js
 levels/swamp/level.js

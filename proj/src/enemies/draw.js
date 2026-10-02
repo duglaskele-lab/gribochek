@@ -26,7 +26,7 @@ const EDRAW={
     let sx=!e.onGround?.82:e.squash>0?1.28:1+Math.sin(time*6+e.x)*.05;
     const hw=19*sx, hh=26/sx;
     shadow(0,0,hw);blob(0,0,hw,hh);
-    ctx.fillStyle=col(e,e.hue?'#7cc4e0':'#8ed45e');ctx.fill();ctx.lineWidth=2.2;ctx.strokeStyle=INK;ctx.stroke();
+    ctx.fillStyle=col(e,e.hue===2?'#b77ee0':e.hue?'#7cc4e0':'#8ed45e');ctx.fill();ctx.lineWidth=2.2;ctx.strokeStyle=INK;ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.ellipse(-hw*.45,-hh*.72,4,6,-.5,0,7);ctx.fill();
     eyes(e.dir*3,-hh*.5,e.dir,7,3);
     ctx.restore();

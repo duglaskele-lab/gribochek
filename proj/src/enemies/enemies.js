@@ -50,10 +50,11 @@ function damageEnemy(e,dmg,srcX){
     if(e.type==='mummy'&&!e.pile&&!e.revived){e.pile=true;e.pileT=3;e.hp=1.5;e.vx=0;burst(e.x+e.w/2,e.y+e.h/2,14,'#e8dcc0',200);sfx('hit');return}
     e.dead=true;hitstop=.045;sfx('kill');
     const cx=e.x+e.w/2,cy=e.y+e.h/2;
-    const col={slime:e.hue?'#8fd0e8':'#8ed45e',caterpillar:'#8cc84b',orc:'#6f8a4a',goblin:'#8fbf4a',scorpion:'#c9772e',parrot:'#3fbf5a',sandworm:'#c9709a',cactus:'#5f9d45',mummy:'#e8dcc0',scarab:'#2f6f78',lizSword:'#5f9a4a',lizMage:'#6a4a9a',lizChief:'#4d7f3e',piranha:'#d8503a',maskGob:'#6f9f4a',mosquito:'#8a6a4a',spider:'#4a2f4f',frog:'#6f9a3a'}[e.type]||(ENEMY_HOOKS[e.type]&&ENEMY_HOOKS[e.type].deathColor)||'#7a4b2b';
+    const col={slime:e.hue===2?'#b77ee0':e.hue?'#8fd0e8':'#8ed45e',caterpillar:'#8cc84b',orc:'#6f8a4a',goblin:'#8fbf4a',scorpion:'#c9772e',parrot:'#3fbf5a',sandworm:'#c9709a',cactus:'#5f9d45',mummy:'#e8dcc0',scarab:'#2f6f78',lizSword:'#5f9a4a',lizMage:'#6a4a9a',lizChief:'#4d7f3e',piranha:'#d8503a',maskGob:'#6f9f4a',mosquito:'#8a6a4a',spider:'#4a2f4f',frog:'#6f9a3a'}[e.type]||(ENEMY_HOOKS[e.type]&&ENEMY_HOOKS[e.type].deathColor)||'#7a4b2b';
     burst(cx,cy,20,col,280);stars(cx,cy,6);
     if(e.type==='caterpillar'){for(const s of e.segs) burst(s.x,e.gy-17,6,col,160);for(const r of e.riders||[]) r.rider=null}
     dropLoot(e);
+    const H=ENEMY_HOOKS[e.type]; if(H&&H.onDeath) H.onDeath(e);
   }else sfx('hit');
 }
 function shrink(e,a=4){return{x:e.x+a,y:e.y+a,w:e.w-a*2,h:e.h-a}}
