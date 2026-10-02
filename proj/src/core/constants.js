@@ -6,8 +6,10 @@ const TS=40, VH=14*TS, MAXC=560;
 // ROWS/WH: world height in tiles/px (level 3 is two screens tall); FLOOR: boss-arena floor
 let ROWS=14, WH=VH, FLOOR=12*TS, ARENA_TRIG_Y=9*TS, CAM_BOT=0;   // CAM_BOT: lowest point the camera shows outside the boss arena
 const G=2000, JV=Math.round(740*Math.sqrt(1.25)), MAXV=275, SC=0.8, DASH_V=780, DASH_T=.17;
-// STOMP_BOUNCE: the plain bounce off a foe's head, raised twice by 30% in height (480 px/s originally)
-const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=1000, STOMP_BOUNCE=Math.round(480*1.3), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
+// bounces off a foe's head or a box: STOMP_BOUNCE the plain one (its height raised by 30%, 30% and 50% since 480 px/s),
+// HIGH_BOUNCE with jump held (its height lowered by 17% from 1000 px/s); BOUNCE_K scales other plain bounces the same way
+const BOUNCE_K=1.3*Math.sqrt(1.5);
+const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=Math.round(1000*Math.sqrt(.83)), STOMP_BOUNCE=Math.round(480*BOUNCE_K), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
 const WAVE_LIFE=.15, WAVE_SPEED=540, MAXHP_CAP=7, HP_BASE=3, GLIDE_V=71;
 const DMG_PUNCH=1, DMG_STOMP=1.5, DMG_SHROOM=0.8, TRIPLE_PENALTY=.85, TAIL_MULT=1.25, EPS=1e-6;
 const FLOW_V=150, WATER_G=.3;

@@ -151,7 +151,7 @@ function updateSnowman(dt){
   // stomping on the bucket hurts it
   if(!P.dead&&P.vy>0&&B.stompCD<=0&&Math.abs(pcx-head.x)<head.r+14&&P.prevBottom<=headTop+14&&P.y+P.h>=headTop&&bossHittable()&&B.state!=='intro'){
     hitBoss(DMG_STOMP,head.x,headTop);gainMana(MANA_HIT);B.sqv[2]+=6;B.stompCD=.25;clang(head.x,headTop);
-    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*1.3);P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
+    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*BOUNCE_K);P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
     P.vx+=(pcx<head.x?-1:1)*120;
     if(B.state==='dying')return}
   const above=!P.dead&&Math.abs(pcx-cx)<100&&P.y+P.h<headTop+10;

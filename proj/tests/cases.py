@@ -344,9 +344,12 @@ def mana(c):
       // a punch on a foe: 1 damage, +5 mana (once per punch)
       P.mana=20;let e=g.spawn('orc',P.x+70,P.y+P.h);e.hp=10;e.face=1;P.face=1;g.punch();g.sim(.4,()=>{P.inv=1e9});
       out.punch=[10-e.hp,P.mana];g.enemies.length=0;
-      // a stomp: 1.5 damage, +5 mana, a bounce 1.3*1.3 higher (624 px/s)
+      // a stomp: 1.5 damage, +5 mana, the plain bounce 764 px/s (its height x1.3 x1.3 x1.5 since 480)
       P.mana=20;e=g.spawn('orc',P.x+P.w/2,P.y+P.h);e.hp=10;P.x=e.x+e.w/2-P.w/2;P.y=e.y-P.h-2;P.vy=300;P.onGround=false;P.inv=0;let vy=null;
-      g.sim(.1,()=>{if(vy===null&&g.P.vy<0)vy=g.P.vy});out.stomp=[10-e.hp,g.P.mana,Math.round(vy)];g.enemies.length=0;
+      g.sim(.1,()=>{if(vy===null&&g.P.vy<0)vy=g.P.vy});out.stomp=[10-e.hp,g.P.mana,Math.round(vy)];const ox=e.x+e.w/2,oy=e.y+e.h;g.enemies.length=0;
+      // with jump held: the high bounce, 17% lower in height than before (911 px/s)
+      {const Q=g.P;e=g.spawn('orc',ox,oy);e.hp=10;Q.x=e.x+e.w/2-Q.w/2;Q.y=e.y-Q.h-2;Q.vy=300;Q.onGround=false;Q.inv=0;g.key('j',1);let hv=null;
+       g.sim(.1,()=>{if(hv===null&&g.P.vy<0)hv=g.P.vy});g.key('j',0);out.high=Math.round(hv);g.enemies.length=0}
       // L: one mushroom for 5 mana; with no mana, nothing
       g.P.inv=1e9;g.P.y=0;g.sim(1.5,()=>{g.P.inv=1e9});const Q=g.P;Q.mana=12;Q.shootCD=0;g.throwShroom();out.throw1=[Q.mana,g.shots.length];
       Q.shootCD=0;Q.mana=3;const n0=g.shots.length;g.throwShroom();out.empty=[Q.mana,g.shots.length-n0];
@@ -361,7 +364,8 @@ def mana(c):
       return out""")
     assert r['start']==[100,100], r
     assert r['punch']==[1,25], r
-    assert r['stomp'][0]==1.5 and r['stomp'][1]==25 and abs(r['stomp'][2]+624)<3, r
+    assert r['stomp'][0]==1.5 and r['stomp'][1]==25 and abs(r['stomp'][2]+764)<3, r
+    assert abs(r['high']+911)<3, r
     assert r['throw1']==[7,1] and r['empty']==[3,0], r
     assert r['maxMana']==200 and r['lvl2']==2 and r['lvl3']==3, r
     assert r['spent']==4*25+30+60, r
