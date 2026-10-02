@@ -7,8 +7,8 @@ const CHOMP_LUNGE=62;   // how far the bite lunge carries it forward (420 px/s b
 const CHOMP_MAX=2;      // never more than two bites in a row
 // the danger zone of the bite, drawn while it opens its jaws: where the bite will land after the lunge
 function drawCrocBiteZone(){
-  const wind=B.state==='chompWind', b=crocBite(), k=wind?clamp(1-B.t/.45,0,1):1;
-  const x=b.x+(wind?B.face*CHOMP_LUNGE:0), a=wind?.12+.22*k:.38, pulse=.75+.25*Math.sin(time*30);
+  const b=crocBite(), k=clamp(1-B.t/.45,0,1);
+  const x=b.x+B.face*CHOMP_LUNGE, a=.12+.22*k, pulse=.75+.25*Math.sin(time*30);
   ctx.save();ctx.fillStyle=`rgba(230,40,30,${a*pulse})`;ctx.strokeStyle=`rgba(200,20,10,${(a+.25)*pulse})`;ctx.lineWidth=3;ctx.setLineDash([10,7]);
   ctx.beginPath();ctx.roundRect(x,b.y,b.w,FLOOR-b.y,12);ctx.fill();ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle=`rgba(200,20,10,${(a+.15)*pulse})`;ctx.beginPath();ctx.ellipse(x+b.w/2,FLOOR-2,b.w/2,6,0,0,7);ctx.fill();
@@ -87,7 +87,7 @@ function updateCroc(dt){
       if(B.t<=0) crocLaunch();break;
     case 'windup': B.vx=0;B.t-=dt;B.jaw=.25;
       if(Math.random()<.4) parts.push({x:B.x+B.w/2+B.face*150,y:B.y+45,vx:B.face*rand(40,120),vy:rand(-40,0),g:-30,c:'rgba(255,255,255,.8)',s:rand(4,7),life:.4,max:0,t:'puff'});
-      if(B.t<=0){B.state='charge';B.vx=B.face*760*mult;sfx('roar');B.jaw=.6}break;
+      if(B.t<=0){B.state='charge';B.vx=B.face*(p2?760:600);sfx('roar');B.jaw=.6}break;   // the charge across the arena: 600 px/s, 760 in phase 2
     case 'charge': if(Math.random()<.5)dust(B.x+B.w/2-B.face*100,FLOOR,1,-B.face);
       if(wall){B.state='stun';B.t=1.3;B.vx=0;B.jaw=0;shake(.45,13);sfx('boom');
         const n=p2?5:3;for(let i=0;i<n;i++)eshots.push({k:'rock',x:rand(ARENA_L+60,ARENA_R-60),y:-40-i*90,vy:0,g:1300,r:17})}break;
@@ -154,9 +154,9 @@ function drawCroc(){
   else{ctx.beginPath();ctx.ellipse(15,-37,2.5,6,0,0,7);ctx.fill();ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-2,-50);ctx.lineTo(26,-44);ctx.stroke()}
   ctx.restore();
   ctx.restore();
-  if(B.state==='chompWind'||B.state==='chomp') drawCrocBiteZone();
+  if(B.state==='chompWind') drawCrocBiteZone();   // only the warning: once it bites, the zone is gone
   if(B.state==='stun') for(let k=0;k<3;k++){const a=time*5+k*2.1;drawStar(cx+f*60+Math.cos(a)*40,B.y-10+Math.sin(a)*10,7,time*4)}
 }
 
 registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
-  dmgMult:()=>B.state==='enrage'?.4:1});   // while it changes into phase 2 it takes 60% less damage
+  dmgMult:()=>B.state==='enrage'?.75:1});   // while it changes into phase 2 it takes only 75% of the damage

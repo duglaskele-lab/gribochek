@@ -4,7 +4,7 @@
 // clear ice blocks float as stepping stones (flow ICE_B: a little slippery), crystal walls have to be smashed.
 // In a few places the roof is open to the sky far above: daylight and snow fall in, but it is much too high to climb out.
 const ICE_F=11, ICE_B=12;
-let skylights=[], startY=null, iceCeil=0;
+let skylights=[], startY=null, iceCeil=0, iceGate=[];   // iceGate: the ice wall that closes the hall until the snowman is beaten
 function genIce(seed){
   let v=null;
   for(let attempt=0;attempt<40;attempt++){buildIce(seed,attempt);v=validateIce();if(v.ok){GEN_INFO={attempt,repairs:0};return}}
@@ -38,6 +38,13 @@ function buildIce(seed,attempt){
   const power=(c,y)=>{const px=c*TS+TS/2;items.push({k:'power',x:px,y,ph:0});powerSpots.push([px,y])};
   const crumbIce=(c,r,w)=>plats.push({crumble:true,style:'ice',x:c*TS,y:r*TS,w:w*TS,h:16,x0:c*TS,x1:c*TS,vx:0,hy:r*TS,st:'idle',t:0,vy:0,rot:0});
   const maxGap=(dyT,dash,m)=>{const r=REACH.reach(dyT*TS,dash);return r<0?0:Math.floor(r*m/TS)};
+  // crumbling slabs over a bottomless chasm along a path: each step is [gap in tiles, change of row, slab width].
+  // The gaps are kept within an easy jump (no dash needed). Returns the row of the last slab.
+  const slabs=(top,r0,steps)=>{let r=r0;for(const [g0,dr,w] of steps){const nr=r+dr;
+      const g=clamp(g0,1,Math.max(1,maxGap(nr-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;
+      for(let i=0;i<w;i++)pit(x+i,top);crumbIce(x,nr,w);spore(x+(w>>1),nr*TS-30);x+=w;r=nr}
+    return r};
+  const landOn=(top,r,nf)=>{const g=clamp(2,1,Math.max(1,maxGap(nf-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;fl=nf};
   // strong but few: at most three golems and three witches in the whole cave
   const golemOK=()=>golems<3&&progress>.12, witchOK=()=>witches<3&&progress>.1;
   const startFl=fl;
@@ -82,6 +89,21 @@ function buildIce(seed,attempt){
       for(let i=0;i<n;i++)pit(x+i,top);
       for(let i=1;i<n-1;i+=3)crumbIce(x+i,fl,Math.min(2,n-1-i));
       arc(x,x+n-1,fl*TS-40,50);x+=n;run(4,hh)},
+    // crumbling-slab trials: stairs up, stairs down, a zigzag and a long bridge with a safe ice island halfway
+    crumbStairs(L){const hh=6,k=3+(L>1?1:0);stepFl(clamp(fl,FMIN+k+1,FMAX),hh);run(2,hh);const top=fl-k-1-hh;
+      const r=slabs(top,fl,Array.from({length:k},()=>[ri(1,2),-1,L>1?1:2]));landOn(top,r,r-1);run(4,hh)},
+    crumbDrop(L){const hh=6,k=3+(L>1?1:0);stepFl(clamp(fl,FMIN,FMAX-k-1),hh);run(2,hh);const top=fl-hh;
+      const r=slabs(top,fl,Array.from({length:k},()=>[ri(1,2),1,L>1?1:2]));landOn(top,r,r+1);run(4,hh);
+      if(chance(.4))spawnAt('iceSlime',x-2,fl)},
+    crumbZig(L){const hh=6,up=L>0?2:1;stepFl(clamp(fl,FMIN+up,FMAX),hh);run(2,hh);const top=fl-up-hh,f0=fl,k=4+L;
+      const r=slabs(top,fl,Array.from({length:k},(_,i)=>[ri(1,2),i%2?up:-up,L>1?1:2]));landOn(top,r,f0);run(4,hh)},
+    crumbIsle(L){const hh=6;stepFl(Math.max(fl,hh+2),hh);run(2,hh);const top=fl-hh,f0=fl,k=2+L;
+      slabs(top,fl,Array.from({length:k},()=>[ri(1,2),0,2]));
+      for(let i=0;i<2;i++)pit(x+i,top);x+=2;iceBlock(x,f0,3);for(let i=0;i<3;i++)carve(x+i,top,f0-1);   // a solid island to catch your breath
+      for(let i=0;i<3;i++)for(let rr=f0+1;rr<ROWS;rr++){grid[rr][x+i]=T_EMPTY;flow[rr][x+i]=0}
+      sporeRow(x,x+2,f0);x+=3;
+      slabs(top,f0,Array.from({length:k},()=>[ri(1,2),0,L>1?1:2]));landOn(top,f0,f0);run(4,hh);
+      if(L>0&&witchOK()&&chance(.4)){spawnAt('iceWitch',x-8,f0-5);witches++}},
     // going up: a shaft with ice ledges on alternate sides
     climb(L){const rise=ri(4,6)+(L>1?1:0),nf=Math.max(FMIN,fl-rise);if(fl-nf<3){run(4);return}
       const w=ri(6,7),c0=x,d=fl-nf,k=Math.ceil(d/3)-1;
@@ -158,7 +180,9 @@ function buildIce(seed,attempt){
   /* ---- the plan ---- */
   run(12,6,false);deco('torch',10,fl*TS);sporeRow(5,8,fl);
   const total=ri(17,19);
-  const W={tunnel:1.6,hall:1.5,slide:1.5,chasm:1.6,climb:1.9,descent:1.8,snake:1.9,crystal:1.4,nook:1,skylight:.35,iceBridge:1.1};
+  const W={tunnel:1.6,hall:1.5,slide:1.5,chasm:1.6,climb:1.9,descent:1.8,snake:1.9,crystal:1.4,nook:1,skylight:.35,iceBridge:1.1,
+    crumbStairs:.8,crumbDrop:.7,crumbZig:.8,crumbIsle:.7};
+  const CRUMB=['iceBridge','crumbStairs','crumbDrop','crumbZig','crumbIsle'];
   // the roof opens to the sky at least twice: once in each half of the cave
   const skyAt=new Set([ri(2,Math.floor(total*.42)),ri(Math.floor(total*.58),total-2)]);
   const secKinds=[],secPool=[['falseFloor',1],['crackHall',1],['shelf',1]],nSec=chance(.75)?2:1;
@@ -177,7 +201,8 @@ function buildIce(seed,attempt){
       if(recent.slice(-3).indexOf(ty)>=0)w*=.35;
       if(ty==='climb')w*=fl-4<FMIN?0:fl>=14?1.8:fl<=10?.4:1;
       if(ty==='descent')w*=fl+3>FMAX?0:fl<=10?1.8:fl>=14?.4:1;
-      if(i<2&&(ty==='chasm'||ty==='iceBridge'))w*=.3;
+      if(i<2&&(ty==='chasm'||CRUMB.indexOf(ty)>=0))w*=.3;
+      if(CRUMB.indexOf(ty)>=0&&recent.slice(-2).some(t=>CRUMB.indexOf(t)>=0))w*=.25;   // not two slab trials in a row
       if(w>0)cands.push([ty,w])}
     const ty=skyAt.has(i)&&last!=='skylight'?'skylight':wpick(cands);PLAN.push({t:ty,L,c:x,fl});SEG[ty](L);last=ty;recent.push(ty);sinceCP++;
   }
@@ -185,11 +210,16 @@ function buildIce(seed,attempt){
   stepFl(14);PLAN.push({t:'final',c:x});SEG.rest(true,true);run(5,5,false);
   // the snowman's hall: you drop into it from the passage
   const a0=x,AW=30,fr=ROWS-2,atop=6;ARENA_L=a0*TS;iceCeil=(atop+1)*TS;
-  for(let c=a0;c<a0+AW;c++)carve(c,atop+1,fr-1);
-  plank(a0+3,fr-4,4);plank(a0+AW-7,fr-4,4);plank(a0+10,fr-7,4);
-  heart(a0+11,(fr-7)*TS-26);
-  ARENA_R=(a0+AW)*TS;COLS=a0+AW+2;
-  door={x:(a0+AW-5)*TS,y:FLOOR-104,w:76,h:104};
+  for(let c=a0;c<a0+AW;c++)carve(c,atop+1,fr-1);   // an open hall: no ledges
+  heart(a0+5,fr*TS-30);
+  ARENA_R=(a0+AW)*TS;
+  // past the hall a passage leads on to the door, one screen further; a wall of clear ice closes it until the snowman is beaten
+  const e0=a0+AW,EW=26;iceGate=[];
+  for(let c=e0;c<e0+EW;c++)carve(c,fr-6,fr-1);
+  for(let r=fr-6;r<fr;r++){grid[r][e0]=T_SOLID;flow[r][e0]=ICE_B;iceGate.push([r,e0])}
+  sporeRow(e0+4,e0+9,fr);
+  COLS=e0+EW+2;
+  door={x:(e0+EW-6)*TS,y:FLOOR-104,w:76,h:104};
   /* ---- dressing: icicles under the roof, crystals and snow drifts on the floor ---- */
   const skyCol=c=>skylights.some(s=>c*TS>=s.x0&&c*TS<s.x1);
   const safe=[...checks.map(q=>q.x/TS),...shops.map(q=>q.x/TS)];
@@ -249,6 +279,12 @@ function iceUnder(b){
   for(const c of [Math.floor((b.x+3)/TS),Math.floor((b.x+b.w-3)/TS)]){if(c<0||c>=COLS)continue;const t=grid[r][c];if(!isSolidT(t))continue;
     const f=flow[r][c];if(f===ICE_F)return 2;if(f===ICE_B)s=1}
   return s;
+}
+// the ice wall at the end of the snowman's hall shatters once he is beaten
+function openIceGate(){
+  if(!iceGate.length||!bossDead) return;
+  for(const [r,c] of iceGate){grid[r][c]=T_EMPTY;flow[r][c]=0;iceShards(c*TS+TS/2,r*TS+TS/2,6,240)}
+  iceGate=[];sfx('shatter');shake(.3,6);
 }
 function snowPuff(x,y,n){for(let i=0;i<n;i++)parts.push({x:x+rand(-14,14),y:y+rand(-8,8),vx:rand(-120,120),vy:rand(-220,-40),g:600,c:Math.random()<.5?'rgba(255,255,255,.95)':'rgba(215,236,252,.95)',s:rand(4,9),life:rand(.3,.6),max:0,t:'puff'})}
 function updateSnow(dt){

@@ -18,5 +18,5 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     hitBoss:(d,x,y)=>hitBoss(d,x,y),
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
-    get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},
+    get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
     croc:()=>crocChoose()}};   // the crocodile picks its next move now

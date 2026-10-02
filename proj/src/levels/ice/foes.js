@@ -91,10 +91,13 @@ const ICE_EUPD={
     const steer=(tx,ty,maxV,k)=>{const ddx=tx-(e.x+e.w/2),ddy=ty-(e.y+e.h/2),kk=Math.min(1,k*dt);
       e.vx+=(clamp(ddx*2.6,-maxV,maxV)-e.vx)*kk;e.vy+=(clamp(ddy*2.6,-maxV*.8,maxV*.8)-e.vy)*kk};
     if(e.state==='hover'){
-      if(near){if(Math.random()<dt*.4||e.hitWall)e.side=-e.side;
-        steer(pcx+e.side*170+Math.sin(e.ph*1.3)*50,P.y-116+Math.sin(e.ph*2.1)*24,320,2.6);
+      // smooth flight: it drifts over to the other side of the player gradually instead of turning on the spot,
+      // and keeps low, just above her head
+      if(near){if(Math.random()<dt*.3||e.hitWall)e.side=-e.side;
+        e.sx=approach(e.sx||e.side,e.side,dt*.9);
+        steer(pcx+e.sx*170+Math.sin(e.ph*1.1)*40,P.y-78+Math.sin(e.ph*1.7)*16,240,1.5);
         if(Math.abs(dx)>20)e.face=Math.sign(dx)}
-      else{steer(e.hx+e.w/2+Math.sin(e.ph*.7)*120,e.hy+e.h/2+Math.sin(e.ph*1.6)*20,200,1.8);if(Math.abs(e.vx)>20)e.face=Math.sign(e.vx)}
+      else{steer(e.hx+e.w/2+Math.sin(e.ph*.7)*120,e.hy+e.h/2+40+Math.sin(e.ph*1.3)*16,170,1.3);if(Math.abs(e.vx)>20)e.face=Math.sign(e.vx)}
       flyMove(e,dt);
       if(near&&e.cd<=0){e.face=Math.sign(dx)||e.face;
         if(Math.random()<.55||P.y+P.h<e.y+e.h){e.state='cast';e.t=.62}else{e.state='warn';e.t=.38}sfx('witch')}
@@ -165,7 +168,8 @@ const ICE_EDRAW={
     const arm=s=>{const [hx,hy]=fist(s),sx=s*42,mx=(sx+hx)/2+s*10,my=(sh+hy)/2;
       limb(sx,sh+6,mx,my,19,ice);limb(mx,my,hx,hy,19,ice);
       ctx.fillStyle=e.guard>0&&s===e.gside?col(e,'#e8f8ff'):iceD;ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(hx-17,hy-15,34,30,8);ctx.fill();ctx.stroke();
-      if(e.guard>0&&s===e.gside){ctx.fillStyle='rgba(225,247,255,.85)';ctx.beginPath();ctx.moveTo(hx+s*8,hy-34);ctx.lineTo(hx+s*20,hy-20);ctx.lineTo(hx+s*20,hy+52);ctx.lineTo(hx+s*8,hy+64);ctx.closePath();ctx.fill();ctx.stroke()}};
+      if(e.guard>0&&s===e.gside){ctx.fillStyle='rgba(225,247,255,.85)';ctx.beginPath();ctx.moveTo(hx+s*8,hy-34);ctx.lineTo(hx+s*20,hy-20);ctx.lineTo(hx+s*22,-14);ctx.lineTo(hx+s*8,-2);ctx.closePath();ctx.fill();ctx.stroke();   // the ice shield reaches down to the floor
+        ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx+s*13,hy-18);ctx.lineTo(hx+s*13,-16);ctx.stroke();ctx.strokeStyle=INK;ctx.lineWidth=3}};
     arm(-f);
     // body: a heap of ice blocks
     ctx.fillStyle=ice;ctx.beginPath();ctx.moveTo(-34,-30);ctx.lineTo(-46,sh-6);ctx.lineTo(-24,sh-18);ctx.lineTo(24,sh-18);ctx.lineTo(46,sh-6);ctx.lineTo(34,-30);ctx.quadraticCurveTo(0,-22,-34,-30);ctx.closePath();ctx.fill();ctx.stroke();

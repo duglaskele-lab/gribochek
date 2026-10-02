@@ -87,6 +87,7 @@ function fishRange(e){
   e.x0=a*TS;e.x1=(b+1)*TS;e.surf=t*TS;e.bot=(d+1)*TS;e.dir=e.dir||1;
   return b>a;
 }
+const FROG_WIND=.4;   // the frog's warning before its tongue lashes out
 function swingBox(e,len,h,oy=4){return{x:e.face>0?e.x+e.w-6:e.x-len+6,y:e.y+oy,w:len,h}}
 // which boxes hurt the player on touch, and where the player can stomp
 function contactInfo(e){
@@ -508,6 +509,8 @@ const EUPD={
     const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx),dy=P.y+P.h-(e.y+e.h);
     e.cd-=dt;e.anim+=dt;
     switch(e.state){
+      case 'tongueWind': e.vx=0;e.t-=dt;   // warning: the throat swells, a mark shows how far the tongue will reach
+        if(e.t<=0){e.state='tongue';e.t=.62;e.tl=0;sfx('lick')}break;
       case 'tongue': e.vx=0;e.t-=dt;{const k=.62-e.t;e.tl=k<.2?k/.2*175:k<.34?175:Math.max(0,175*(1-(k-.34)/.2))}
         if(e.t<=0){e.state='idle';e.cd=rand(.9,1.4);e.tl=0}break;
       case 'hop': if(e.onGround&&e.vy>=0){e.state='idle';e.vx=0;dust(cx,e.y+e.h,4)}break;
@@ -515,7 +518,7 @@ const EUPD={
         if(e.onGround)e.vx=approach(e.vx,0,900*dt);
         const engaged=!P.dead&&adx<480&&Math.abs(dy)<220&&onScreenE(e);
         if(engaged){e.face=Math.sign(dx)||e.face;
-          if(adx<185&&Math.abs(dy)<46&&e.cd<=0&&e.onGround){e.state='tongue';e.t=.62;e.tl=0;sfx('lick');break}
+          if(adx<185&&Math.abs(dy)<46&&e.cd<=0&&e.onGround){e.state='tongueWind';e.t=FROG_WIND;e.tl=0;break}
           if(e.cd<=0&&e.onGround&&adx>120){const safe=groundAhead(e,e.face,TS*3)||dy>40;
             if(safe){e.vy=dy<-40?-760:-540;e.vx=e.face*170;e.onGround=false;e.state='hop';e.cd=rand(.9,1.5);sfx('jump')}else e.cd=.5}}
         else if(e.cd<=0&&e.onGround){if(!groundAhead(e,e.dir,TS*2.5))e.dir*=-1;e.face=e.dir;e.vy=-420;e.vx=e.dir*110;e.onGround=false;e.state='hop';e.cd=rand(2,3.5)}

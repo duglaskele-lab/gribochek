@@ -1,10 +1,13 @@
 /* ---------- boss 4: the snowman ---------- */
 // three balls of snow on springs (they squash on landings), a bucket, a carrot and two branch arms.
-// Attacks: overhead slam, long diagonal punch, low uppercut that throws you up, a volley of snowballs,
-// a big hop that brings icicles down, and the split: the balls roll at you one by one and stack up again at the far end.
+// Attacks: overhead slam, long diagonal punch, a volley of snowballs spat from the head, a big hop that brings icicles
+// down, the split (the balls roll at you one by one and stack up again at the far end) and the head throw:
+// it pulls its head off and throws it. Either the head bounces like a ball to the wall of the arena and back onto the
+// body, or it lands on the floor and stays there; then the body comes over to it, rolling or flinging its balls
+// through the air one by one, stacks up next to it and the head hops back on top.
 const SM_R=[62,46,36];
 function makeSnowman(){return{kind:'snowman',x:ARENA_L+18*TS,y:FLOOR-262,w:124,h:262,hp:76,max:76,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
-  sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,up:false,melt:0,wob:0,stompCD:0}}
+  sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,melt:0,wob:0,stompCD:0,throwCD:4}}
 const smCX=()=>B.x+B.w/2;
 function smBalls(){
   const cx=smCX(),bot=B.y+B.h,s=B.sq,R=SM_R,h0=R[0]*(1-s[0]),h1=R[1]*(1-s[1]),h2=R[2]*(1-s[2]);
@@ -21,17 +24,17 @@ function smChoose(){
   const room=B.face>0?ARENA_R-90-cx:cx-(ARENA_L+90);
   const o=[];
   if(d<270)o.push(['slam',3]);
-  if(d<200&&P.y+P.h>FLOOR-150)o.push(['upper',3.2]);
   if(d>190&&d<640)o.push(['punch',2.4]);
+  if(B.throwCD<=0&&d>200)o.push(['throw',p2?2.4:1.8]);
   if(d>230)o.push(['volley',2]);
   o.push(['hop',d>380?2.6:1.1]);
   if(B.splitCD<=0&&d>150&&room>420)o.push(['split',p2?2.6:1.6]);
   const f=o.filter(q=>q[0]!==B.last),L=f.length?f:o;
   let s=0;for(const q of L)s+=q[1];let r=Math.random()*s,k=L[L.length-1][0];for(const q of L){r-=q[1];if(r<=0){k=q[0];break}}
-  B.last=k;const m=smMult();B.hitDone=false;B.up=false;
+  B.last=k;const m=smMult();B.hitDone=false;
   switch(k){
     case 'slam': B.state='slamWind';B.t=.7*m;sfx('creak');break;
-    case 'upper': B.state='upperWind';B.t=.45*m;break;
+    case 'throw': B.state='throwWind';B.t=.65*m;B.tMax=B.t;sfx('creak');break;
     case 'punch': B.state='punchWind';B.t=.75*m;B.tMax=B.t;smAimPunch();break;
     case 'volley': B.state='volleyWind';B.t=.6*m;break;
     case 'hop': B.state='hopWind';B.t=.5*m;break;
@@ -88,12 +91,91 @@ function smSplitUpdate(dt){
     B.x=tx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.state='reform';B.t=.55*smMult();B.face=-dir;smKick(5);shake(.25,5);sfx('land');B.splitCD=p2?7:9;
   }
 }
+/* the head throw */
+// centres of the balls when stacked
+const smStackY=i=>FLOOR-[62,156,228][i];
+function smThrowStart(){
+  const bs=smBalls(),f=B.face,p2=B.phase===2,pcx=P.x+P.w/2;
+  B.pieces=bs.map((b,i)=>({i,x:b.x,y:b.y,r:b.r,vx:0,vy:0,st:'wait',rot:0,k:0}));
+  const hd=B.pieces[2];B.splitDir=f;B.state='headThrow';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];B.throwCD=p2?7:9;
+  sfx('throwb');sfx('roar');
+  const kind=B.forceThrow||(Math.random()<.45?'bounce':Math.random()<.5?'roll':'fling');   // forceThrow: for tests
+  if(kind==='bounce'){ // a bouncing head: off to the wall and back
+    B.throwKind='bounce';hd.st='ball';hd.vx=f*(p2?470:420);hd.vy=-560;B.sx=bs[0].x;
+    for(const p of [B.pieces[0],B.pieces[1]]){p.st='done';p.x=B.sx;p.y=smStackY(p.i)}   // the body stays put
+  }else{ // thrown in an arc at the player; it stays where it lands
+    B.throwKind=kind;hd.st='fly';
+    const tx=clamp(pcx+P.vx*.3,ARENA_L+60,ARENA_R-60),ty=FLOOR-hd.r,Tt=clamp(Math.abs(tx-hd.x)/430,.7,1.25),g=G*.8;
+    hd.vx=(tx-hd.x)/Tt;hd.vy=(ty-hd.y-.5*g*Tt*Tt)/Tt;
+  }
+}
+// pieces of the body that wait in a stack drop down when the ball under them goes away
+function smSettle(p,support,dt){
+  const ty=support-p.r+(support<FLOOR?12:0);
+  if(p.y<ty){p.vy+=G*dt;p.y+=p.vy*dt;if(p.y>=ty){p.y=ty;if(p.vy>300)snowPuff(p.x,p.y+p.r,4);p.vy=0}}
+  return p.y-p.r;
+}
+function smStackAnim(p,dt,dur,arc){
+  p.k=Math.min(1,p.k+dt/dur);p.x=p.x0+(p.tx-p.x0)*p.k;p.y=p.y0+(smStackY(p.i)-p.y0)*p.k-Math.sin(p.k*Math.PI)*arc;p.rot+=dt*6*(p.tx>p.x0?1:-1);
+  if(p.k>=1){p.st='done';p.x=p.tx;p.y=smStackY(p.i);if(p.i)snowPuff(p.x,p.y+p.r,4);sfx('land')}
+}
+const smToStack=(p,tx)=>{p.st='stack';p.k=0;p.x0=p.x;p.y0=p.y;p.tx=tx};
+function smThrowUpdate(dt){
+  const [b0,b1,hd]=B.pieces,p2=B.phase===2,g=G*.8;B.t+=dt;
+  switch(hd.st){
+    case 'ball':{ // bounces along the floor; turns back at a wall of the arena and drops back onto the body
+      hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;B.splitDir=Math.sign(hd.vx)||B.splitDir;
+      if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=-Math.max(560,Math.abs(hd.vy)*.85);snowPuff(hd.x,FLOOR-4,3);sfx('land');shake(.1,3)}
+      const wall=hd.x<ARENA_L+hd.r?1:hd.x>ARENA_R-hd.r?-1:0;
+      if(wall){hd.x=wall>0?ARENA_L+hd.r:ARENA_R-hd.r;hd.vx=wall*Math.abs(hd.vx);hd.back=true;shake(.25,6);sfx('clang');snowPuff(hd.x-wall*hd.r,hd.y,5)}
+      if(hd.back&&Math.abs(hd.x-B.sx)<220) smToStack(hd,B.sx);
+      break}
+    case 'fly':
+      hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;
+      if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=0;hd.vx=0;hd.st='rest';hd.t=.45;shake(.3,7);sfx('boom');snowPuff(hd.x,FLOOR-6,8);
+        // the body stacks up next to the head, on the side it comes from
+        const d=Math.sign(hd.x-b0.x)||1;B.sx=clamp(Math.abs(hd.x-b0.x)<SM_R[0]+hd.r+10?b0.x:hd.x-d*(SM_R[0]+hd.r+6),ARENA_L+70,ARENA_R-70);
+        B.splitDir=-d}
+      break;
+    case 'rest': hd.t-=dt;
+      if(hd.t<=0&&!B.moving){B.moving=true;b0.delay=0;b1.delay=p2?.35:.45;   // the body sets off towards the head
+        if(B.throwKind==='roll')sfx('jump');}
+      if(b0.st==='done'&&b1.st==='done'){smToStack(hd,B.sx);sfx('jump')}
+      break;
+    case 'stack': smStackAnim(hd,dt,hd.back?.4:.5,hd.back?40:110);break;
+  }
+  // the body: waits as a stack (in the bounce variant it just waits for its head), or travels to the stacking spot
+  let support=FLOOR;const dir=Math.sign(B.sx-b0.x)||1;
+  for(const p of [b0,b1]){
+    if(p.st==='wait'){
+      support=smSettle(p,support,dt);
+      if(B.moving&&(p.delay-=dt)<=0){
+        if(Math.abs(B.sx-p.x)<4){p.x=B.sx;smToStack(p,B.sx)}
+        else if(B.throwKind==='roll'){p.st='go';p.vy=p.i?-420:0;sfx('jump')}
+        else{p.st='arc';const Tt=.75,ty=smStackY(p.i);p.vx=(B.sx-p.x)/Tt;p.vy=(ty-p.y-.5*G*Tt*Tt)/Tt;p.tArc=Tt;sfx('throwb');smKick(2)}}
+    }else if(p.st==='go'){ // rolls over like in the split
+      const sp=[430,390][p.i]*(p2?1.1:1);p.x+=dir*sp*dt;p.rot+=dir*sp*dt/p.r;p.vy+=G*dt;p.y+=p.vy*dt;
+      if(p.y>=FLOOR-p.r){p.y=FLOOR-p.r;p.vy=p.i===0?0:-380;if(p.i)snowPuff(p.x,FLOOR-4,3)}
+      if(p.i===0&&Math.random()<.5)snowPuff(p.x-dir*p.r*.6,FLOOR-4,1);
+      if(dir*(p.x-B.sx)>=0) smToStack(p,B.sx);
+    }else if(p.st==='arc'){ // flung through the air, it lands right on the stacking spot
+      p.tArc-=dt;p.vy+=G*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.rot+=dt*8;
+      if(p.tArc<=0){p.st='done';p.x=B.sx;p.y=smStackY(p.i);shake(p.i?.2:.35,p.i?5:9);sfx('boom');snowPuff(p.x,p.y+p.r,6);
+        if(p.i===0&&p2)for(const s of [-1,1])eshots.push({k:'iwave',x:p.x+s*70,y:FLOOR,vx:s*340,life:2.4,h:0})}
+    }else if(p.st==='stack') smStackAnim(p,dt,.3,p.i?60:0);
+  }
+  if(B.pieces.every(p=>p.st==='done')||B.t>9){
+    B.x=B.sx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.moving=false;B.state='reform';B.t=.5*smMult();
+    B.face=(P.x+P.w/2>B.sx)?1:-1;smKick(5);shake(.25,5);sfx('land');
+  }
+}
 function updateSnowman(dt){
   const p2=B.phase===2,m=smMult(),pcx=P.x+P.w/2;
   // springy balls
   for(let i=0;i<3;i++){const a=-220*B.sq[i]-14*B.sqv[i];B.sqv[i]+=a*dt;B.sq[i]=clamp(B.sq[i]+B.sqv[i]*dt,-.25,.35)}
-  if(B.splitCD>0)B.splitCD-=dt;if(B.stompCD>0)B.stompCD-=dt;
+  if(B.splitCD>0)B.splitCD-=dt;if(B.stompCD>0)B.stompCD-=dt;if(B.throwCD>0)B.throwCD-=dt;
   if(B.state==='split'){smSplitUpdate(dt);return}
+  if(B.state==='headThrow'){smThrowUpdate(dt);return}
   if(B.state==='dying'){
     if(!B.meltInit){B.meltInit=true;B.t=2.4;B.melt=0;if(B.pieces){B.pieces.forEach(p=>{p.st='done'})}}
     B.t-=dt;B.melt=clamp(1-B.t/2.4,0,1);B.vx=0;
@@ -125,7 +207,7 @@ function updateSnowman(dt){
       B.vx=approach(B.vx,d>420?B.face*85:0,400*dt);
       if(Math.abs(B.vx)>20){B.wob-=dt;if(B.wob<=0){B.wob=.32;smKick(2.2);snowPuff(cx,FLOOR-4,2)}}
       if(B.phase===1&&B.hp<=B.max/2){B.state='enrage';B.t=1.3;B.vx=0;sfx('roar');shake(1,7);break}
-      if(B.aboveT>.5){B.state='upperWind';B.up=true;B.t=.4*m;B.vx=0;B.aboveT=0;B.hitDone=false;B.last='upper';break}
+      if(B.aboveT>.5){B.state='hopWind';B.t=.4*m;B.vx=0;B.aboveT=0;B.last='hop';break}   // she hangs above it: it jumps
       if(B.t<=0){B.vx=0;smChoose()}
       break}
     case 'enrage': B.t-=dt;B.mouth=.8+.2*Math.sin(time*24);B.lean=Math.sin(time*30)*4;tf=[sh.fx+f*30,sh.fy-90];tb=[sh.bx-f*30,sh.by-90];
@@ -149,16 +231,11 @@ function updateSnowman(dt){
       if(ext>=1&&!B.hitDone){B.hitDone=true;shake(.18,5);snowPuff(a.x,FLOOR-6,6);sfx('land')}
       if(ext>.4&&!P.dead&&segDist(pcx,P.y+P.h/2,sh.fx,sh.fy,hx,hy)<34)hurt(hx);
       if(B.t<=0){B.state='idle';B.t=p2?.4:.65}break}
-    case 'upperWind': B.t-=dt;rate=14;
-      if(B.up){tf=[cx+f*30,head.y+10];B.lean=-f*6}else{tf=[cx+f*92,FLOOR-22];B.lean=f*8}
-      if(B.t<=0){B.state='upper';B.t=.4;B.hitDone=false;sfx('punch')}break;
-    case 'upper':{B.t-=dt;rate=40;
-      const box=B.up?{x:cx-80,y:headTop-190,w:160,h:200}:{x:f>0?cx+28:cx-178,y:FLOOR-175,w:150,h:175};
-      if(B.up){tf=[cx+f*10,headTop-150];B.lean=f*4}else{tf=[cx+f*70,B.y-50];B.lean=-f*8}
-      if(B.t>.22&&!P.dead&&overlap(box,{x:P.x+3,y:P.y+6,w:P.w-6,h:P.h-6})){const was=P.inv;hurt(cx);
-        if(P.inv>was&&!P.dead){P.vy=B.up?-900:-1080;P.vx=(B.up?(pcx<cx?-1:1):f)*260;snowPuff(pcx,P.y+P.h,6)}}
-      if(B.t<=0){B.state='idle';B.t=p2?.45:.7;B.up=false}break}
-    case 'volleyWind': B.t-=dt;B.mouth=approach(B.mouth,1,dt*3);B.lean=-f*10;tb=[sh.bx-f*50,sh.by-50];
+    case 'throwWind':{ // both hands grab the head and lift it a little, then it is thrown
+      B.t-=dt;const k=clamp(1-B.t/B.tMax,0,1);rate=16;B.lean=-f*8*k;
+      tf=[head.x+f*head.r*.9,head.y-k*20];tb=[head.x-f*head.r*.9,head.y-k*20];B.sqv[2]-=k*dt*30;
+      if(B.t<=0)smThrowStart();break}
+    case 'volleyWind': B.t-=dt;B.mouth=approach(B.mouth,1,dt*3);B.lean=-f*10;   // no arm movement: only the mouth opens
       if(B.t<=0){B.state='volley';B.shots=0;B.t=0}break;
     case 'volley':{B.t-=dt;B.mouth=1;B.lean=-f*6;const n=p2?6:4;
       if(B.t<=0&&B.shots<n){smSnowball(B.shots,n);B.shots++;B.t=.15;B.sqv[2]-=3}
@@ -170,7 +247,7 @@ function updateSnowman(dt){
     case 'splitWind':{B.t-=dt;B.lean=Math.sin(time*26)*6;for(let i=0;i<3;i++)B.sqv[i]+=Math.sin(time*30+i)*dt*20;
       if(B.t<=0)smSplitStart();break}
   }
-  if(B.state==='split') return;
+  if(B.state==='split'||B.state==='headThrow') return;
   if(!B.hf)B.hf={x:tf[0],y:tf[1]};if(!B.hb)B.hb={x:tb[0],y:tb[1]};
   const k=Math.min(1,dt*rate);B.hf.x+=(tf[0]-B.hf.x)*k;B.hf.y+=(tf[1]-B.hf.y)*k;
   const kb=Math.min(1,dt*Math.min(rate,30));B.hb.x+=(tb[0]-B.hb.x)*kb;B.hb.y+=(tb[1]-B.hb.y)*kb;
