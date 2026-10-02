@@ -158,8 +158,10 @@ const TS=40, VH=14*TS, MAXC=560;
 // ROWS/WH: world height in tiles/px (level 3 is two screens tall); FLOOR: boss-arena floor
 let ROWS=14, WH=VH, FLOOR=12*TS, ARENA_TRIG_Y=9*TS, CAM_BOT=0;   // CAM_BOT: lowest point the camera shows outside the boss arena
 const G=2000, JV=Math.round(740*Math.sqrt(1.25)), MAXV=275, SC=0.8, DASH_V=780, DASH_T=.17;
-// STOMP_BOUNCE: the plain bounce off a foe's head, raised twice by 30% in height (480 px/s originally)
-const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=1000, STOMP_BOUNCE=Math.round(480*1.3), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
+// bounces off a foe's head or a box: STOMP_BOUNCE the plain one (its height raised by 30%, 30% and 50% since 480 px/s),
+// HIGH_BOUNCE with jump held (its height lowered by 17% from 1000 px/s); BOUNCE_K scales other plain bounces the same way
+const BOUNCE_K=1.3*Math.sqrt(1.5);
+const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=Math.round(1000*Math.sqrt(.83)), STOMP_BOUNCE=Math.round(480*BOUNCE_K), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
 const WAVE_LIFE=.15, WAVE_SPEED=540, MAXHP_CAP=7, HP_BASE=3, GLIDE_V=71;
 const DMG_PUNCH=1, DMG_STOMP=1.5, DMG_SHROOM=0.8, TRIPLE_PENALTY=.85, TAIL_MULT=1.25, EPS=1e-6;
 const FLOW_V=150, WATER_G=.3;
@@ -3283,7 +3285,7 @@ function hydraBounce(pb){
     if(P.prevBottom<=top.y+18&&overlap(top,pb)){
       if(hydraDanger(h)){hydraBite(h.x);break}
       const high=inp.j||P.buffer>0;
-      P.vy=high?-HIGH_BOUNCE:-720;P.y=top.y-P.h;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();P.bounceT=high?0:.14;P.peakY=P.y;
+      P.vy=high?-HIGH_BOUNCE:-Math.round(720*Math.sqrt(1.5));P.y=top.y-P.h;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();P.bounceT=high?0:.14;P.peakY=P.y;
       h.sink=120;h.sinkT=.45;h.y+=45;h.flash=.06;shake(.12,4);sfx('jump');sfx('land');stars(P.x+P.w/2,P.y+P.h,5);dust(h.x,h.y-40,6);
       if(B.state==='fight'&&h.angry<=0){h.hops=h.hops.filter(t=>time-t<RAGE_WINDOW);h.hops.push(time);if(h.hops.length>=RAGE_HOPS)hydraEnrage(h)}
       if(B.state==='fight') hydraDamage(h,DMG_HEAD_STOMP,h.x,h.y-40);
@@ -4349,6 +4351,8 @@ function drawParts(){
   ctx.globalAlpha=1;
 }
 // ==== render/hud.js ====
+const SHOT_BADGES={};
+function shotsBadge(n){if(!SHOT_BADGES[n]){const im=new Image();im.src='data:image/svg+xml,'+encodeURIComponent(shotsIcon(n,true).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" '));SHOT_BADGES[n]=im}return SHOT_BADGES[n]}
 function drawHUD(){
   const W=cv.width/K;ctx.lineJoin='round';   // no spikes on the outlined numbers
   for(let i=0;i<P.maxhp;i++) heart(30+i*34,32,1.6,'#ff5b6e',i>=P.hp);
@@ -4358,12 +4362,14 @@ function drawHUD(){
   // mana: a blue bar as long as the mana pool, with the mushrooms per throw next to it
   // the bar grows by a tenth for each upgrade (the pool by a quarter); no numbers, just the bar
   {const mm=maxMana(),bw=150*(1+.1*manaUps),bx=50,by=101,cost=SHOT_COST[shotLvl];
-   mushroom(30,114,11,Math.sin(time*3)*.12,shotLvl>1,shotLvl>=3);
+   mushroom(30,114,11,Math.sin(time*3)*.12,false,false);
    ctx.fillStyle='rgba(43,26,18,.75)';ctx.beginPath();ctx.roundRect(bx-3,by-3,bw+6,20,10);ctx.fill();
    ctx.fillStyle=P.mana>=cost?'#3b7fe0':'#7a8aa6';ctx.beginPath();ctx.roundRect(bx,by,Math.max(0,bw*P.mana/mm),14,7);ctx.fill();
    ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(bx+4,by+2,Math.max(0,bw*P.mana/mm-8),3);
-   if(shotLvl>1){ctx.font='15px '+FONT;ctx.lineWidth=3;ctx.fillStyle='#fff';const mt='×'+shotLvl;ctx.strokeText(mt,bx+bw+10,by+13);ctx.fillText(mt,bx+bw+10,by+13)}}
+  }
   {let gx=24;const gy=150;
+   // the mushroom-bunch upgrade: the same picture as in the shop
+   if(shotLvl>1){const im=shotsBadge(shotLvl);if(im.complete)ctx.drawImage(im,gx-10,gy-20,40,40);gx+=40}
    if(hasCloak){ctx.save();ctx.translate(gx+8,gy);ctx.fillStyle='#7a4ab8';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-5,-12);ctx.lineTo(5,-12);ctx.lineTo(12,12);ctx.quadraticCurveTo(0,8,-12,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();gx+=34}
    if(hasUmbrella){ctx.save();ctx.translate(gx+8,gy+2);ctx.scale(.42,.42);ctx.fillStyle='#e33b2e';ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.ellipse(0,0,30,21,0,Math.PI,0);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,22);ctx.quadraticCurveTo(0,29,-7,27);ctx.stroke();ctx.restore()}}
   ctx.font='18px '+FONT;ctx.textAlign='right';ctx.lineWidth=4;const lt=T('levelName')(LEVEL);ctx.strokeText(lt,W-(isTouch?74:18),30);ctx.fillText(lt,W-(isTouch?74:18),30);
@@ -4680,13 +4686,17 @@ const HEART_PATH='M20 33 C4 22 6 8 20 15 C34 8 36 22 20 33Z';
 // shop icons: a five-pointed star (mana) and a small mushroom; filled with colour, or black outlines for 'not yet'
 function starPath(cx,cy,r,fill,stroke='#2b1a12'){let d='';for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;d+=(i?'L':'M')+(cx+Math.cos(a)*rr).toFixed(1)+' '+(cy+Math.sin(a)*rr).toFixed(1)}
   return `<path d="${d}Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>`}
+// the mushroom-bunch upgrade: two mushrooms on a diagonal (bottom left, top right), then three in a triangle
+// (two below, one on top). The same picture is the shop icon, the bought-marks and the HUD badge.
+const SHOT_LAYOUT={2:[[1,17],[17,3]],3:[[1,17],[18,17],[9.5,2]]};
+function shotsIcon(n,filled,size=40){return `<svg width="${size}" height="${size}" viewBox="0 0 40 40">${SHOT_LAYOUT[n].map(([x,y])=>mushSil(x,y,.55,filled?'#e33b2e':null)).join('')}</svg>`}
 function mushSil(x,y,s,fill){const st=fill?'#f5ecd8':'none';return `<g transform="translate(${x} ${y}) scale(${s})"><rect x="15" y="20" width="10" height="14" rx="3" fill="${st}" stroke="#2b1a12" stroke-width="2.5"/><path d="M5 22 A15 15 0 0 1 35 22 Z" fill="${fill||'none'}" stroke="#2b1a12" stroke-width="3"/></g>`}
 const SHOP=[
  {id:'heal',price:5,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="${HEART_PATH}" fill="#ff5b6e" stroke="#2b1a12" stroke-width="2.5"/></svg>`},
  {id:'maxhp',price:20,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="${HEART_PATH}" fill="#ff5b6e" stroke="#2b1a12" stroke-width="2.5"/><circle cx="31" cy="10" r="8" fill="#fff" stroke="#2b1a12" stroke-width="2"/><path d="M31 6v8M27 10h8" stroke="#2b1a12" stroke-width="2.5"/></svg>`},
  {id:'mush',price:15,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><rect x="15" y="20" width="10" height="14" rx="3" fill="#f5ecd8" stroke="#2b1a12" stroke-width="2"/><path d="M5 22 A15 15 0 0 1 35 22 Z" fill="#e33b2e" stroke="#2b1a12" stroke-width="2.5"/><circle cx="13" cy="15" r="2.6" fill="#fff"/><circle cx="23" cy="11" r="2.2" fill="#fff"/><circle cx="28" cy="18" r="1.8" fill="#fff"/></svg>`},
  {id:'manaUp',price:25,icon:`<svg width="40" height="40" viewBox="0 0 40 40">${starPath(20,21,15,'#3b7fe0')}<circle cx="31" cy="10" r="8" fill="#fff" stroke="#2b1a12" stroke-width="2"/><path d="M31 6v8M27 10h8" stroke="#2b1a12" stroke-width="2.5"/></svg>`},
- {id:'shots',price:30,icon:`<svg width="40" height="40" viewBox="0 0 40 40">${mushSil(0,6,.55,'#e33b2e')}${mushSil(16,0,.55,'#e33b2e')}${mushSil(10,14,.55,'#f2b830')}</svg>`},
+ {id:'shots',price:30,icon:shotsIcon(3,true)},
  {id:'cloak',price:50,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M14 6 H26 L35 34 Q28 30 20 35 Q12 30 5 34Z" fill="#7a4ab8" stroke="#2b1a12" stroke-width="2.5" stroke-linejoin="round"/><path d="M14 6 Q20 13 26 6" fill="#5a3290" stroke="#2b1a12" stroke-width="2"/><circle cx="20" cy="11" r="2.6" fill="#f2b830" stroke="#2b1a12" stroke-width="1.5"/><path d="M15 20 L12 31 M25 20 L28 31" stroke="#5a3290" stroke-width="2"/></svg>`},
  {id:'umbrella',price:60,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M3 20 A17 12 0 0 1 37 20 Q32 17 28.5 20 Q24 17 20 20 Q16 17 11.5 20 Q8 17 3 20Z" fill="#e33b2e" stroke="#2b1a12" stroke-width="2.5" stroke-linejoin="round"/><path d="M20 8 Q14 12 11.5 20 M20 8 Q26 12 28.5 20" fill="none" stroke="#fff3e0" stroke-width="2.5"/><path d="M20 20 V29 Q20 33 16 32" fill="none" stroke="#2b1a12" stroke-width="2.5" stroke-linecap="round"/></svg>`}];
 const heartsSold=()=>Math.max(0,P.maxhp-HP_BASE), heartsMax=MAXHP_CAP-HP_BASE;
@@ -4706,8 +4716,7 @@ function shopProgress(it){
   const sp=(on,svg)=>`<span class="pip${on?' on':''}">${svg}</span>`;
   if(it.id==='maxhp') return Array.from({length:heartsMax},(_,i)=>sp(i<heartsSold(),`<svg width="22" height="22" viewBox="0 0 40 40"><path d="${HEART_PATH}" fill="${i<heartsSold()?'#ff5b6e':'none'}" stroke="#2b1a12" stroke-width="3.5"/></svg>`)).join('');
   if(it.id==='manaUp') return Array.from({length:MANA_UPS},(_,i)=>sp(i<manaUps,`<svg width="22" height="22" viewBox="0 0 40 40">${starPath(20,21,16,i<manaUps?'#3b7fe0':'#2b1a12')}</svg>`)).join('');
-  if(it.id==='shots') return [2,3].map(n=>{const on=shotLvl>=n,f=on?(n===3?'#f2b830':'#e33b2e'):null;
-    return sp(on,`<svg width="${n===2?34:46}" height="24" viewBox="0 0 ${n===2?34:46} 24">${n===2?mushSil(0,2,.55,f)+mushSil(16,2,.55,f):mushSil(0,2,.55,f)+mushSil(14,2,.55,f)+mushSil(28,2,.55,f)}</svg>`)}).join('');
+  if(it.id==='shots') return [2,3].map(n=>sp(shotLvl>=n,shotsIcon(n,shotLvl>=n,30))).join('');
   return '';
 }
 let shopSel=0;
@@ -6002,7 +6011,7 @@ function updateSnowman(dt){
   // stomping on the bucket hurts it
   if(!P.dead&&P.vy>0&&B.stompCD<=0&&Math.abs(pcx-head.x)<head.r+14&&P.prevBottom<=headTop+14&&P.y+P.h>=headTop&&bossHittable()&&B.state!=='intro'){
     hitBoss(DMG_STOMP,head.x,headTop);gainMana(MANA_HIT);B.sqv[2]+=6;B.stompCD=.25;clang(head.x,headTop);
-    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*1.3);P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
+    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*BOUNCE_K);P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
     P.vx+=(pcx<head.x?-1:1)*120;
     if(B.state==='dying')return}
   const above=!P.dead&&Math.abs(pcx-cx)<100&&P.y+P.h<headTop+10;
