@@ -760,12 +760,10 @@ function buildLevel(level,seed,attempt){
   // desert: the ruined town fills the middle of the level; single ruins can still turn up near the start and the end
   const midA=Math.floor(total*.36), midB=Math.floor(total*.62);
   let heavy=0,sinceCP=0,tension=0,last='';const recent=[];
-  // a level with a mini-boss gets a clearing for it past the middle: checkpoint, a low step, a flat field with two
-  // planks to jump from, another low step. The steps keep the mini-boss in its clearing.
+  // a level with a mini-boss gets a wide flat clearing for it past the middle, right after a checkpoint
   const MB=LEVELS[level].miniboss, mbAt=MB?Math.floor(total*.68):-1;
-  const miniArena=()=>{stepTo(clamp(h,3,5));SEG.rest(true);run(1,h+1);
-    const n=22,c0=x,pr=ROWS-h-3;run(n,h);plank(c0+3,pr,3);plank(c0+n-6,pr,3);
-    sporeLine(c0+9,c0+12,h,150);spawn(MB,c0+n-6,{force:true});run(1,h+1);run(3,h)};
+  const miniArena=()=>{stepTo(clamp(h,3,5));SEG.rest(true);
+    const n=24,c0=x;run(n,h);sporeLine(c0+9,c0+12,h,110);spawn(MB,c0+n-6,{force:true})};
   for(let i=0;i<total;i++){
     progress=i/total;
     // after two hard sections, or when a checkpoint is due, give a breather that ends at the flag
@@ -1550,6 +1548,7 @@ function fishRange(e){
   e.x0=a*TS;e.x1=(b+1)*TS;e.surf=t*TS;e.bot=(d+1)*TS;e.dir=e.dir||1;
   return b>a;
 }
+const FROG_WIND=.4;   // the frog's warning before its tongue lashes out
 function swingBox(e,len,h,oy=4){return{x:e.face>0?e.x+e.w-6:e.x-len+6,y:e.y+oy,w:len,h}}
 // which boxes hurt the player on touch, and where the player can stomp
 function contactInfo(e){
@@ -1971,6 +1970,8 @@ const EUPD={
     const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx),dy=P.y+P.h-(e.y+e.h);
     e.cd-=dt;e.anim+=dt;
     switch(e.state){
+      case 'tongueWind': e.vx=0;e.t-=dt;   // warning: the throat swells, a mark shows how far the tongue will reach
+        if(e.t<=0){e.state='tongue';e.t=.62;e.tl=0;sfx('lick')}break;
       case 'tongue': e.vx=0;e.t-=dt;{const k=.62-e.t;e.tl=k<.2?k/.2*175:k<.34?175:Math.max(0,175*(1-(k-.34)/.2))}
         if(e.t<=0){e.state='idle';e.cd=rand(.9,1.4);e.tl=0}break;
       case 'hop': if(e.onGround&&e.vy>=0){e.state='idle';e.vx=0;dust(cx,e.y+e.h,4)}break;
@@ -1978,7 +1979,7 @@ const EUPD={
         if(e.onGround)e.vx=approach(e.vx,0,900*dt);
         const engaged=!P.dead&&adx<480&&Math.abs(dy)<220&&onScreenE(e);
         if(engaged){e.face=Math.sign(dx)||e.face;
-          if(adx<185&&Math.abs(dy)<46&&e.cd<=0&&e.onGround){e.state='tongue';e.t=.62;e.tl=0;sfx('lick');break}
+          if(adx<185&&Math.abs(dy)<46&&e.cd<=0&&e.onGround){e.state='tongueWind';e.t=FROG_WIND;e.tl=0;break}
           if(e.cd<=0&&e.onGround&&adx>120){const safe=groundAhead(e,e.face,TS*3)||dy>40;
             if(safe){e.vy=dy<-40?-760:-540;e.vx=e.face*170;e.onGround=false;e.state='hop';e.cd=rand(.9,1.5);sfx('jump')}else e.cd=.5}}
         else if(e.cd<=0&&e.onGround){if(!groundAhead(e,e.dir,TS*2.5))e.dir*=-1;e.face=e.dir;e.vy=-420;e.vx=e.dir*110;e.onGround=false;e.state='hop';e.cd=rand(2,3.5)}
@@ -2590,12 +2591,17 @@ const EDRAW={
     if(air){limb(-8,-9,-24,2,6,dark);limb(-24,2,-32,-2,4,dark)}else{ctx.fillStyle=dark;ctx.beginPath();ctx.ellipse(-12,-6,10,7,-.2,0,7);ctx.fill();ctx.stroke()}
     ctx.fillStyle=skin;ctx.beginPath();ctx.moveTo(-19,-1);ctx.quadraticCurveTo(-21,-25,1,-25);ctx.quadraticCurveTo(21,-24,21,-8);ctx.quadraticCurveTo(20,-1,10,0);ctx.closePath();ctx.fill();ctx.stroke();
     ctx.fillStyle=dark;for(const [sx,sy,r] of [[-9,-16,4],[-2,-20,3],[-12,-8,3]]){ctx.beginPath();ctx.arc(sx,sy,r,0,7);ctx.fill()}
-    const pu=e.state==='tongue'?0:Math.max(0,Math.sin(time*4+e.ph))*3.5;
+    const wind=e.state==='tongueWind',wk=wind?1-e.t/FROG_WIND:0;
+    if(wind){ctx.translate(rand(-1,1),0); // where the tongue will reach: a dashed red line that fills in
+      ctx.save();ctx.setLineDash([8,6]);ctx.lineCap='round';ctx.strokeStyle=`rgba(220,40,60,${.35+.45*wk})`;ctx.lineWidth=4;
+      ctx.beginPath();ctx.moveTo(22,-10);ctx.lineTo(22+175*Math.min(1,wk*1.6),-10);ctx.stroke();ctx.restore();ctx.strokeStyle=INK;ctx.lineWidth=2.5}
+    const pu=e.state==='tongue'?0:wind?3+wk*6:Math.max(0,Math.sin(time*4+e.ph))*3.5;
     ctx.fillStyle=belly;ctx.beginPath();ctx.ellipse(12,-4,5+pu,3.5+pu*.7,0,0,7);ctx.fill();ctx.lineWidth=1.6;ctx.stroke();
     ctx.lineWidth=2.5;for(const [ex,ey] of [[-1,-24],[10,-25]]){ctx.fillStyle=skin;ctx.beginPath();ctx.arc(ex,ey,6.5,0,7);ctx.fill();ctx.stroke();
       ctx.fillStyle='#f2c94c';ctx.beginPath();ctx.arc(ex+1,ey-1,4,0,7);ctx.fill();ctx.fillStyle=INK;ctx.fillRect(ex-2,ey-2,6,2)}
     ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(7,-11);ctx.quadraticCurveTo(15,-9,21,-12);ctx.stroke();
     limb(10,-4,15,0,5,dark);
+    if(wind){ctx.scale(f,1);ctx.globalAlpha=.6+.4*Math.sin(time*30);ctx.fillStyle='#e0303a';ctx.font='bold 22px '+FONT;ctx.textAlign='center';ctx.fillText('!',0,-38);ctx.globalAlpha=1;ctx.scale(f,1)}
     if(e.tl>2){ctx.lineCap='round';ctx.strokeStyle=INK;ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(18,-10);ctx.lineTo(18+e.tl,-10);ctx.stroke();
       ctx.strokeStyle='#e86a8a';ctx.lineWidth=5;ctx.stroke();ctx.fillStyle='#e86a8a';ctx.strokeStyle=INK;ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(20+e.tl,-10,7,0,7);ctx.fill();ctx.stroke()}
     ctx.restore();
@@ -2749,8 +2755,8 @@ const CHOMP_LUNGE=62;   // how far the bite lunge carries it forward (420 px/s b
 const CHOMP_MAX=2;      // never more than two bites in a row
 // the danger zone of the bite, drawn while it opens its jaws: where the bite will land after the lunge
 function drawCrocBiteZone(){
-  const wind=B.state==='chompWind', b=crocBite(), k=wind?clamp(1-B.t/.45,0,1):1;
-  const x=b.x+(wind?B.face*CHOMP_LUNGE:0), a=wind?.12+.22*k:.38, pulse=.75+.25*Math.sin(time*30);
+  const b=crocBite(), k=clamp(1-B.t/.45,0,1);
+  const x=b.x+B.face*CHOMP_LUNGE, a=.12+.22*k, pulse=.75+.25*Math.sin(time*30);
   ctx.save();ctx.fillStyle=`rgba(230,40,30,${a*pulse})`;ctx.strokeStyle=`rgba(200,20,10,${(a+.25)*pulse})`;ctx.lineWidth=3;ctx.setLineDash([10,7]);
   ctx.beginPath();ctx.roundRect(x,b.y,b.w,FLOOR-b.y,12);ctx.fill();ctx.stroke();
   ctx.setLineDash([]);ctx.fillStyle=`rgba(200,20,10,${(a+.15)*pulse})`;ctx.beginPath();ctx.ellipse(x+b.w/2,FLOOR-2,b.w/2,6,0,0,7);ctx.fill();
@@ -2829,7 +2835,7 @@ function updateCroc(dt){
       if(B.t<=0) crocLaunch();break;
     case 'windup': B.vx=0;B.t-=dt;B.jaw=.25;
       if(Math.random()<.4) parts.push({x:B.x+B.w/2+B.face*150,y:B.y+45,vx:B.face*rand(40,120),vy:rand(-40,0),g:-30,c:'rgba(255,255,255,.8)',s:rand(4,7),life:.4,max:0,t:'puff'});
-      if(B.t<=0){B.state='charge';B.vx=B.face*760*mult;sfx('roar');B.jaw=.6}break;
+      if(B.t<=0){B.state='charge';B.vx=B.face*(p2?760:600);sfx('roar');B.jaw=.6}break;   // the charge across the arena: 600 px/s, 760 in phase 2
     case 'charge': if(Math.random()<.5)dust(B.x+B.w/2-B.face*100,FLOOR,1,-B.face);
       if(wall){B.state='stun';B.t=1.3;B.vx=0;B.jaw=0;shake(.45,13);sfx('boom');
         const n=p2?5:3;for(let i=0;i<n;i++)eshots.push({k:'rock',x:rand(ARENA_L+60,ARENA_R-60),y:-40-i*90,vy:0,g:1300,r:17})}break;
@@ -2896,12 +2902,12 @@ function drawCroc(){
   else{ctx.beginPath();ctx.ellipse(15,-37,2.5,6,0,0,7);ctx.fill();ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-2,-50);ctx.lineTo(26,-44);ctx.stroke()}
   ctx.restore();
   ctx.restore();
-  if(B.state==='chompWind'||B.state==='chomp') drawCrocBiteZone();
+  if(B.state==='chompWind') drawCrocBiteZone();   // only the warning: once it bites, the zone is gone
   if(B.state==='stun') for(let k=0;k<3;k++){const a=time*5+k*2.1;drawStar(cx+f*60+Math.cos(a)*40,B.y-10+Math.sin(a)*10,7,time*4)}
 }
 
 registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
-  dmgMult:()=>B.state==='enrage'?.4:1});   // while it changes into phase 2 it takes 60% less damage
+  dmgMult:()=>B.state==='enrage'?.75:1});   // while it changes into phase 2 it takes only 75% of the damage
 // ==== bosses/dragon.js ====
 /* ---------- dragon ---------- */
 // big animated wind swooshes blowing away from the dragon during the gust attack
@@ -2946,6 +2952,8 @@ function drawInferno(){
 function makeDragon(){return{kind:'dragon',x:ARENA_L+27*TS,y:FLOOR-84,w:180,h:84,hp:89,max:89,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flap:0,mouth:0,glow:0,
   last:'',repeat:0,tx:0,ty:0,side:1,infCD:0,emitT:0,burnT:0,shots:0,landed:true,sweep0:0,sweep1:0,targetX:0,flash:0}}
 const dcx=()=>B.x+B.w/2, dcy=()=>B.y+B.h/2;
+// the inferno that opens phase 2 is armoured: 75% less damage until its breath ends (later infernos are not)
+const dragonArmored=()=>B.infArmor&&(B.state==='infernoWind'||B.state==='inferno');
 function dragonBody(){return{x:B.x+12,y:B.y+14,w:B.w-24,h:B.h-20}}
 function dragonHeadPos(){return B.state==='tired'?{x:dcx()+B.face*128,y:FLOOR-26}:{x:dcx()+B.face*118,y:dcy()-26}}
 function dragonHeadBox(){const h=dragonHeadPos();return{x:h.x-30,y:h.y-22,w:60,h:44}}
@@ -3038,7 +3046,7 @@ function updateDragon(dt){
     case 'enrage':
       flyTo((ARENA_L+ARENA_R)/2,140,dt,260);B.t-=dt;B.mouth=.8+.2*Math.sin(time*20);
       skyHeat=approach(skyHeat,1,dt);
-      if(B.t<=0){B.phase=2;floater((ARENA_L+ARENA_R)/2,120,T('fPhase2'));startInferno()}break;
+      if(B.t<=0){B.phase=2;floater((ARENA_L+ARENA_R)/2,120,T('fPhase2'));startInferno();B.infArmor=true}break;   // only this first inferno is armoured
     case 'infernoWind':
       flyTo((ARENA_L+ARENA_R)/2,140,dt,360);B.t-=dt;B.mouth=approach(B.mouth,1,dt*1.5);B.glow=1;
       if(Math.random()<.9){const x=rand(ARENA_L,ARENA_R);parts.push({x,y:FLOOR-2,vx:rand(-20,20),vy:rand(-90,-40),g:-20,c:Math.random()<.5?'rgba(90,60,50,.55)':'rgba(255,140,40,.8)',s:rand(4,8),life:rand(.4,.8),max:0,t:'puff'})}
@@ -3054,7 +3062,7 @@ function updateDragon(dt){
       if(Math.random()<.9) embers(rand(ARENA_L,ARENA_R),FLOOR-rand(4,50),2);
       const inArena=P.x+P.w>ARENA_L&&P.x<ARENA_R;
       if(!P.dead&&inArena&&P.y+P.h>FLOOR-INFERNO_H) hurt(P.x+P.w/2+rand(-1,1));
-      if(B.t<=0){B.state='hover';B.t=.9;B.infCD=9;dragonHoverTarget()}
+      if(B.t<=0){B.state='hover';B.t=.9;B.infCD=9;B.infArmor=false;dragonHoverTarget()}
     }break;
     case 'meteorUp': B.y-=520*dt;if(B.y<-320){B.state='meteor';B.t=2.2;B.emitT=0}break;
     case 'meteor':
@@ -3090,6 +3098,9 @@ function drawDragon(){
   // floor shadow
   const alt=clamp((FLOOR-(B.y+B.h))/400,0,1);
   ctx.fillStyle=`rgba(0,0,0,${.22-alt*.14})`;ctx.beginPath();ctx.ellipse(cx,FLOOR+2,130-alt*50,10,0,0,7);ctx.fill();
+  if(dragonArmored()){ // a shimmering heat shield while it is armoured
+    const pr=.7+.3*Math.sin(time*9);ctx.fillStyle=`rgba(255,190,80,${.18*pr})`;ctx.strokeStyle=`rgba(255,220,120,${.6*pr})`;ctx.lineWidth=3;
+    ctx.beginPath();ctx.ellipse(cx+f*30,cy-10,170,95,0,0,7);ctx.fill();ctx.stroke()}
   ctx.save();ctx.translate(cx,cy);if(B.state==='enrage')ctx.translate(rand(-2,2),rand(-2,2));ctx.scale(f,1);
   ctx.lineWidth=3.5;ctx.strokeStyle=INK;ctx.lineJoin='round';
   const a=grounded?-.6:Math.sin(B.flap);
@@ -3139,7 +3150,8 @@ function drawDragon(){
   if(B.state==='breath'&&Math.random()<.5) embers(dragonMouth().x,dragonMouth().y,2);
 }
 
-registerBoss('dragon',{make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8});
+registerBoss('dragon',{make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
+  dmgMult:()=>dragonArmored()?.25:1});
 // ==== bosses/hydra.js ====
 /* ---------- hydra ---------- */
 // The arena is two screens tall. The hydra's body sits in the background of a poisoned pool (touching it is harmless);
@@ -3177,7 +3189,9 @@ function hydraHP(){let v=B.heads.reduce((a,q)=>a+Math.max(0,q.hp),0);for(let k=B
 function hydraLaserSeg(h){const o=hydraMouth(h,h.aa);return [o.x,o.y,o.x+Math.cos(h.aa)*LASER_LEN,o.y+Math.sin(h.aa)*LASER_LEN]}
 function hydraMouth(h,a){return{x:h.x+Math.cos(a)*78,y:h.y+Math.sin(a)*78}}
 function segDist(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1,l=dx*dx+dy*dy||1,t=clamp(((px-x1)*dx+(py-y1)*dy)/l,0,1);return Math.hypot(px-x1-dx*t,py-y1-dy*t)}
-function hydraGap(){const n=B.heads.filter(h=>!h.dead).length;return (n>=3?rand(2.4,3.2):n===2?rand(1.6,2.2):rand(1.1,1.5))*[1,1,.85,.7][B.stage]}
+function hydraGap(){const n=B.heads.filter(h=>!h.dead).length;return (n>=3?rand(2.4,3.2):n===2?rand(1.6,2.2):rand(1.1,1.5))*HYDRA_GAP_K[B.stage]}
+// pause between head attacks per stage: stage 1 -20%, stage 2 -40%, stage 3 -60% (against the original 1, .85, .7)
+const HYDRA_GAP_K=[1,.8,.85*.6,.7*.4];
 function hydraHit(dmg,x,y){const h=B.lastHead;if(h)hydraDamage(h,dmg,x,y)}
 function hydraDamage(h,dmg,x,y){
   if(!h||h.dead||B.state!=='fight') return;
@@ -3709,7 +3723,7 @@ function step(dt){
   const vw=VW/camZ;
   let minX=0,maxX=COLS*TS-vw;
   if(arenaLocked&&!bossDead){minX=ARENA_L-TS;maxX=ARENA_R-vw;if(maxX<minX){minX=maxX=(ARENA_L-TS+ARENA_R-vw)/2}}
-  maxX=Math.min(maxX,ARENA_R+TS-vw);
+  if(!(LV().exitRight&&bossDead)) maxX=Math.min(maxX,ARENA_R+TS-vw);
   if(arenaLocked&&!bossDead&&B.kind==='hydra') minX=maxX=(ARENA_L+ARENA_R-vw)/2;   // the whole hydra arena on one screen
   const target=clamp(P.x+P.w/2-vw/2+P.face*70,minX,Math.max(minX,maxX));
   camX+=(target-camX)*Math.min(1,dt*7);
@@ -4368,7 +4382,7 @@ function compileSong(d){
     for(let i=0;i<st;i++){
       const c=sec.chords[Math.floor(i/16)].split(','), bi=i%16;
       steps.push({ch:chordTones(c[Math.floor(bi*c.length/16)]),bi,notes:[],b:pat(sec.bass,bi),a:pat(sec.arp,bi),
-        k:pat(sec.kick,bi),s:pat(sec.snare,bi),h:pat(sec.hat,bi),g:pat(sec.gtr||'.',bi),cr:!!d.crash&&i===0,lw:sec.lw||25,lv:sec.lv||.22,av:sec.av||.05,bv:sec.bv||.42})
+        k:pat(sec.kick,bi),s:pat(sec.snare,bi),h:pat(sec.hat,bi),g:pat(sec.gtr||'.',bi),bl:pat(sec.bell||'.',bi),wn:pat(sec.wind||'.',bi),i,cr:!!d.crash&&i===0,lw:sec.lw||25,lv:sec.lv||.22,av:sec.av||.05,bv:sec.bv||.42})
     }
     for(const n of lead) steps[base+n.s].notes.push(n);
   }
@@ -4511,6 +4525,19 @@ function mNoise(t,dur,vol,hp){
 }
 function mKick(t){const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(42,t+.12);
   g.gain.setValueAtTime(.75,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.connect(g).connect(MUSIC.gain);o.start(t);o.stop(t+.18)}
+// a crystal chime: a sine with an inharmonic partial that rings out slowly
+function mBell(m,t,vol){
+  for(const [mul,v,dec] of [[1,1,1.6],[2.76,.35,.6],[5.4,.12,.25]]){const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine';o.frequency.value=mfreq(m)*mul;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol*v,t+.004);g.gain.exponentialRampToValueAtTime(.0005,t+dec);
+    o.connect(g).connect(MUSIC.gain);o.start(t);o.stop(t+dec+.05)}
+}
+// a soft gust of snowy wind: band-passed noise that swells and fades
+function mWind(t,dur,vol){
+  const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();
+  s.buffer=NOISE;s.loop=true;f.type='bandpass';f.frequency.setValueAtTime(900,t);f.frequency.linearRampToValueAtTime(1800,t+dur*.5);f.frequency.linearRampToValueAtTime(1100,t+dur);f.Q.value=.8;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+dur*.45);g.gain.linearRampToValueAtTime(0,t+dur);
+  s.connect(f).connect(g).connect(MUSIC.gain);s.start(t,Math.random()*.5);s.stop(t+dur+.05);
+}
 let DIST=null;
 function mGuitar(m,t,dur,vol){
   if(!DIST){DIST=new Float32Array(1024);for(let i=0;i<1024;i++){const x=i/1023*2-1;DIST[i]=Math.tanh(x*5)}}
@@ -4530,6 +4557,8 @@ function scheduleStep(s,i,t,sd){
   if(st.s==='x'){mNoise(t,.12,.26,1300);mTone('triangle',190,t,.05,.16)}
   if(st.g==='x') mGuitar(ch[0]+12,t,sd*.8,.13); else if(st.g==='X') mGuitar(ch[0]+12,t,sd*7.5,.12);
   if(st.cr) mNoise(t,.9,.13,4500);
+  if(st.bl==='b') mBell(ch[(st.i*5)%3]+36+(st.i%32<16?0:12),t,.09);   // chimes on chord tones, the octave changes every two bars
+  if(st.wn==='w') mWind(t,sd*16,.1);
   if((p2&&s.hat2?pat(s.hat2,bi):st.h)==='x') mNoise(t,.03,.06,7000);
 }
 function musicTick(){
@@ -4815,21 +4844,30 @@ function togglePause(){
 /* ---------- level 1 mini-boss: the giant purple slime ---------- */
 // It sleeps in a clearing in the second half of the forest (the generator builds the clearing, see level.miniboss).
 // Woken up, it hops after the player, crouches and leaps high to land on her (the landing sends a wave of goo
-// along the floor both ways), rams her, sliding fast along the floor (it stops before any drop), and spits blobs
-// of goo that a punch can knock away. Every third of its health it sheds
-// a small purple slime, and when it dies it bursts into two more. It falls through one-way planks, so they are
-// no safe refuge, and it never leaves its clearing.
-const BS_W=150, BS_H=112;
-function bsRange(e){ // the flat floor of the clearing: stops at a step up, a drop or a wall
-  const r=Math.floor((e.y+e.h+4)/TS), c=Math.floor((e.x+e.w/2)/TS);
-  const ok=cc=>isFloorT(tile(cc,r))&&!solid(cc,r-1)&&!solid(cc,r-2)&&!solid(cc,r-3);
-  let a=c,b=c;while(a-1>c-24&&ok(a-1))a--;while(b+1<c+24&&ok(b+1))b++;
-  e.x0=a*TS;e.x1=(b+1)*TS;
-}
+// along the floor both ways), rams her, sliding fast along the floor, and spits blobs of goo that a punch can knock
+// away. Every third of its health it sheds a small purple slime, and when it dies it bursts into two more.
+// It falls through one-way planks, so they are no safe refuge. Once awake it follows her anywhere, but none of its
+// moves ever ends over a drop. After a stomp on its head it neither hops nor leaps for a while (only spits or rams).
+const BS_W=150, BS_H=112, BS_STOMP_LOCK=1.25;
 function bsInit(e){
-  e.max=e.hp;e.state='sleep';e.t=0;e.hops=0;e.cd=0;e.squash=0;e.mouth=0;e.split=2;e.face=-1;e.zz=0;
+  e.max=e.hp;e.state='sleep';e.t=0;e.hops=0;e.cd=0;e.squash=0;e.mouth=0;e.split=2;e.face=-1;e.zz=0;e.noJump=0;
   e.bub=[0,1,2,3].map(i=>({x:rand(-.5,.5),y:rand(0,1),s:rand(.04,.08)}));
-  bsRange(e);
+}
+// is there floor (not a pit, water or sand) under the whole body if it stood centred at x?
+function bsFloorAt(e,x){
+  for(const ox of [-e.w/2+8,0,e.w/2-8]){const y=topY(Math.floor((x+ox)/TS));if(y<0||y>=WH)return false}
+  return true;
+}
+// where a leap at the player may land: her spot, or the nearest spot towards the slime that has floor under it
+function bsLeapTarget(e){
+  const cx=e.x+e.w/2;let tx=P.x+P.w/2+P.vx*.25;
+  for(let k=0;k<30;k++){if(bsFloorAt(e,tx))return tx;tx+=Math.sign(cx-tx)*TS/2;if(Math.abs(tx-cx)<TS)break}
+  return null;
+}
+// a stomp on its head: no hopping or leaping for a moment, so bouncing on it is safer
+function bsStomped(e){
+  e.squash=.25;bsWake(e);e.noJump=BS_STOMP_LOCK;
+  if(e.state==='crouch'){e.state='idle';e.t=.2}   // a leap that was about to start is called off
 }
 // a small purple slime flies out of the big one
 function bsSpawnKid(e,dir){
@@ -4860,9 +4898,8 @@ function bsUpdate(e,dt){
   const was=e.onGround;
   e.vy=Math.min(e.vy+G*dt,1100);moveBody(e,dt,false);   // heavy: falls straight through one-way planks
   if(e.y>WH+60){e.dead=true;return}
-  if(e.x<e.x0){e.x=e.x0;if(e.vx<0)e.vx=0}
-  if(e.x+e.w>e.x1){e.x=e.x1-e.w;if(e.vx>0)e.vx=0}
   if(e.squash>0) e.squash-=dt;
+  if(e.noJump>0) e.noJump-=dt;
   e.mouth=approach(e.mouth,e.state==='spitWind'?1:0,dt*5);
   for(const b of e.bub){b.y-=b.s*dt*3;if(b.y<0){b.y=1;b.x=rand(-.5,.5)}}
   const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx),dy=P.y+P.h-(e.y+e.h),rage=e.hp<=e.max*.5;
@@ -4880,22 +4917,25 @@ function bsUpdate(e,dt){
       e.vx=approach(e.vx,0,1400*dt);
       if(adx>20) e.face=Math.sign(dx);
       if(e.t<=0&&e.onGround&&!P.dead){
-        if(e.hops>=(rage?1:2)){e.hops=0;
+        const locked=e.noJump>0;   // just stomped: spit, or ram off to one side, but no jumping
+        if(locked||e.hops>=(rage?1:2)){e.hops=0;
           const opts=[['spit',2]];
-          if(adx>140) opts.push(['leap',e.last==='leap'?1:3]);
-          if(adx>180&&Math.abs(dy)<70) opts.push(['ram',e.last==='ram'?1:rage?4:3]);   // only when she is on its floor
+          if(!locked&&adx>140&&bsLeapTarget(e)!==null) opts.push(['leap',e.last==='leap'?1:3]);
+          if(locked){if(groundAhead(e,e.face,TS))opts.push(['ram',2])}
+          else if(adx>180&&Math.abs(dy)<70&&groundAhead(e,Math.sign(dx)||e.face,TS)) opts.push(['ram',e.last==='ram'?1:rage?4:3]);   // only when she is on its floor
           let r=Math.random()*opts.reduce((a,o)=>a+o[1],0),pk=opts[0][0];for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
           e.last=pk;
           if(pk==='leap'){e.state='crouch';e.t=rage?.4:.55;sfx('creak')}
-          else if(pk==='ram'){e.state='ramWind';e.t=rage?.45:.6;e.face=Math.sign(dx)||e.face;sfx('creak')}
+          else if(pk==='ram'){e.state='ramWind';e.t=rage?.45:.6;if(!locked)e.face=Math.sign(dx)||e.face;sfx('creak')}
           else{e.state='spitWind';e.t=rage?.4:.55}}
         else{e.hops++;const vy=rage?560:500,vx=rage?210:165,reach=vx*2*vy/G;   // a hop never ends over a drop: then it hops in place
-          e.vy=-vy;e.vx=groundAhead(e,e.face,reach*2)?e.face*vx:0;e.onGround=false;e.state='air';e.big=false}
+          e.vy=-vy;e.vx=bsFloorAt(e,cx+e.face*reach)&&!solid(Math.floor((cx+e.face*(e.w/2+reach))/TS),Math.floor((e.y+e.h)/TS)-3)?e.face*vx:0;e.onGround=false;e.state='air';e.big=false}
       }
       break;
     case 'crouch': // squeezes down, trembling, then jumps at the player
       e.vx=0;
-      if(e.t<=0){const air=1.0,tx=clamp(P.x+P.w/2+P.vx*.25,e.x0+e.w/2,e.x1-e.w/2);
+      if(e.t<=0){const air=1.0,tx=bsLeapTarget(e);
+        if(tx===null){e.state='idle';e.t=.2;break}   // no floor anywhere near her: no leap
         e.vy=-G*air/2;e.vx=clamp((tx-cx)/air,-520,520);e.onGround=false;e.state='air';e.big=true;sfx('jump');dust(cx,e.y+e.h,8)}
       break;
     case 'air':
@@ -4909,12 +4949,12 @@ function bsUpdate(e,dt){
       if(Math.random()<.4) dust(cx-e.face*e.w*.4,e.y+e.h,1,-e.face);
       if(e.t<=0){e.state='ram';e.t=1.6;e.rx=cx;e.vx=e.face*(rage?660:560);sfx('roar');shake(.15,4)}
       break;
-    case 'ram':{ // slides at her; stops before a drop, at the edge of the clearing or at a wall
+    case 'ram':{ // slides at her; stops before a drop or at a wall
       e.vx=e.face*(rage?660:560);
       if(Math.random()<.6) dust(cx-e.face*e.w*.45,e.y+e.h,1,-e.face);
-      const edge=e.face>0?e.x+e.w>=e.x1-2:e.x<=e.x0+2, passed=e.face*(cx-(P.x+P.w/2))>240;
-      if(e.hitWall||edge||!groundAhead(e,e.face,TS*.6)||passed||e.t<=0){
-        const hard=e.hitWall||edge;e.vx=0;e.state='ramStop';e.t=hard?.7:.45;e.squash=.25;
+      const passed=e.face*(cx-(P.x+P.w/2))>240;
+      if(e.hitWall||!groundAhead(e,e.face,TS*.6)||passed||e.t<=0){
+        const hard=e.hitWall;e.vx=0;e.state='ramStop';e.t=hard?.7:.45;e.squash=.25;
         shake(hard?.3:.12,hard?7:3);sfx(hard?'boom':'land');dust(cx+e.face*e.w*.45,e.y+e.h,6,e.face)}
       break}
     case 'ramStop': e.vx=0;if(e.t<=0){e.state='idle';e.t=rage?.25:.4}break;
@@ -5020,7 +5060,7 @@ registerEnemy('bigSlime',{size:{w:BS_W,h:BS_H,hp:48},update:bsUpdate,draw:bsDraw
   // the top of the dome is soft: a stomp hurts it but does not squash it flat
   contact:e=>({hurt:[shrink(e,12)],stomp:{x:e.x+20,y:e.y,w:e.w-40,h:30},dmg:2}),
   onHit:e=>bsWake(e),
-  onStomp:e=>{e.squash=.25;bsWake(e)},
+  onStomp:bsStomped,
   onDeath:e=>{const cx=e.x+e.w/2;shake(.5,8);sfx('boom');
     burst(cx,e.y+e.h/2,40,'#b77ee0',380,900,[4,9]);
     bsSpawnKid(e,-1);bsSpawnKid(e,1);
@@ -5040,7 +5080,7 @@ registerLevel(3,{biome:'swamp',boss:'hydra',song:'swamp',gen:genSwamp,validate:v
 // clear ice blocks float as stepping stones (flow ICE_B: a little slippery), crystal walls have to be smashed.
 // In a few places the roof is open to the sky far above: daylight and snow fall in, but it is much too high to climb out.
 const ICE_F=11, ICE_B=12;
-let skylights=[], startY=null, iceCeil=0;
+let skylights=[], startY=null, iceCeil=0, iceGate=[];   // iceGate: the ice wall that closes the hall until the snowman is beaten
 function genIce(seed){
   let v=null;
   for(let attempt=0;attempt<40;attempt++){buildIce(seed,attempt);v=validateIce();if(v.ok){GEN_INFO={attempt,repairs:0};return}}
@@ -5074,6 +5114,13 @@ function buildIce(seed,attempt){
   const power=(c,y)=>{const px=c*TS+TS/2;items.push({k:'power',x:px,y,ph:0});powerSpots.push([px,y])};
   const crumbIce=(c,r,w)=>plats.push({crumble:true,style:'ice',x:c*TS,y:r*TS,w:w*TS,h:16,x0:c*TS,x1:c*TS,vx:0,hy:r*TS,st:'idle',t:0,vy:0,rot:0});
   const maxGap=(dyT,dash,m)=>{const r=REACH.reach(dyT*TS,dash);return r<0?0:Math.floor(r*m/TS)};
+  // crumbling slabs over a bottomless chasm along a path: each step is [gap in tiles, change of row, slab width].
+  // The gaps are kept within an easy jump (no dash needed). Returns the row of the last slab.
+  const slabs=(top,r0,steps)=>{let r=r0;for(const [g0,dr,w] of steps){const nr=r+dr;
+      const g=clamp(g0,1,Math.max(1,maxGap(nr-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;
+      for(let i=0;i<w;i++)pit(x+i,top);crumbIce(x,nr,w);spore(x+(w>>1),nr*TS-30);x+=w;r=nr}
+    return r};
+  const landOn=(top,r,nf)=>{const g=clamp(2,1,Math.max(1,maxGap(nf-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;fl=nf};
   // strong but few: at most three golems and three witches in the whole cave
   const golemOK=()=>golems<3&&progress>.12, witchOK=()=>witches<3&&progress>.1;
   const startFl=fl;
@@ -5118,6 +5165,21 @@ function buildIce(seed,attempt){
       for(let i=0;i<n;i++)pit(x+i,top);
       for(let i=1;i<n-1;i+=3)crumbIce(x+i,fl,Math.min(2,n-1-i));
       arc(x,x+n-1,fl*TS-40,50);x+=n;run(4,hh)},
+    // crumbling-slab trials: stairs up, stairs down, a zigzag and a long bridge with a safe ice island halfway
+    crumbStairs(L){const hh=6,k=3+(L>1?1:0);stepFl(clamp(fl,FMIN+k+1,FMAX),hh);run(2,hh);const top=fl-k-1-hh;
+      const r=slabs(top,fl,Array.from({length:k},()=>[ri(1,2),-1,L>1?1:2]));landOn(top,r,r-1);run(4,hh)},
+    crumbDrop(L){const hh=6,k=3+(L>1?1:0);stepFl(clamp(fl,FMIN,FMAX-k-1),hh);run(2,hh);const top=fl-hh;
+      const r=slabs(top,fl,Array.from({length:k},()=>[ri(1,2),1,L>1?1:2]));landOn(top,r,r+1);run(4,hh);
+      if(chance(.4))spawnAt('iceSlime',x-2,fl)},
+    crumbZig(L){const hh=6,up=L>0?2:1;stepFl(clamp(fl,FMIN+up,FMAX),hh);run(2,hh);const top=fl-up-hh,f0=fl,k=4+L;
+      const r=slabs(top,fl,Array.from({length:k},(_,i)=>[ri(1,2),i%2?up:-up,L>1?1:2]));landOn(top,r,f0);run(4,hh)},
+    crumbIsle(L){const hh=6;stepFl(Math.max(fl,hh+2),hh);run(2,hh);const top=fl-hh,f0=fl,k=2+L;
+      slabs(top,fl,Array.from({length:k},()=>[ri(1,2),0,2]));
+      for(let i=0;i<2;i++)pit(x+i,top);x+=2;iceBlock(x,f0,3);for(let i=0;i<3;i++)carve(x+i,top,f0-1);   // a solid island to catch your breath
+      for(let i=0;i<3;i++)for(let rr=f0+1;rr<ROWS;rr++){grid[rr][x+i]=T_EMPTY;flow[rr][x+i]=0}
+      sporeRow(x,x+2,f0);x+=3;
+      slabs(top,f0,Array.from({length:k},()=>[ri(1,2),0,L>1?1:2]));landOn(top,f0,f0);run(4,hh);
+      if(L>0&&witchOK()&&chance(.4)){spawnAt('iceWitch',x-8,f0-5);witches++}},
     // going up: a shaft with ice ledges on alternate sides
     climb(L){const rise=ri(4,6)+(L>1?1:0),nf=Math.max(FMIN,fl-rise);if(fl-nf<3){run(4);return}
       const w=ri(6,7),c0=x,d=fl-nf,k=Math.ceil(d/3)-1;
@@ -5194,7 +5256,9 @@ function buildIce(seed,attempt){
   /* ---- the plan ---- */
   run(12,6,false);deco('torch',10,fl*TS);sporeRow(5,8,fl);
   const total=ri(17,19);
-  const W={tunnel:1.6,hall:1.5,slide:1.5,chasm:1.6,climb:1.9,descent:1.8,snake:1.9,crystal:1.4,nook:1,skylight:.35,iceBridge:1.1};
+  const W={tunnel:1.6,hall:1.5,slide:1.5,chasm:1.6,climb:1.9,descent:1.8,snake:1.9,crystal:1.4,nook:1,skylight:.35,iceBridge:1.1,
+    crumbStairs:.8,crumbDrop:.7,crumbZig:.8,crumbIsle:.7};
+  const CRUMB=['iceBridge','crumbStairs','crumbDrop','crumbZig','crumbIsle'];
   // the roof opens to the sky at least twice: once in each half of the cave
   const skyAt=new Set([ri(2,Math.floor(total*.42)),ri(Math.floor(total*.58),total-2)]);
   const secKinds=[],secPool=[['falseFloor',1],['crackHall',1],['shelf',1]],nSec=chance(.75)?2:1;
@@ -5213,7 +5277,8 @@ function buildIce(seed,attempt){
       if(recent.slice(-3).indexOf(ty)>=0)w*=.35;
       if(ty==='climb')w*=fl-4<FMIN?0:fl>=14?1.8:fl<=10?.4:1;
       if(ty==='descent')w*=fl+3>FMAX?0:fl<=10?1.8:fl>=14?.4:1;
-      if(i<2&&(ty==='chasm'||ty==='iceBridge'))w*=.3;
+      if(i<2&&(ty==='chasm'||CRUMB.indexOf(ty)>=0))w*=.3;
+      if(CRUMB.indexOf(ty)>=0&&recent.slice(-2).some(t=>CRUMB.indexOf(t)>=0))w*=.25;   // not two slab trials in a row
       if(w>0)cands.push([ty,w])}
     const ty=skyAt.has(i)&&last!=='skylight'?'skylight':wpick(cands);PLAN.push({t:ty,L,c:x,fl});SEG[ty](L);last=ty;recent.push(ty);sinceCP++;
   }
@@ -5221,11 +5286,16 @@ function buildIce(seed,attempt){
   stepFl(14);PLAN.push({t:'final',c:x});SEG.rest(true,true);run(5,5,false);
   // the snowman's hall: you drop into it from the passage
   const a0=x,AW=30,fr=ROWS-2,atop=6;ARENA_L=a0*TS;iceCeil=(atop+1)*TS;
-  for(let c=a0;c<a0+AW;c++)carve(c,atop+1,fr-1);
-  plank(a0+3,fr-4,4);plank(a0+AW-7,fr-4,4);plank(a0+10,fr-7,4);
-  heart(a0+11,(fr-7)*TS-26);
-  ARENA_R=(a0+AW)*TS;COLS=a0+AW+2;
-  door={x:(a0+AW-5)*TS,y:FLOOR-104,w:76,h:104};
+  for(let c=a0;c<a0+AW;c++)carve(c,atop+1,fr-1);   // an open hall: no ledges
+  heart(a0+5,fr*TS-30);
+  ARENA_R=(a0+AW)*TS;
+  // past the hall a passage leads on to the door, one screen further; a wall of clear ice closes it until the snowman is beaten
+  const e0=a0+AW,EW=26;iceGate=[];
+  for(let c=e0;c<e0+EW;c++)carve(c,fr-6,fr-1);
+  for(let r=fr-6;r<fr;r++){grid[r][e0]=T_SOLID;flow[r][e0]=ICE_B;iceGate.push([r,e0])}
+  sporeRow(e0+4,e0+9,fr);
+  COLS=e0+EW+2;
+  door={x:(e0+EW-6)*TS,y:FLOOR-104,w:76,h:104};
   /* ---- dressing: icicles under the roof, crystals and snow drifts on the floor ---- */
   const skyCol=c=>skylights.some(s=>c*TS>=s.x0&&c*TS<s.x1);
   const safe=[...checks.map(q=>q.x/TS),...shops.map(q=>q.x/TS)];
@@ -5285,6 +5355,12 @@ function iceUnder(b){
   for(const c of [Math.floor((b.x+3)/TS),Math.floor((b.x+b.w-3)/TS)]){if(c<0||c>=COLS)continue;const t=grid[r][c];if(!isSolidT(t))continue;
     const f=flow[r][c];if(f===ICE_F)return 2;if(f===ICE_B)s=1}
   return s;
+}
+// the ice wall at the end of the snowman's hall shatters once he is beaten
+function openIceGate(){
+  if(!iceGate.length||!bossDead) return;
+  for(const [r,c] of iceGate){grid[r][c]=T_EMPTY;flow[r][c]=0;iceShards(c*TS+TS/2,r*TS+TS/2,6,240)}
+  iceGate=[];sfx('shatter');shake(.3,6);
 }
 function snowPuff(x,y,n){for(let i=0;i<n;i++)parts.push({x:x+rand(-14,14),y:y+rand(-8,8),vx:rand(-120,120),vy:rand(-220,-40),g:600,c:Math.random()<.5?'rgba(255,255,255,.95)':'rgba(215,236,252,.95)',s:rand(4,9),life:rand(.3,.6),max:0,t:'puff'})}
 function updateSnow(dt){
@@ -5488,10 +5564,13 @@ const ICE_EUPD={
     const steer=(tx,ty,maxV,k)=>{const ddx=tx-(e.x+e.w/2),ddy=ty-(e.y+e.h/2),kk=Math.min(1,k*dt);
       e.vx+=(clamp(ddx*2.6,-maxV,maxV)-e.vx)*kk;e.vy+=(clamp(ddy*2.6,-maxV*.8,maxV*.8)-e.vy)*kk};
     if(e.state==='hover'){
-      if(near){if(Math.random()<dt*.4||e.hitWall)e.side=-e.side;
-        steer(pcx+e.side*170+Math.sin(e.ph*1.3)*50,P.y-116+Math.sin(e.ph*2.1)*24,320,2.6);
+      // smooth flight: it drifts over to the other side of the player gradually instead of turning on the spot,
+      // and keeps low, just above her head
+      if(near){if(Math.random()<dt*.3||e.hitWall)e.side=-e.side;
+        e.sx=approach(e.sx||e.side,e.side,dt*.9);
+        steer(pcx+e.sx*170+Math.sin(e.ph*1.1)*40,P.y-78+Math.sin(e.ph*1.7)*16,240,1.5);
         if(Math.abs(dx)>20)e.face=Math.sign(dx)}
-      else{steer(e.hx+e.w/2+Math.sin(e.ph*.7)*120,e.hy+e.h/2+Math.sin(e.ph*1.6)*20,200,1.8);if(Math.abs(e.vx)>20)e.face=Math.sign(e.vx)}
+      else{steer(e.hx+e.w/2+Math.sin(e.ph*.7)*120,e.hy+e.h/2+40+Math.sin(e.ph*1.3)*16,170,1.3);if(Math.abs(e.vx)>20)e.face=Math.sign(e.vx)}
       flyMove(e,dt);
       if(near&&e.cd<=0){e.face=Math.sign(dx)||e.face;
         if(Math.random()<.55||P.y+P.h<e.y+e.h){e.state='cast';e.t=.62}else{e.state='warn';e.t=.38}sfx('witch')}
@@ -5562,7 +5641,8 @@ const ICE_EDRAW={
     const arm=s=>{const [hx,hy]=fist(s),sx=s*42,mx=(sx+hx)/2+s*10,my=(sh+hy)/2;
       limb(sx,sh+6,mx,my,19,ice);limb(mx,my,hx,hy,19,ice);
       ctx.fillStyle=e.guard>0&&s===e.gside?col(e,'#e8f8ff'):iceD;ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(hx-17,hy-15,34,30,8);ctx.fill();ctx.stroke();
-      if(e.guard>0&&s===e.gside){ctx.fillStyle='rgba(225,247,255,.85)';ctx.beginPath();ctx.moveTo(hx+s*8,hy-34);ctx.lineTo(hx+s*20,hy-20);ctx.lineTo(hx+s*20,hy+52);ctx.lineTo(hx+s*8,hy+64);ctx.closePath();ctx.fill();ctx.stroke()}};
+      if(e.guard>0&&s===e.gside){ctx.fillStyle='rgba(225,247,255,.85)';ctx.beginPath();ctx.moveTo(hx+s*8,hy-34);ctx.lineTo(hx+s*20,hy-20);ctx.lineTo(hx+s*22,-14);ctx.lineTo(hx+s*8,-2);ctx.closePath();ctx.fill();ctx.stroke();   // the ice shield reaches down to the floor
+        ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx+s*13,hy-18);ctx.lineTo(hx+s*13,-16);ctx.stroke();ctx.strokeStyle=INK;ctx.lineWidth=3}};
     arm(-f);
     // body: a heap of ice blocks
     ctx.fillStyle=ice;ctx.beginPath();ctx.moveTo(-34,-30);ctx.lineTo(-46,sh-6);ctx.lineTo(-24,sh-18);ctx.lineTo(24,sh-18);ctx.lineTo(46,sh-6);ctx.lineTo(34,-30);ctx.quadraticCurveTo(0,-22,-34,-30);ctx.closePath();ctx.fill();ctx.stroke();
@@ -5662,11 +5742,14 @@ function drawIceShot(b){
 // ==== levels/ice/snowman.js ====
 /* ---------- boss 4: the snowman ---------- */
 // three balls of snow on springs (they squash on landings), a bucket, a carrot and two branch arms.
-// Attacks: overhead slam, long diagonal punch, low uppercut that throws you up, a volley of snowballs,
-// a big hop that brings icicles down, and the split: the balls roll at you one by one and stack up again at the far end.
+// Attacks: overhead slam, long diagonal punch, a volley of snowballs spat from the head, a big hop that brings icicles
+// down, the split (the balls roll at you one by one and stack up again at the far end) and the head throw:
+// it pulls its head off and throws it. Either the head bounces like a ball to the wall of the arena and back onto the
+// body, or it lands on the floor and stays there; then the body comes over to it, rolling or flinging its balls
+// through the air one by one, stacks up next to it and the head hops back on top.
 const SM_R=[62,46,36];
 function makeSnowman(){return{kind:'snowman',x:ARENA_L+18*TS,y:FLOOR-262,w:124,h:262,hp:76,max:76,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
-  sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,up:false,melt:0,wob:0,stompCD:0}}
+  sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,melt:0,wob:0,stompCD:0,throwCD:4}}
 const smCX=()=>B.x+B.w/2;
 function smBalls(){
   const cx=smCX(),bot=B.y+B.h,s=B.sq,R=SM_R,h0=R[0]*(1-s[0]),h1=R[1]*(1-s[1]),h2=R[2]*(1-s[2]);
@@ -5683,17 +5766,17 @@ function smChoose(){
   const room=B.face>0?ARENA_R-90-cx:cx-(ARENA_L+90);
   const o=[];
   if(d<270)o.push(['slam',3]);
-  if(d<200&&P.y+P.h>FLOOR-150)o.push(['upper',3.2]);
   if(d>190&&d<640)o.push(['punch',2.4]);
+  if(B.throwCD<=0&&d>200)o.push(['throw',p2?2.4:1.8]);
   if(d>230)o.push(['volley',2]);
   o.push(['hop',d>380?2.6:1.1]);
   if(B.splitCD<=0&&d>150&&room>420)o.push(['split',p2?2.6:1.6]);
   const f=o.filter(q=>q[0]!==B.last),L=f.length?f:o;
   let s=0;for(const q of L)s+=q[1];let r=Math.random()*s,k=L[L.length-1][0];for(const q of L){r-=q[1];if(r<=0){k=q[0];break}}
-  B.last=k;const m=smMult();B.hitDone=false;B.up=false;
+  B.last=k;const m=smMult();B.hitDone=false;
   switch(k){
     case 'slam': B.state='slamWind';B.t=.7*m;sfx('creak');break;
-    case 'upper': B.state='upperWind';B.t=.45*m;break;
+    case 'throw': B.state='throwWind';B.t=.65*m;B.tMax=B.t;sfx('creak');break;
     case 'punch': B.state='punchWind';B.t=.75*m;B.tMax=B.t;smAimPunch();break;
     case 'volley': B.state='volleyWind';B.t=.6*m;break;
     case 'hop': B.state='hopWind';B.t=.5*m;break;
@@ -5750,12 +5833,91 @@ function smSplitUpdate(dt){
     B.x=tx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.state='reform';B.t=.55*smMult();B.face=-dir;smKick(5);shake(.25,5);sfx('land');B.splitCD=p2?7:9;
   }
 }
+/* the head throw */
+// centres of the balls when stacked
+const smStackY=i=>FLOOR-[62,156,228][i];
+function smThrowStart(){
+  const bs=smBalls(),f=B.face,p2=B.phase===2,pcx=P.x+P.w/2;
+  B.pieces=bs.map((b,i)=>({i,x:b.x,y:b.y,r:b.r,vx:0,vy:0,st:'wait',rot:0,k:0}));
+  const hd=B.pieces[2];B.splitDir=f;B.state='headThrow';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];B.throwCD=p2?7:9;
+  sfx('throwb');sfx('roar');
+  const kind=B.forceThrow||(Math.random()<.45?'bounce':Math.random()<.5?'roll':'fling');   // forceThrow: for tests
+  if(kind==='bounce'){ // a bouncing head: off to the wall and back
+    B.throwKind='bounce';hd.st='ball';hd.vx=f*(p2?470:420);hd.vy=-560;B.sx=bs[0].x;
+    for(const p of [B.pieces[0],B.pieces[1]]){p.st='done';p.x=B.sx;p.y=smStackY(p.i)}   // the body stays put
+  }else{ // thrown in an arc at the player; it stays where it lands
+    B.throwKind=kind;hd.st='fly';
+    const tx=clamp(pcx+P.vx*.3,ARENA_L+60,ARENA_R-60),ty=FLOOR-hd.r,Tt=clamp(Math.abs(tx-hd.x)/430,.7,1.25),g=G*.8;
+    hd.vx=(tx-hd.x)/Tt;hd.vy=(ty-hd.y-.5*g*Tt*Tt)/Tt;
+  }
+}
+// pieces of the body that wait in a stack drop down when the ball under them goes away
+function smSettle(p,support,dt){
+  const ty=support-p.r+(support<FLOOR?12:0);
+  if(p.y<ty){p.vy+=G*dt;p.y+=p.vy*dt;if(p.y>=ty){p.y=ty;if(p.vy>300)snowPuff(p.x,p.y+p.r,4);p.vy=0}}
+  return p.y-p.r;
+}
+function smStackAnim(p,dt,dur,arc){
+  p.k=Math.min(1,p.k+dt/dur);p.x=p.x0+(p.tx-p.x0)*p.k;p.y=p.y0+(smStackY(p.i)-p.y0)*p.k-Math.sin(p.k*Math.PI)*arc;p.rot+=dt*6*(p.tx>p.x0?1:-1);
+  if(p.k>=1){p.st='done';p.x=p.tx;p.y=smStackY(p.i);if(p.i)snowPuff(p.x,p.y+p.r,4);sfx('land')}
+}
+const smToStack=(p,tx)=>{p.st='stack';p.k=0;p.x0=p.x;p.y0=p.y;p.tx=tx};
+function smThrowUpdate(dt){
+  const [b0,b1,hd]=B.pieces,p2=B.phase===2,g=G*.8;B.t+=dt;
+  switch(hd.st){
+    case 'ball':{ // bounces along the floor; turns back at a wall of the arena and drops back onto the body
+      hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;B.splitDir=Math.sign(hd.vx)||B.splitDir;
+      if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=-Math.max(560,Math.abs(hd.vy)*.85);snowPuff(hd.x,FLOOR-4,3);sfx('land');shake(.1,3)}
+      const wall=hd.x<ARENA_L+hd.r?1:hd.x>ARENA_R-hd.r?-1:0;
+      if(wall){hd.x=wall>0?ARENA_L+hd.r:ARENA_R-hd.r;hd.vx=wall*Math.abs(hd.vx);hd.back=true;shake(.25,6);sfx('clang');snowPuff(hd.x-wall*hd.r,hd.y,5)}
+      if(hd.back&&Math.abs(hd.x-B.sx)<220) smToStack(hd,B.sx);
+      break}
+    case 'fly':
+      hd.vy+=g*dt;hd.x+=hd.vx*dt;hd.y+=hd.vy*dt;hd.rot+=hd.vx*dt/hd.r;
+      if(hd.y>=FLOOR-hd.r&&hd.vy>0){hd.y=FLOOR-hd.r;hd.vy=0;hd.vx=0;hd.st='rest';hd.t=.45;shake(.3,7);sfx('boom');snowPuff(hd.x,FLOOR-6,8);
+        // the body stacks up next to the head, on the side it comes from
+        const d=Math.sign(hd.x-b0.x)||1;B.sx=clamp(Math.abs(hd.x-b0.x)<SM_R[0]+hd.r+10?b0.x:hd.x-d*(SM_R[0]+hd.r+6),ARENA_L+70,ARENA_R-70);
+        B.splitDir=-d}
+      break;
+    case 'rest': hd.t-=dt;
+      if(hd.t<=0&&!B.moving){B.moving=true;b0.delay=0;b1.delay=p2?.35:.45;   // the body sets off towards the head
+        if(B.throwKind==='roll')sfx('jump');}
+      if(b0.st==='done'&&b1.st==='done'){smToStack(hd,B.sx);sfx('jump')}
+      break;
+    case 'stack': smStackAnim(hd,dt,hd.back?.4:.5,hd.back?40:110);break;
+  }
+  // the body: waits as a stack (in the bounce variant it just waits for its head), or travels to the stacking spot
+  let support=FLOOR;const dir=Math.sign(B.sx-b0.x)||1;
+  for(const p of [b0,b1]){
+    if(p.st==='wait'){
+      support=smSettle(p,support,dt);
+      if(B.moving&&(p.delay-=dt)<=0){
+        if(Math.abs(B.sx-p.x)<4){p.x=B.sx;smToStack(p,B.sx)}
+        else if(B.throwKind==='roll'){p.st='go';p.vy=p.i?-420:0;sfx('jump')}
+        else{p.st='arc';const Tt=.75,ty=smStackY(p.i);p.vx=(B.sx-p.x)/Tt;p.vy=(ty-p.y-.5*G*Tt*Tt)/Tt;p.tArc=Tt;sfx('throwb');smKick(2)}}
+    }else if(p.st==='go'){ // rolls over like in the split
+      const sp=[430,390][p.i]*(p2?1.1:1);p.x+=dir*sp*dt;p.rot+=dir*sp*dt/p.r;p.vy+=G*dt;p.y+=p.vy*dt;
+      if(p.y>=FLOOR-p.r){p.y=FLOOR-p.r;p.vy=p.i===0?0:-380;if(p.i)snowPuff(p.x,FLOOR-4,3)}
+      if(p.i===0&&Math.random()<.5)snowPuff(p.x-dir*p.r*.6,FLOOR-4,1);
+      if(dir*(p.x-B.sx)>=0) smToStack(p,B.sx);
+    }else if(p.st==='arc'){ // flung through the air, it lands right on the stacking spot
+      p.tArc-=dt;p.vy+=G*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.rot+=dt*8;
+      if(p.tArc<=0){p.st='done';p.x=B.sx;p.y=smStackY(p.i);shake(p.i?.2:.35,p.i?5:9);sfx('boom');snowPuff(p.x,p.y+p.r,6);
+        if(p.i===0&&p2)for(const s of [-1,1])eshots.push({k:'iwave',x:p.x+s*70,y:FLOOR,vx:s*340,life:2.4,h:0})}
+    }else if(p.st==='stack') smStackAnim(p,dt,.3,p.i?60:0);
+  }
+  if(B.pieces.every(p=>p.st==='done')||B.t>9){
+    B.x=B.sx-B.w/2;B.y=FLOOR-B.h;B.vx=0;B.vy=0;B.pieces=null;B.moving=false;B.state='reform';B.t=.5*smMult();
+    B.face=(P.x+P.w/2>B.sx)?1:-1;smKick(5);shake(.25,5);sfx('land');
+  }
+}
 function updateSnowman(dt){
   const p2=B.phase===2,m=smMult(),pcx=P.x+P.w/2;
   // springy balls
   for(let i=0;i<3;i++){const a=-220*B.sq[i]-14*B.sqv[i];B.sqv[i]+=a*dt;B.sq[i]=clamp(B.sq[i]+B.sqv[i]*dt,-.25,.35)}
-  if(B.splitCD>0)B.splitCD-=dt;if(B.stompCD>0)B.stompCD-=dt;
+  if(B.splitCD>0)B.splitCD-=dt;if(B.stompCD>0)B.stompCD-=dt;if(B.throwCD>0)B.throwCD-=dt;
   if(B.state==='split'){smSplitUpdate(dt);return}
+  if(B.state==='headThrow'){smThrowUpdate(dt);return}
   if(B.state==='dying'){
     if(!B.meltInit){B.meltInit=true;B.t=2.4;B.melt=0;if(B.pieces){B.pieces.forEach(p=>{p.st='done'})}}
     B.t-=dt;B.melt=clamp(1-B.t/2.4,0,1);B.vx=0;
@@ -5787,7 +5949,7 @@ function updateSnowman(dt){
       B.vx=approach(B.vx,d>420?B.face*85:0,400*dt);
       if(Math.abs(B.vx)>20){B.wob-=dt;if(B.wob<=0){B.wob=.32;smKick(2.2);snowPuff(cx,FLOOR-4,2)}}
       if(B.phase===1&&B.hp<=B.max/2){B.state='enrage';B.t=1.3;B.vx=0;sfx('roar');shake(1,7);break}
-      if(B.aboveT>.5){B.state='upperWind';B.up=true;B.t=.4*m;B.vx=0;B.aboveT=0;B.hitDone=false;B.last='upper';break}
+      if(B.aboveT>.5){B.state='hopWind';B.t=.4*m;B.vx=0;B.aboveT=0;B.last='hop';break}   // she hangs above it: it jumps
       if(B.t<=0){B.vx=0;smChoose()}
       break}
     case 'enrage': B.t-=dt;B.mouth=.8+.2*Math.sin(time*24);B.lean=Math.sin(time*30)*4;tf=[sh.fx+f*30,sh.fy-90];tb=[sh.bx-f*30,sh.by-90];
@@ -5811,16 +5973,11 @@ function updateSnowman(dt){
       if(ext>=1&&!B.hitDone){B.hitDone=true;shake(.18,5);snowPuff(a.x,FLOOR-6,6);sfx('land')}
       if(ext>.4&&!P.dead&&segDist(pcx,P.y+P.h/2,sh.fx,sh.fy,hx,hy)<34)hurt(hx);
       if(B.t<=0){B.state='idle';B.t=p2?.4:.65}break}
-    case 'upperWind': B.t-=dt;rate=14;
-      if(B.up){tf=[cx+f*30,head.y+10];B.lean=-f*6}else{tf=[cx+f*92,FLOOR-22];B.lean=f*8}
-      if(B.t<=0){B.state='upper';B.t=.4;B.hitDone=false;sfx('punch')}break;
-    case 'upper':{B.t-=dt;rate=40;
-      const box=B.up?{x:cx-80,y:headTop-190,w:160,h:200}:{x:f>0?cx+28:cx-178,y:FLOOR-175,w:150,h:175};
-      if(B.up){tf=[cx+f*10,headTop-150];B.lean=f*4}else{tf=[cx+f*70,B.y-50];B.lean=-f*8}
-      if(B.t>.22&&!P.dead&&overlap(box,{x:P.x+3,y:P.y+6,w:P.w-6,h:P.h-6})){const was=P.inv;hurt(cx);
-        if(P.inv>was&&!P.dead){P.vy=B.up?-900:-1080;P.vx=(B.up?(pcx<cx?-1:1):f)*260;snowPuff(pcx,P.y+P.h,6)}}
-      if(B.t<=0){B.state='idle';B.t=p2?.45:.7;B.up=false}break}
-    case 'volleyWind': B.t-=dt;B.mouth=approach(B.mouth,1,dt*3);B.lean=-f*10;tb=[sh.bx-f*50,sh.by-50];
+    case 'throwWind':{ // both hands grab the head and lift it a little, then it is thrown
+      B.t-=dt;const k=clamp(1-B.t/B.tMax,0,1);rate=16;B.lean=-f*8*k;
+      tf=[head.x+f*head.r*.9,head.y-k*20];tb=[head.x-f*head.r*.9,head.y-k*20];B.sqv[2]-=k*dt*30;
+      if(B.t<=0)smThrowStart();break}
+    case 'volleyWind': B.t-=dt;B.mouth=approach(B.mouth,1,dt*3);B.lean=-f*10;   // no arm movement: only the mouth opens
       if(B.t<=0){B.state='volley';B.shots=0;B.t=0}break;
     case 'volley':{B.t-=dt;B.mouth=1;B.lean=-f*6;const n=p2?6:4;
       if(B.t<=0&&B.shots<n){smSnowball(B.shots,n);B.shots++;B.t=.15;B.sqv[2]-=3}
@@ -5832,7 +5989,7 @@ function updateSnowman(dt){
     case 'splitWind':{B.t-=dt;B.lean=Math.sin(time*26)*6;for(let i=0;i<3;i++)B.sqv[i]+=Math.sin(time*30+i)*dt*20;
       if(B.t<=0)smSplitStart();break}
   }
-  if(B.state==='split') return;
+  if(B.state==='split'||B.state==='headThrow') return;
   if(!B.hf)B.hf={x:tf[0],y:tf[1]};if(!B.hb)B.hb={x:tb[0],y:tb[1]};
   const k=Math.min(1,dt*rate);B.hf.x+=(tf[0]-B.hf.x)*k;B.hf.y+=(tf[1]-B.hf.y)*k;
   const kb=Math.min(1,dt*Math.min(rate,30));B.hb.x+=(tb[0]-B.hb.x)*kb;B.hb.y+=(tb[1]-B.hb.y)*kb;
@@ -5921,19 +6078,21 @@ function drawSnowman(){
 // ==== levels/ice/music.js ====
 /* ---------- level 4 music ---------- */
 Object.assign(SONGS,{
-  // ice cave: chilly C-sharp minor with a glassy bell lead
-  ice:compileSong({bpm:118,vol:1,order:['intro','A','B','A2','C','B'],variant:{lw:'triangle',lv:.3,arp:'1.5.8.5.3.5.8.5.'},
-    bass:'R...R.O.R...R.O.', arp:'8.5.3.5.1.5.3.5.', kick:'x.......x.......', snare:'....x.......x...', hat:'..x...x...x...x.', lw:12, lv:.17,
+  // ice cave: a slow, melancholic E minor; a soft sine lead over long bass notes, crystal chimes and gusts of snowy wind
+  ice:compileSong({bpm:84,vol:1.1,order:['intro','A','B','A2','C','B'],variant:{lw:'triangle',lv:.26,bell:'b...b.....b.b...'},
+    bass:'R.......O.......', arp:'1.....5.....8...', kick:'................', snare:'................', hat:'................',
+    lw:'sine', lv:.34, av:.022, bv:.36, bell:'b.....b.......b.', wind:'w...............',
     sections:{
-      intro:{chords:['C#m','A','E','G#'],lead:'r:64',kick:'x...............',snare:'................',hat:'........x.......',bass:'R.......R.......'},
-      A:{chords:['C#m','C#m','A','B','C#m','G#m','A','G#'],
-        lead:`C#5:2 E5:2 G#5:4 F#5:2 E5:2 D#5:2 E5:2  G#5:4 C#6:4 B5:2 G#5:2 E5:4  A5:2 C#6:2 E6:4 D#6:2 C#6:2 B5:4  F#5:4 A5:2 B5:2 D#6:4 B5:4
-              C#6:4 B5:2 G#5:2 E5:4 G#5:4  D#5:2 F#5:2 B5:4 A#5:2 G#5:2 F#5:4  E5:2 A5:2 C#6:4 B5:2 A5:2 E5:4  G#5:6 C6:2 D#6:8`},
-      B:{chords:['A','B','G#m','C#m','A','B','G#','G#'],
-        lead:`E6:4 C#6:4 A5:8  F#6:4 D#6:4 B5:8  D#6:2 C#6:2 B5:2 G#5:2 D#5:4 G#5:4  E5:2 G#5:2 C#6:4 E6:8
-              A5:2 C#6:2 E6:4 A6:4 G#6:4  F#6:4 D#6:2 B5:2 F#5:4 D#6:4  C6:4 D#6:4 G#6:4 F#6:4  D#6:8 G#5:8`},
-      C:{chords:['C#m','A','E','B','C#m','A','G#','G#'],lw:'triangle',lv:.32,arp:'1...5...3...5...',kick:'x...............',snare:'................',hat:'....x.......x...',bass:'R.......O.......',
-        lead:`G#4:8 C#5:4 E5:4  E5:6 C#5:2 A4:8  B4:4 E5:4 G#5:6 F#5:2  F#5:12 D#5:4  E5:4 D#5:4 C#5:4 G#4:4  A4:4 C#5:4 E5:8  F#5:6 E5:2 D#5:4 C6:4  G#5:16`},
+      intro:{chords:['Em','C','G','D'],lead:'r:64',arp:'................',bell:'b.......b...b...'},
+      A:{chords:['Em','C','G','D','Em','C','Am','B'],
+        lead:`B4:6 E5:2 G5:8  E5:6 G5:2 C6:8  B5:4 A5:4 G5:4 D5:4  F#5:12 A5:4
+              G5:6 F#5:2 E5:8  C5:4 E5:4 G5:8  A5:6 G5:2 E5:4 C5:4  D#5:16`},
+      B:{chords:['C','D','Bm','Em','Am','D','G','B'],
+        lead:`E5:4 G5:4 C6:8  D6:6 C6:2 A5:8  B5:4 F#5:4 D5:8  E5:12 r:4
+              C6:4 B5:4 A5:4 E5:4  F#5:6 A5:2 D6:8  B5:4 G5:4 D5:4 G5:4  F#5:8 D#5:8`},
+      C:{chords:['Am','Em','C','B','Am','Em','C','B'],arp:'................',bass:'R...............',bell:'b...b...b...b...',
+        lead:`r:4 E6:4 C6:8  r:4 B5:4 G5:8  r:4 E5:4 G5:4 C6:4  B5:16
+              r:4 A5:4 C6:8  B5:4 G5:4 E5:8  E5:4 G5:4 C6:4 E6:4  D#6:16`},
     }}),
   // snowman: bouncy, menacing G minor march with guitar stabs
   snowman:compileSong({bpm:164,vol:1.2,order:['intro','A','B','A2','B'],variant:{lw:12,lv:.2,hat:'xxxxxxxxxxxxxxxx'},
@@ -5969,7 +6128,8 @@ registerLevel(4,{
   dust:'rgba(225,240,255,.9)', debris:'#bfe6fa', breakSfx:'shatter',
   plank:['#cdeefc','#8cc3e3'], thorn:'#d4f1ff',
   openRubble:true,             // smashed crystal walls show the cave behind, not dark earth
-  update:updateSnow, drawBG:drawIceBG, drawSolid:drawIceSolid, drawBack:drawSkylights,
+  update:dt=>{updateSnow(dt);openIceGate()}, drawBG:drawIceBG,
+  exitRight:true,              // the level goes on past the boss hall: the camera may follow once the boss is beaten drawSolid:drawIceSolid, drawBack:drawSkylights,
   // glassy frozen floor: very slippery; clear ice blocks: a little
   floorControl:p=>{const iu=iceUnder(p);return iu===2?{acc:760,dec:250,maxv:1.15}:iu===1?{acc:1700,dec:950}:null},
   // sparkles fly from under her feet while she slides on the glassy floor
@@ -6033,7 +6193,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     hitBoss:(d,x,y)=>hitBoss(d,x,y),
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
-    get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},
+    get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
     croc:()=>crocChoose()}};   // the crocodile picks its next move now
 // ==== main.js ====
 /* ---------- main loop (render capped at 60 fps, fixed 120 Hz physics) ---------- */

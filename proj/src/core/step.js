@@ -46,7 +46,7 @@ function step(dt){
   const vw=VW/camZ;
   let minX=0,maxX=COLS*TS-vw;
   if(arenaLocked&&!bossDead){minX=ARENA_L-TS;maxX=ARENA_R-vw;if(maxX<minX){minX=maxX=(ARENA_L-TS+ARENA_R-vw)/2}}
-  maxX=Math.min(maxX,ARENA_R+TS-vw);
+  if(!(LV().exitRight&&bossDead)) maxX=Math.min(maxX,ARENA_R+TS-vw);
   if(arenaLocked&&!bossDead&&B.kind==='hydra') minX=maxX=(ARENA_L+ARENA_R-vw)/2;   // the whole hydra arena on one screen
   const target=clamp(P.x+P.w/2-vw/2+P.face*70,minX,Math.max(minX,maxX));
   camX+=(target-camX)*Math.min(1,dt*7);

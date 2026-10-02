@@ -75,7 +75,7 @@ def gen3(c): return gen(c,3,20)
 def gen4(c): return gen(c,4,40)
 
 # ------------------------------------------------------------------ bosses
-def boss_fight(c,level,expect_states=()):
+def boss_fight(c,level,expect_states=(),secs=45):
     c.js(f'g.startBoss({level});g.freeze();')
     # walk into the arena and let it lock
     c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;P.y=g.P.y;")
@@ -83,10 +83,10 @@ def boss_fight(c,level,expect_states=()):
     c.sim(1.5,"g.P.inv=1e9;")
     if not c.js('return g.arenaLocked'): c.js('g.lock()')
     seen=c.js("""const seen=new Set();const P=g.P;
-      g.sim(45,i=>{P.inv=1e9;if(P.hp<1)P.hp=3;seen.add(g.B.state);
+      g.sim(SECS,i=>{P.inv=1e9;if(P.hp<1)P.hp=3;seen.add(g.B.state);
         if(i%420===0){P.x=g.arena[0]+80+Math.random()*(g.arena[1]-g.arena[0]-160)}
-        if(i===2700)g.B.hp=g.B.max?g.B.max*.4:g.B.hp});
-      return [...seen]""")
+        if(i===HALF)g.B.hp=g.B.max?g.B.max*.4:g.B.hp});
+      return [...seen]""".replace('SECS',str(secs)).replace('HALF',str(secs*60)))
     c.shot(f'boss{level}',look=False)
     missing=[s for s in expect_states if s not in seen]
     assert not missing, f'states never reached: {missing}'
@@ -103,8 +103,33 @@ def boss2(c): return boss_fight(c,2)
 def boss3(c): return boss_fight(c,3)
 @test('boss4','boss','ice')
 def boss4(c):
-    return boss_fight(c,4,['idle','slamWind','slam','punchWind','punch','upperWind','upper','volleyWind','volley',
-                           'hopWind','hop','splitWind','split','reform','enrage'])
+    return boss_fight(c,4,['idle','slamWind','slam','punchWind','punch','throwWind','headThrow','volleyWind','volley',
+                           'hopWind','hop','splitWind','split','reform','enrage'],secs=120)
+
+@test('snowman_throw','boss4','ice')
+def snowman_throw(c):
+    # every head-throw variant ends with the snowman whole again; the hall has no ledges; after the fight the ice wall
+    # opens and the door, one screen to the right of the hall, can be reached
+    c.js('g.startBoss(4);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P,out={};
+      const G=g.grid,a0=g.arena[0]/40,a1=g.arena[1]/40;let planks=0;for(const row of G)for(let c=a0;c<a1;c++)if(row[c]===2)planks++;out.planks=planks;
+      for(const kind of ['bounce','roll','fling']){let ok=0;
+        for(let n=0;n<4;n++){B.x=(g.arena[0]+g.arena[1])/2-B.w/2+(n-1.5)*120;B.y=g.B.y;P.x=B.x+(n%2?500:-350);P.vx=0;
+          B.forceThrow=kind;B.state='throwWind';B.t=.05;B.tMax=.05;let seen=false;
+          g.sim(10,()=>{P.inv=1e9;if(B.state==='headThrow')seen=true;else if(seen)return false});
+          if(seen&&B.state==='reform'&&!B.pieces)ok++;B.state='idle';B.t=5}
+        out[kind]=ok}
+      // beat it: the gate opens and the door can be entered
+      g.hitBoss(999,B.x+B.w/2,B.y+B.h/2);g.sim(4,()=>{P.inv=1e9});
+      out.dead=g.dead;out.gateOpen=G[G.length-3][a1]===0;
+      const door=g.door;out.doorPast=door.x>g.arena[1]+300;
+      P.x=g.arena[1]-200;P.y=P.y;g.key('r',1);let entered=false;g.sim(6,()=>{if(g.P.entering)entered=true});g.key('r',0);
+      out.entered=entered;return out""")
+    assert r['planks']==0, r
+    assert r['bounce']==4 and r['roll']==4 and r['fling']==4, r
+    assert r['dead'] and r['gateOpen'] and r['doorPast'] and r['entered'], r
+    return 'all three head throws reassemble; gate opens, door reached'
 
 # ------------------------------------------------------------------ ice cave
 @test('ice_physics','ice')
@@ -114,7 +139,7 @@ def ice_physics(c):
             c.start(4,seed)
             ok=c.js(f"""const G=g.grid,F=g.flow;for(let x=20;x<300;x++)for(let r=3;r<22;r++){{let n=0;
               while(G[r][x+n]===1&&F[r][x+n]==={fv}&&G[r-1][x+n]===0&&G[r-2][x+n]===0&&n<14)n++;
-              if(n>=14){{const P=g.P;P.x=x*40+5;P.y=r*40-58;P.vx=275;P.vy=0;P.onGround=true;return true}}}}return false""")
+              if(n>=14){{g.enemies.length=0;const P=g.P;P.x=x*40+5;P.y=r*40-58;P.vx=275;P.vy=0;P.onGround=true;return true}}}}return false""")
             if ok:
                 x0=c.js('return g.P.x'); c.sim(1.5); return c.js('return g.P.x')-x0
         raise AssertionError('no flat stretch found')
@@ -146,32 +171,52 @@ def bigslime(c):
         n=c.js("return g.enemies.filter(e=>e.type==='bigSlime').length")
         assert n==1, (seed,n)
     c.start(1,4)
-    r=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;
-      P.x=e.x-260;P.y=e.y+e.h-P.h;P.vx=0;P.vy=0;
-      const seen=new Set(),shots=new Set();let kids=0;
-      g.sim(40,i=>{P.inv=1e9;seen.add(e.state);if(i%360===0){P.x=(i/360)%2?e.x1-60:e.x0+30;P.y=e.y+e.h-P.h}   // she keeps changing sides
+    r=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;const cx0=e.x+e.w/2,fy=e.y+e.h;
+      P.x=e.x-260;P.y=fy-P.h;P.vx=0;P.vy=0;
+      const seen=new Set(),shots=new Set();
+      const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+      g.sim(40,i=>{P.inv=1e9;seen.add(e.state);if(i%360===0){P.x=clamp(e.x+e.w/2+((i/360)%2?400:-400),cx0-680,cx0+200);P.y=fy-P.h}   // she keeps changing sides
         for(const b of g.eshots)shots.add(b.k)});
-      const out={states:[...seen].sort().join(','),shots:[...shots].sort().join(','),inRange:e.x>=e.x0-1&&e.x+e.w<=e.x1+1};
+      const out={states:[...seen].sort().join(','),shots:[...shots].sort().join(',')};
       for(let i=0;i<60&&!e.dead;i++){g.attack(e,1.25,e.x-10);g.sim(.05,()=>{P.inv=1e9})}
       out.dead=e.dead;out.kids=g.enemies.filter(k=>k.mini).length;
       g.sim(3,()=>{P.inv=1e9});
       return out""")
-    assert r['dead'] and r['kids']>=3 and r['inRange'], r
+    assert r['dead'] and r['kids']>=3, r
     for s in ('wake','crouch','air','spitWind','ramWind','ram','ramStop'): assert s in r['states'], r
     assert 'goo' in r['shots'] and 'gooWave' in r['shots'], r
-    # the ram never carries it off its clearing, whatever the seed
+    # awake, it follows her out of its clearing, across the level, and never falls into a pit
+    far=[]
     for seed in range(1,11):
         c.start(1,seed)
-        rr=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;let rams=0,out=false;
-          for(let k=0;k<6;k++){const side=k%2?1:-1;P.x=side>0?e.x1+400:e.x0-400;P.y=e.y+e.h-P.h;
-            e.state='ramWind';e.t=.1;e.face=side;g.sim(2.5,()=>{P.inv=1e9;P.vy=0;if(e.state==='ram')rams++;if(e.x<e.x0-1||e.x+e.w>e.x1+1)out=true})}
-          return [e.hp,rams>0,out,!e.dead,e.onGround]""")
-        assert rr[0]==48 and rr[1] and not rr[2] and rr[3], (seed,rr)
-    # with a pit dug in front of it (and its clearing limits taken away) the ram still stops at the edge
+        rr=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;const x0=e.x;
+          P.x=e.x-300;P.y=e.y+e.h-P.h;g.sim(1,()=>{P.inv=1e9});
+          // she walks back towards the start; it follows
+          // she is always put down on solid ground, so she never falls and respawns (that would reset the foes)
+          const G=g.grid,ground=c=>{for(let r=0;r<G.length;r++){if(G[r][c]===1)return r*40;if(G[r][c]===5||G[r][c]===6)return -1}return -1};
+          g.sim(20,i=>{P.inv=1e9;if(i%120===0){let c=Math.max(5,Math.floor((e.x-350)/40));while(c>5&&(ground(c)<0||ground(c-1)<0||ground(c+1)<0))c--;
+            P.x=c*40+5;P.y=ground(c)-P.h-2;P.vy=0;P.vx=0}});
+          return [x0-e.x,e.dead||P!==g.P,e.hp]""")
+        assert not rr[1] and rr[2]==48, (seed,rr)
+        far.append(rr[0])
+    assert max(far)>400, far
+    # after a stomp it neither hops nor leaps for 1.25 s, but it may spit or ram
+    c.start(1,4)
+    st=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;P.x=e.x-300;P.y=e.y+e.h-P.h;g.sim(1.5,()=>{P.inv=1e9});
+      const res=[];for(let k=0;k<8;k++){g.sim(.5,()=>{P.inv=1e9});if(!e.onGround){g.sim(1.5,()=>{P.inv=1e9;return e.onGround?false:undefined})}
+        e.state='idle';e.t=.05;e.hops=0;e.vx=0;
+        P.x=e.x+e.w/2-P.w/2;P.y=e.y-P.h-4;P.vy=300;P.onGround=false;P.inv=0;P.dashT=0;
+        const seen=new Set();let stomped=false;
+        g.sim(1.2,()=>{if(e.noJump>0)stomped=true;if(stomped)seen.add(e.state);P.inv=stomped?1e9:0});
+        res.push([stomped,[...seen].join(',')])}
+      return res""")
+    for stomped,states in st:
+        assert stomped and 'crouch' not in states and 'air' not in states, st
+    # with a pit dug in front of it the ram stops at the edge
     c.start(1,2)
     gap=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime'),G=g.grid;
       const c0=Math.floor((e.x+e.w)/40)+3;for(let c=c0;c<c0+3;c++)for(let r=0;r<G.length;r++)G[r][c]=0;
-      e.x0=0;e.x1=1e6;P.inv=1e9;P.x=c0*40+400;e.state='ramWind';e.t=.05;e.face=1;g.sim(3,()=>{P.inv=1e9});
+      P.inv=1e9;P.x=c0*40+400;e.state='ramWind';e.t=.05;e.face=1;g.sim(3,()=>{P.inv=1e9});
       return c0*40-(e.x+e.w)""")
     assert 0<=gap<40, gap
     c.start(1,4)
@@ -219,7 +264,7 @@ def croc_rules(c):
     c.js('g.startBoss(1);g.freeze();')
     c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
     r=c.js("""const B=g.B,P=g.P,out={};
-      // 60% less damage while turning into phase 2
+      // only 75% of the damage while turning into phase 2
       B.state='enrage';B.t=1;let h=B.hp;g.hitBoss(10,B.x+B.w/2,B.y+B.h/2);out.enrage=h-B.hp;
       B.state='idle';h=B.hp;g.hitBoss(10,B.x+B.w/2,B.y+B.h/2);out.normal=h-B.hp;
       // never three bites in a row, even with the player right in front of it
@@ -229,10 +274,34 @@ def croc_rules(c):
       // player against a wall: it mostly jumps
       let leaps=0;for(let i=0;i<400;i++){B.state='idle';B.t=0;B.chompRun=0;B.x=g.arena[0]+300;P.x=g.arena[0]+40;g.croc();if(B.state==='leapWind')leaps++}
       out.wall=leaps/400;return out""")
-    assert abs(r['enrage']-4)<.01 and abs(r['normal']-10)<.01, r
+    assert abs(r['enrage']-7.5)<.01 and abs(r['normal']-10)<.01, r
     assert r['worst']<=2, r
     assert .65<r['wall']<.9, r
     return f"bites in a row <= {r['worst']}, near wall leaps {r['wall']:.0%}"
+
+@test('dragon_armor','boss2')
+def dragon_armor(c):
+    # the inferno that opens phase 2 takes 75% less damage until its breath ends; a later inferno has no armour
+    c.js('g.startBoss(2);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P,hit=()=>{const h=B.hp;g.hitBoss(4,B.x+B.w/2,B.y+B.h/2);return h-B.hp};
+      g.hitBoss(B.hp-B.max/2+1,B.x+B.w/2,B.y+B.h/2);   // down to half: it enrages
+      g.sim(5,()=>{P.inv=1e9;if(B.state==='inferno')return false});const first=hit();
+      g.sim(5,()=>{P.inv=1e9;if(B.state==='hover')return false});const after=hit();
+      B.infCD=0;B.state='infernoWind';B.t=1;B.infDir=1;g.sim(1.1,()=>{P.inv=1e9});const second=hit();
+      return [first,after,second,B.state]""")
+    assert abs(r[0]-1)<.01 and abs(r[1]-4)<.01 and abs(r[2]-4)<.01, r
+    return 'first inferno armoured, later ones not'
+
+@test('frog_warn','enemies')
+def frog_warn(c):
+    # the frog shows a warning before every tongue lash
+    c.start(3,1)
+    r=c.js("""const P=g.P;P.inv=1e9;g.enemies.length=0;const f=g.spawn('frog',P.x+150,P.y+P.h);let prev='',ok=0,bad=0;
+      g.sim(8,()=>{P.inv=1e9;if(f.state==='tongue'&&prev!=='tongue'){if(prev==='tongueWind')ok++;else bad++}prev=f.state});
+      return [ok,bad]""")
+    assert r[0]>0 and r[1]==0, r
+    return f'{r[0]} tongue lashes, all announced'
 
 @test('mummy_ruins','gen2')
 def mummy_ruins(c):

@@ -413,12 +413,17 @@ const EDRAW={
     if(air){limb(-8,-9,-24,2,6,dark);limb(-24,2,-32,-2,4,dark)}else{ctx.fillStyle=dark;ctx.beginPath();ctx.ellipse(-12,-6,10,7,-.2,0,7);ctx.fill();ctx.stroke()}
     ctx.fillStyle=skin;ctx.beginPath();ctx.moveTo(-19,-1);ctx.quadraticCurveTo(-21,-25,1,-25);ctx.quadraticCurveTo(21,-24,21,-8);ctx.quadraticCurveTo(20,-1,10,0);ctx.closePath();ctx.fill();ctx.stroke();
     ctx.fillStyle=dark;for(const [sx,sy,r] of [[-9,-16,4],[-2,-20,3],[-12,-8,3]]){ctx.beginPath();ctx.arc(sx,sy,r,0,7);ctx.fill()}
-    const pu=e.state==='tongue'?0:Math.max(0,Math.sin(time*4+e.ph))*3.5;
+    const wind=e.state==='tongueWind',wk=wind?1-e.t/FROG_WIND:0;
+    if(wind){ctx.translate(rand(-1,1),0); // where the tongue will reach: a dashed red line that fills in
+      ctx.save();ctx.setLineDash([8,6]);ctx.lineCap='round';ctx.strokeStyle=`rgba(220,40,60,${.35+.45*wk})`;ctx.lineWidth=4;
+      ctx.beginPath();ctx.moveTo(22,-10);ctx.lineTo(22+175*Math.min(1,wk*1.6),-10);ctx.stroke();ctx.restore();ctx.strokeStyle=INK;ctx.lineWidth=2.5}
+    const pu=e.state==='tongue'?0:wind?3+wk*6:Math.max(0,Math.sin(time*4+e.ph))*3.5;
     ctx.fillStyle=belly;ctx.beginPath();ctx.ellipse(12,-4,5+pu,3.5+pu*.7,0,0,7);ctx.fill();ctx.lineWidth=1.6;ctx.stroke();
     ctx.lineWidth=2.5;for(const [ex,ey] of [[-1,-24],[10,-25]]){ctx.fillStyle=skin;ctx.beginPath();ctx.arc(ex,ey,6.5,0,7);ctx.fill();ctx.stroke();
       ctx.fillStyle='#f2c94c';ctx.beginPath();ctx.arc(ex+1,ey-1,4,0,7);ctx.fill();ctx.fillStyle=INK;ctx.fillRect(ex-2,ey-2,6,2)}
     ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(7,-11);ctx.quadraticCurveTo(15,-9,21,-12);ctx.stroke();
     limb(10,-4,15,0,5,dark);
+    if(wind){ctx.scale(f,1);ctx.globalAlpha=.6+.4*Math.sin(time*30);ctx.fillStyle='#e0303a';ctx.font='bold 22px '+FONT;ctx.textAlign='center';ctx.fillText('!',0,-38);ctx.globalAlpha=1;ctx.scale(f,1)}
     if(e.tl>2){ctx.lineCap='round';ctx.strokeStyle=INK;ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(18,-10);ctx.lineTo(18+e.tl,-10);ctx.stroke();
       ctx.strokeStyle='#e86a8a';ctx.lineWidth=5;ctx.stroke();ctx.fillStyle='#e86a8a';ctx.strokeStyle=INK;ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(20+e.tl,-10,7,0,7);ctx.fill();ctx.stroke()}
     ctx.restore();

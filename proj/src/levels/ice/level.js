@@ -18,7 +18,8 @@ registerLevel(4,{
   dust:'rgba(225,240,255,.9)', debris:'#bfe6fa', breakSfx:'shatter',
   plank:['#cdeefc','#8cc3e3'], thorn:'#d4f1ff',
   openRubble:true,             // smashed crystal walls show the cave behind, not dark earth
-  update:updateSnow, drawBG:drawIceBG, drawSolid:drawIceSolid, drawBack:drawSkylights,
+  update:dt=>{updateSnow(dt);openIceGate()}, drawBG:drawIceBG,
+  exitRight:true,              // the level goes on past the boss hall: the camera may follow once the boss is beaten drawSolid:drawIceSolid, drawBack:drawSkylights,
   // glassy frozen floor: very slippery; clear ice blocks: a little
   floorControl:p=>{const iu=iceUnder(p);return iu===2?{acc:760,dec:250,maxv:1.15}:iu===1?{acc:1700,dec:950}:null},
   // sparkles fly from under her feet while she slides on the glassy floor

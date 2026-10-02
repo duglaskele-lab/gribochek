@@ -1,21 +1,30 @@
 /* ---------- level 1 mini-boss: the giant purple slime ---------- */
 // It sleeps in a clearing in the second half of the forest (the generator builds the clearing, see level.miniboss).
 // Woken up, it hops after the player, crouches and leaps high to land on her (the landing sends a wave of goo
-// along the floor both ways), rams her, sliding fast along the floor (it stops before any drop), and spits blobs
-// of goo that a punch can knock away. Every third of its health it sheds
-// a small purple slime, and when it dies it bursts into two more. It falls through one-way planks, so they are
-// no safe refuge, and it never leaves its clearing.
-const BS_W=150, BS_H=112;
-function bsRange(e){ // the flat floor of the clearing: stops at a step up, a drop or a wall
-  const r=Math.floor((e.y+e.h+4)/TS), c=Math.floor((e.x+e.w/2)/TS);
-  const ok=cc=>isFloorT(tile(cc,r))&&!solid(cc,r-1)&&!solid(cc,r-2)&&!solid(cc,r-3);
-  let a=c,b=c;while(a-1>c-24&&ok(a-1))a--;while(b+1<c+24&&ok(b+1))b++;
-  e.x0=a*TS;e.x1=(b+1)*TS;
-}
+// along the floor both ways), rams her, sliding fast along the floor, and spits blobs of goo that a punch can knock
+// away. Every third of its health it sheds a small purple slime, and when it dies it bursts into two more.
+// It falls through one-way planks, so they are no safe refuge. Once awake it follows her anywhere, but none of its
+// moves ever ends over a drop. After a stomp on its head it neither hops nor leaps for a while (only spits or rams).
+const BS_W=150, BS_H=112, BS_STOMP_LOCK=1.25;
 function bsInit(e){
-  e.max=e.hp;e.state='sleep';e.t=0;e.hops=0;e.cd=0;e.squash=0;e.mouth=0;e.split=2;e.face=-1;e.zz=0;
+  e.max=e.hp;e.state='sleep';e.t=0;e.hops=0;e.cd=0;e.squash=0;e.mouth=0;e.split=2;e.face=-1;e.zz=0;e.noJump=0;
   e.bub=[0,1,2,3].map(i=>({x:rand(-.5,.5),y:rand(0,1),s:rand(.04,.08)}));
-  bsRange(e);
+}
+// is there floor (not a pit, water or sand) under the whole body if it stood centred at x?
+function bsFloorAt(e,x){
+  for(const ox of [-e.w/2+8,0,e.w/2-8]){const y=topY(Math.floor((x+ox)/TS));if(y<0||y>=WH)return false}
+  return true;
+}
+// where a leap at the player may land: her spot, or the nearest spot towards the slime that has floor under it
+function bsLeapTarget(e){
+  const cx=e.x+e.w/2;let tx=P.x+P.w/2+P.vx*.25;
+  for(let k=0;k<30;k++){if(bsFloorAt(e,tx))return tx;tx+=Math.sign(cx-tx)*TS/2;if(Math.abs(tx-cx)<TS)break}
+  return null;
+}
+// a stomp on its head: no hopping or leaping for a moment, so bouncing on it is safer
+function bsStomped(e){
+  e.squash=.25;bsWake(e);e.noJump=BS_STOMP_LOCK;
+  if(e.state==='crouch'){e.state='idle';e.t=.2}   // a leap that was about to start is called off
 }
 // a small purple slime flies out of the big one
 function bsSpawnKid(e,dir){
@@ -46,9 +55,8 @@ function bsUpdate(e,dt){
   const was=e.onGround;
   e.vy=Math.min(e.vy+G*dt,1100);moveBody(e,dt,false);   // heavy: falls straight through one-way planks
   if(e.y>WH+60){e.dead=true;return}
-  if(e.x<e.x0){e.x=e.x0;if(e.vx<0)e.vx=0}
-  if(e.x+e.w>e.x1){e.x=e.x1-e.w;if(e.vx>0)e.vx=0}
   if(e.squash>0) e.squash-=dt;
+  if(e.noJump>0) e.noJump-=dt;
   e.mouth=approach(e.mouth,e.state==='spitWind'?1:0,dt*5);
   for(const b of e.bub){b.y-=b.s*dt*3;if(b.y<0){b.y=1;b.x=rand(-.5,.5)}}
   const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx),dy=P.y+P.h-(e.y+e.h),rage=e.hp<=e.max*.5;
@@ -66,22 +74,25 @@ function bsUpdate(e,dt){
       e.vx=approach(e.vx,0,1400*dt);
       if(adx>20) e.face=Math.sign(dx);
       if(e.t<=0&&e.onGround&&!P.dead){
-        if(e.hops>=(rage?1:2)){e.hops=0;
+        const locked=e.noJump>0;   // just stomped: spit, or ram off to one side, but no jumping
+        if(locked||e.hops>=(rage?1:2)){e.hops=0;
           const opts=[['spit',2]];
-          if(adx>140) opts.push(['leap',e.last==='leap'?1:3]);
-          if(adx>180&&Math.abs(dy)<70) opts.push(['ram',e.last==='ram'?1:rage?4:3]);   // only when she is on its floor
+          if(!locked&&adx>140&&bsLeapTarget(e)!==null) opts.push(['leap',e.last==='leap'?1:3]);
+          if(locked){if(groundAhead(e,e.face,TS))opts.push(['ram',2])}
+          else if(adx>180&&Math.abs(dy)<70&&groundAhead(e,Math.sign(dx)||e.face,TS)) opts.push(['ram',e.last==='ram'?1:rage?4:3]);   // only when she is on its floor
           let r=Math.random()*opts.reduce((a,o)=>a+o[1],0),pk=opts[0][0];for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
           e.last=pk;
           if(pk==='leap'){e.state='crouch';e.t=rage?.4:.55;sfx('creak')}
-          else if(pk==='ram'){e.state='ramWind';e.t=rage?.45:.6;e.face=Math.sign(dx)||e.face;sfx('creak')}
+          else if(pk==='ram'){e.state='ramWind';e.t=rage?.45:.6;if(!locked)e.face=Math.sign(dx)||e.face;sfx('creak')}
           else{e.state='spitWind';e.t=rage?.4:.55}}
         else{e.hops++;const vy=rage?560:500,vx=rage?210:165,reach=vx*2*vy/G;   // a hop never ends over a drop: then it hops in place
-          e.vy=-vy;e.vx=groundAhead(e,e.face,reach*2)?e.face*vx:0;e.onGround=false;e.state='air';e.big=false}
+          e.vy=-vy;e.vx=bsFloorAt(e,cx+e.face*reach)&&!solid(Math.floor((cx+e.face*(e.w/2+reach))/TS),Math.floor((e.y+e.h)/TS)-3)?e.face*vx:0;e.onGround=false;e.state='air';e.big=false}
       }
       break;
     case 'crouch': // squeezes down, trembling, then jumps at the player
       e.vx=0;
-      if(e.t<=0){const air=1.0,tx=clamp(P.x+P.w/2+P.vx*.25,e.x0+e.w/2,e.x1-e.w/2);
+      if(e.t<=0){const air=1.0,tx=bsLeapTarget(e);
+        if(tx===null){e.state='idle';e.t=.2;break}   // no floor anywhere near her: no leap
         e.vy=-G*air/2;e.vx=clamp((tx-cx)/air,-520,520);e.onGround=false;e.state='air';e.big=true;sfx('jump');dust(cx,e.y+e.h,8)}
       break;
     case 'air':
@@ -95,12 +106,12 @@ function bsUpdate(e,dt){
       if(Math.random()<.4) dust(cx-e.face*e.w*.4,e.y+e.h,1,-e.face);
       if(e.t<=0){e.state='ram';e.t=1.6;e.rx=cx;e.vx=e.face*(rage?660:560);sfx('roar');shake(.15,4)}
       break;
-    case 'ram':{ // slides at her; stops before a drop, at the edge of the clearing or at a wall
+    case 'ram':{ // slides at her; stops before a drop or at a wall
       e.vx=e.face*(rage?660:560);
       if(Math.random()<.6) dust(cx-e.face*e.w*.45,e.y+e.h,1,-e.face);
-      const edge=e.face>0?e.x+e.w>=e.x1-2:e.x<=e.x0+2, passed=e.face*(cx-(P.x+P.w/2))>240;
-      if(e.hitWall||edge||!groundAhead(e,e.face,TS*.6)||passed||e.t<=0){
-        const hard=e.hitWall||edge;e.vx=0;e.state='ramStop';e.t=hard?.7:.45;e.squash=.25;
+      const passed=e.face*(cx-(P.x+P.w/2))>240;
+      if(e.hitWall||!groundAhead(e,e.face,TS*.6)||passed||e.t<=0){
+        const hard=e.hitWall;e.vx=0;e.state='ramStop';e.t=hard?.7:.45;e.squash=.25;
         shake(hard?.3:.12,hard?7:3);sfx(hard?'boom':'land');dust(cx+e.face*e.w*.45,e.y+e.h,6,e.face)}
       break}
     case 'ramStop': e.vx=0;if(e.t<=0){e.state='idle';e.t=rage?.25:.4}break;

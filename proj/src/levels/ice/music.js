@@ -1,18 +1,20 @@
 /* ---------- level 4 music ---------- */
 Object.assign(SONGS,{
-  // ice cave: chilly C-sharp minor with a glassy bell lead
-  ice:compileSong({bpm:118,vol:1,order:['intro','A','B','A2','C','B'],variant:{lw:'triangle',lv:.3,arp:'1.5.8.5.3.5.8.5.'},
-    bass:'R...R.O.R...R.O.', arp:'8.5.3.5.1.5.3.5.', kick:'x.......x.......', snare:'....x.......x...', hat:'..x...x...x...x.', lw:12, lv:.17,
+  // ice cave: a slow, melancholic E minor; a soft sine lead over long bass notes, crystal chimes and gusts of snowy wind
+  ice:compileSong({bpm:84,vol:1.1,order:['intro','A','B','A2','C','B'],variant:{lw:'triangle',lv:.26,bell:'b...b.....b.b...'},
+    bass:'R.......O.......', arp:'1.....5.....8...', kick:'................', snare:'................', hat:'................',
+    lw:'sine', lv:.34, av:.022, bv:.36, bell:'b.....b.......b.', wind:'w...............',
     sections:{
-      intro:{chords:['C#m','A','E','G#'],lead:'r:64',kick:'x...............',snare:'................',hat:'........x.......',bass:'R.......R.......'},
-      A:{chords:['C#m','C#m','A','B','C#m','G#m','A','G#'],
-        lead:`C#5:2 E5:2 G#5:4 F#5:2 E5:2 D#5:2 E5:2  G#5:4 C#6:4 B5:2 G#5:2 E5:4  A5:2 C#6:2 E6:4 D#6:2 C#6:2 B5:4  F#5:4 A5:2 B5:2 D#6:4 B5:4
-              C#6:4 B5:2 G#5:2 E5:4 G#5:4  D#5:2 F#5:2 B5:4 A#5:2 G#5:2 F#5:4  E5:2 A5:2 C#6:4 B5:2 A5:2 E5:4  G#5:6 C6:2 D#6:8`},
-      B:{chords:['A','B','G#m','C#m','A','B','G#','G#'],
-        lead:`E6:4 C#6:4 A5:8  F#6:4 D#6:4 B5:8  D#6:2 C#6:2 B5:2 G#5:2 D#5:4 G#5:4  E5:2 G#5:2 C#6:4 E6:8
-              A5:2 C#6:2 E6:4 A6:4 G#6:4  F#6:4 D#6:2 B5:2 F#5:4 D#6:4  C6:4 D#6:4 G#6:4 F#6:4  D#6:8 G#5:8`},
-      C:{chords:['C#m','A','E','B','C#m','A','G#','G#'],lw:'triangle',lv:.32,arp:'1...5...3...5...',kick:'x...............',snare:'................',hat:'....x.......x...',bass:'R.......O.......',
-        lead:`G#4:8 C#5:4 E5:4  E5:6 C#5:2 A4:8  B4:4 E5:4 G#5:6 F#5:2  F#5:12 D#5:4  E5:4 D#5:4 C#5:4 G#4:4  A4:4 C#5:4 E5:8  F#5:6 E5:2 D#5:4 C6:4  G#5:16`},
+      intro:{chords:['Em','C','G','D'],lead:'r:64',arp:'................',bell:'b.......b...b...'},
+      A:{chords:['Em','C','G','D','Em','C','Am','B'],
+        lead:`B4:6 E5:2 G5:8  E5:6 G5:2 C6:8  B5:4 A5:4 G5:4 D5:4  F#5:12 A5:4
+              G5:6 F#5:2 E5:8  C5:4 E5:4 G5:8  A5:6 G5:2 E5:4 C5:4  D#5:16`},
+      B:{chords:['C','D','Bm','Em','Am','D','G','B'],
+        lead:`E5:4 G5:4 C6:8  D6:6 C6:2 A5:8  B5:4 F#5:4 D5:8  E5:12 r:4
+              C6:4 B5:4 A5:4 E5:4  F#5:6 A5:2 D6:8  B5:4 G5:4 D5:4 G5:4  F#5:8 D#5:8`},
+      C:{chords:['Am','Em','C','B','Am','Em','C','B'],arp:'................',bass:'R...............',bell:'b...b...b...b...',
+        lead:`r:4 E6:4 C6:8  r:4 B5:4 G5:8  r:4 E5:4 G5:4 C6:4  B5:16
+              r:4 A5:4 C6:8  B5:4 G5:4 E5:8  E5:4 G5:4 C6:4 E6:4  D#6:16`},
     }}),
   // snowman: bouncy, menacing G minor march with guitar stabs
   snowman:compileSong({bpm:164,vol:1.2,order:['intro','A','B','A2','B'],variant:{lw:12,lv:.2,hat:'xxxxxxxxxxxxxxxx'},

@@ -337,12 +337,10 @@ function buildLevel(level,seed,attempt){
   // desert: the ruined town fills the middle of the level; single ruins can still turn up near the start and the end
   const midA=Math.floor(total*.36), midB=Math.floor(total*.62);
   let heavy=0,sinceCP=0,tension=0,last='';const recent=[];
-  // a level with a mini-boss gets a clearing for it past the middle: checkpoint, a low step, a flat field with two
-  // planks to jump from, another low step. The steps keep the mini-boss in its clearing.
+  // a level with a mini-boss gets a wide flat clearing for it past the middle, right after a checkpoint
   const MB=LEVELS[level].miniboss, mbAt=MB?Math.floor(total*.68):-1;
-  const miniArena=()=>{stepTo(clamp(h,3,5));SEG.rest(true);run(1,h+1);
-    const n=22,c0=x,pr=ROWS-h-3;run(n,h);plank(c0+3,pr,3);plank(c0+n-6,pr,3);
-    sporeLine(c0+9,c0+12,h,150);spawn(MB,c0+n-6,{force:true});run(1,h+1);run(3,h)};
+  const miniArena=()=>{stepTo(clamp(h,3,5));SEG.rest(true);
+    const n=24,c0=x;run(n,h);sporeLine(c0+9,c0+12,h,110);spawn(MB,c0+n-6,{force:true})};
   for(let i=0;i<total;i++){
     progress=i/total;
     // after two hard sections, or when a checkpoint is due, give a breather that ends at the flag

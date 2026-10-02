@@ -8,7 +8,7 @@ registerEnemy('bigSlime',{size:{w:BS_W,h:BS_H,hp:48},update:bsUpdate,draw:bsDraw
   // the top of the dome is soft: a stomp hurts it but does not squash it flat
   contact:e=>({hurt:[shrink(e,12)],stomp:{x:e.x+20,y:e.y,w:e.w-40,h:30},dmg:2}),
   onHit:e=>bsWake(e),
-  onStomp:e=>{e.squash=.25;bsWake(e)},
+  onStomp:bsStomped,
   onDeath:e=>{const cx=e.x+e.w/2;shake(.5,8);sfx('boom');
     burst(cx,e.y+e.h/2,40,'#b77ee0',380,900,[4,9]);
     bsSpawnKid(e,-1);bsSpawnKid(e,1);

@@ -34,7 +34,9 @@ function hydraHP(){let v=B.heads.reduce((a,q)=>a+Math.max(0,q.hp),0);for(let k=B
 function hydraLaserSeg(h){const o=hydraMouth(h,h.aa);return [o.x,o.y,o.x+Math.cos(h.aa)*LASER_LEN,o.y+Math.sin(h.aa)*LASER_LEN]}
 function hydraMouth(h,a){return{x:h.x+Math.cos(a)*78,y:h.y+Math.sin(a)*78}}
 function segDist(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1,l=dx*dx+dy*dy||1,t=clamp(((px-x1)*dx+(py-y1)*dy)/l,0,1);return Math.hypot(px-x1-dx*t,py-y1-dy*t)}
-function hydraGap(){const n=B.heads.filter(h=>!h.dead).length;return (n>=3?rand(2.4,3.2):n===2?rand(1.6,2.2):rand(1.1,1.5))*[1,1,.85,.7][B.stage]}
+function hydraGap(){const n=B.heads.filter(h=>!h.dead).length;return (n>=3?rand(2.4,3.2):n===2?rand(1.6,2.2):rand(1.1,1.5))*HYDRA_GAP_K[B.stage]}
+// pause between head attacks per stage: stage 1 -20%, stage 2 -40%, stage 3 -60% (against the original 1, .85, .7)
+const HYDRA_GAP_K=[1,.8,.85*.6,.7*.4];
 function hydraHit(dmg,x,y){const h=B.lastHead;if(h)hydraDamage(h,dmg,x,y)}
 function hydraDamage(h,dmg,x,y){
   if(!h||h.dead||B.state!=='fight') return;

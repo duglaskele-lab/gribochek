@@ -41,6 +41,8 @@ function drawInferno(){
 function makeDragon(){return{kind:'dragon',x:ARENA_L+27*TS,y:FLOOR-84,w:180,h:84,hp:89,max:89,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flap:0,mouth:0,glow:0,
   last:'',repeat:0,tx:0,ty:0,side:1,infCD:0,emitT:0,burnT:0,shots:0,landed:true,sweep0:0,sweep1:0,targetX:0,flash:0}}
 const dcx=()=>B.x+B.w/2, dcy=()=>B.y+B.h/2;
+// the inferno that opens phase 2 is armoured: 75% less damage until its breath ends (later infernos are not)
+const dragonArmored=()=>B.infArmor&&(B.state==='infernoWind'||B.state==='inferno');
 function dragonBody(){return{x:B.x+12,y:B.y+14,w:B.w-24,h:B.h-20}}
 function dragonHeadPos(){return B.state==='tired'?{x:dcx()+B.face*128,y:FLOOR-26}:{x:dcx()+B.face*118,y:dcy()-26}}
 function dragonHeadBox(){const h=dragonHeadPos();return{x:h.x-30,y:h.y-22,w:60,h:44}}
@@ -133,7 +135,7 @@ function updateDragon(dt){
     case 'enrage':
       flyTo((ARENA_L+ARENA_R)/2,140,dt,260);B.t-=dt;B.mouth=.8+.2*Math.sin(time*20);
       skyHeat=approach(skyHeat,1,dt);
-      if(B.t<=0){B.phase=2;floater((ARENA_L+ARENA_R)/2,120,T('fPhase2'));startInferno()}break;
+      if(B.t<=0){B.phase=2;floater((ARENA_L+ARENA_R)/2,120,T('fPhase2'));startInferno();B.infArmor=true}break;   // only this first inferno is armoured
     case 'infernoWind':
       flyTo((ARENA_L+ARENA_R)/2,140,dt,360);B.t-=dt;B.mouth=approach(B.mouth,1,dt*1.5);B.glow=1;
       if(Math.random()<.9){const x=rand(ARENA_L,ARENA_R);parts.push({x,y:FLOOR-2,vx:rand(-20,20),vy:rand(-90,-40),g:-20,c:Math.random()<.5?'rgba(90,60,50,.55)':'rgba(255,140,40,.8)',s:rand(4,8),life:rand(.4,.8),max:0,t:'puff'})}
@@ -149,7 +151,7 @@ function updateDragon(dt){
       if(Math.random()<.9) embers(rand(ARENA_L,ARENA_R),FLOOR-rand(4,50),2);
       const inArena=P.x+P.w>ARENA_L&&P.x<ARENA_R;
       if(!P.dead&&inArena&&P.y+P.h>FLOOR-INFERNO_H) hurt(P.x+P.w/2+rand(-1,1));
-      if(B.t<=0){B.state='hover';B.t=.9;B.infCD=9;dragonHoverTarget()}
+      if(B.t<=0){B.state='hover';B.t=.9;B.infCD=9;B.infArmor=false;dragonHoverTarget()}
     }break;
     case 'meteorUp': B.y-=520*dt;if(B.y<-320){B.state='meteor';B.t=2.2;B.emitT=0}break;
     case 'meteor':
@@ -185,6 +187,9 @@ function drawDragon(){
   // floor shadow
   const alt=clamp((FLOOR-(B.y+B.h))/400,0,1);
   ctx.fillStyle=`rgba(0,0,0,${.22-alt*.14})`;ctx.beginPath();ctx.ellipse(cx,FLOOR+2,130-alt*50,10,0,0,7);ctx.fill();
+  if(dragonArmored()){ // a shimmering heat shield while it is armoured
+    const pr=.7+.3*Math.sin(time*9);ctx.fillStyle=`rgba(255,190,80,${.18*pr})`;ctx.strokeStyle=`rgba(255,220,120,${.6*pr})`;ctx.lineWidth=3;
+    ctx.beginPath();ctx.ellipse(cx+f*30,cy-10,170,95,0,0,7);ctx.fill();ctx.stroke()}
   ctx.save();ctx.translate(cx,cy);if(B.state==='enrage')ctx.translate(rand(-2,2),rand(-2,2));ctx.scale(f,1);
   ctx.lineWidth=3.5;ctx.strokeStyle=INK;ctx.lineJoin='round';
   const a=grounded?-.6:Math.sin(B.flap);
@@ -234,4 +239,5 @@ function drawDragon(){
   if(B.state==='breath'&&Math.random()<.5) embers(dragonMouth().x,dragonMouth().y,2);
 }
 
-registerBoss('dragon',{make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8});
+registerBoss('dragon',{make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
+  dmgMult:()=>dragonArmored()?.25:1});

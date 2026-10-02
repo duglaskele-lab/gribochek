@@ -21,7 +21,7 @@ function compileSong(d){
     for(let i=0;i<st;i++){
       const c=sec.chords[Math.floor(i/16)].split(','), bi=i%16;
       steps.push({ch:chordTones(c[Math.floor(bi*c.length/16)]),bi,notes:[],b:pat(sec.bass,bi),a:pat(sec.arp,bi),
-        k:pat(sec.kick,bi),s:pat(sec.snare,bi),h:pat(sec.hat,bi),g:pat(sec.gtr||'.',bi),cr:!!d.crash&&i===0,lw:sec.lw||25,lv:sec.lv||.22,av:sec.av||.05,bv:sec.bv||.42})
+        k:pat(sec.kick,bi),s:pat(sec.snare,bi),h:pat(sec.hat,bi),g:pat(sec.gtr||'.',bi),bl:pat(sec.bell||'.',bi),wn:pat(sec.wind||'.',bi),i,cr:!!d.crash&&i===0,lw:sec.lw||25,lv:sec.lv||.22,av:sec.av||.05,bv:sec.bv||.42})
     }
     for(const n of lead) steps[base+n.s].notes.push(n);
   }
@@ -164,6 +164,19 @@ function mNoise(t,dur,vol,hp){
 }
 function mKick(t){const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(42,t+.12);
   g.gain.setValueAtTime(.75,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.connect(g).connect(MUSIC.gain);o.start(t);o.stop(t+.18)}
+// a crystal chime: a sine with an inharmonic partial that rings out slowly
+function mBell(m,t,vol){
+  for(const [mul,v,dec] of [[1,1,1.6],[2.76,.35,.6],[5.4,.12,.25]]){const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine';o.frequency.value=mfreq(m)*mul;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol*v,t+.004);g.gain.exponentialRampToValueAtTime(.0005,t+dec);
+    o.connect(g).connect(MUSIC.gain);o.start(t);o.stop(t+dec+.05)}
+}
+// a soft gust of snowy wind: band-passed noise that swells and fades
+function mWind(t,dur,vol){
+  const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();
+  s.buffer=NOISE;s.loop=true;f.type='bandpass';f.frequency.setValueAtTime(900,t);f.frequency.linearRampToValueAtTime(1800,t+dur*.5);f.frequency.linearRampToValueAtTime(1100,t+dur);f.Q.value=.8;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+dur*.45);g.gain.linearRampToValueAtTime(0,t+dur);
+  s.connect(f).connect(g).connect(MUSIC.gain);s.start(t,Math.random()*.5);s.stop(t+dur+.05);
+}
 let DIST=null;
 function mGuitar(m,t,dur,vol){
   if(!DIST){DIST=new Float32Array(1024);for(let i=0;i<1024;i++){const x=i/1023*2-1;DIST[i]=Math.tanh(x*5)}}
@@ -183,6 +196,8 @@ function scheduleStep(s,i,t,sd){
   if(st.s==='x'){mNoise(t,.12,.26,1300);mTone('triangle',190,t,.05,.16)}
   if(st.g==='x') mGuitar(ch[0]+12,t,sd*.8,.13); else if(st.g==='X') mGuitar(ch[0]+12,t,sd*7.5,.12);
   if(st.cr) mNoise(t,.9,.13,4500);
+  if(st.bl==='b') mBell(ch[(st.i*5)%3]+36+(st.i%32<16?0:12),t,.09);   // chimes on chord tones, the octave changes every two bars
+  if(st.wn==='w') mWind(t,sd*16,.1);
   if((p2&&s.hat2?pat(s.hat2,bi):st.h)==='x') mNoise(t,.03,.06,7000);
 }
 function musicTick(){
