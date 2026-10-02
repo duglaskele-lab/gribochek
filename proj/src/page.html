@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Mushroom Girl</title>
+<style>
+{{STYLE}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="touch">
+    <div class="tbtn" id="pad"><span>◀</span><span>▶</span></div>
+    <div class="tbtn" id="bs">удар</div>
+    <div class="tbtn" id="bj">прыг</div>
+    <div class="tbtn" id="bd">рывок</div>
+    <div class="tbtn" id="bshop">лавка</div>
+    <div class="tbtn" id="bp">❚❚</div>
+  </div>
+  <div id="screen"><div class="card" id="card"></div></div>
+</div>
+<script>
+const ATLAS_SRC="data:image/png;base64,{{ATLAS}}";
+{{PRE}}
+(()=>{
+'use strict';
+{{CODE}}
+})();
+
+</script>
+</body>
+</html>

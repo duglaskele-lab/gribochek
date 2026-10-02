@@ -1,0 +1,139 @@
+# Грибочек / Mushroom Girl — устройство проекта
+
+Это короткая карта проекта, чтобы быстро войти в работу, не читая весь код. Её стоит прочитать первой, а также прикладывать к любому запросу на правку.
+
+## Как собирается игра
+
+- Исходники лежат в `src/`, а игра собирается в один файл `dist/gribochek.html` командой `python3 build.py`.
+- Весь код работает внутри **одной функции-замыкания**. Файлы из `src/` — это куски её тела: у них общие переменные, и сами по себе они не запускаются.
+- Порядок склейки задаёт `src/manifest.txt`.
+  - Функции (`function f(){}`) видны отовсюду.
+  - `const`/`let` доступны только после выполнения своего файла. Поэтому код, который *выполняется при загрузке* (регистрации, `Object.assign(...)`), может опираться только на то, что объявлено выше по манифесту. Иначе возникнет ошибка `Cannot access 'X' before initialization`.
+- Атлас спрайтов хранится в `assets/sprites.png`, а координаты кадров — в `src/sprites/frames.js`. При сборке картинка встраивается в HTML как base64.
+- Ошибка «строка N в dist/gribochek.html» переводится в файл исходника командой `python3 build.py --where N`.
+
+## Карта файлов (в порядке манифеста)
+
+| Файл | Что внутри |
+|---|---|
+| `core/constants.js` | холст, размеры (TS=40, VH), физические константы, типы тайлов, `rand/clamp/approach/hash/overlap` |
+| `core/registry.js` | **реестры контента**: `LEVELS, BOSSES, SHOTS, DECOR, PLAT_STYLES, ENEMY_HOOKS`, функции `register*`, `LV()` |
+| `core/rng.js` | сидовый генератор случайных чисел для уровней |
+| `core/audio.js` | звуковые эффекты `SFX`, `sfx(name)` |
+| `core/input.js` | клавиатура и касания → объект `inp` |
+| `core/world.js` | состояние мира: `grid, flow, COLS, ROWS, LEVEL, BIOME, B, enemies, eshots, parts...`, `tile(c,r)` |
+| `core/physics.js` | движение тел и столкновения (`moveBody`) |
+| `core/fx.js` | частицы: `burst, dust, stars, floater, shake` |
+| `levels/common/*` | модель прыжка, таблица сложности, классический генератор (уровни 1–2), проверка проходимости |
+| `levels/swamp/gen.js` | генератор уровня 3 |
+| `core/player.js` | игрок: управление, удар, рывок, `hurt`, `attackEnemy`, разбивание стен |
+| `enemies/enemies.js` | старые враги: `EDEF` (размеры), `makeEnemy`, `contactInfo`, `doStomp`, `damageEnemy`, `EUPD` (поведение) |
+| `core/items.js` | споры, пружины и прочие предметы |
+| `render/decor.js` | декорации и `drawDecor()` |
+| `enemies/draw.js` | отрисовка старых врагов (`EDRAW`) |
+| `bosses/shared.js` | общее для боссов: урон `hitBoss`, контакт, смерть, диспетчер `updateBoss/drawBoss` |
+| `bosses/croc.js`, `dragon.js`, `hydra.js` | боссы 1–3, каждый регистрируется в конце своего файла |
+| `core/projectiles.js` | выстрелы игрока, вражеские снаряды `eshots`, платформы |
+| `core/step.js` | один шаг игры `step(dt)`, камера `camTargetY()` |
+| `core/flow.js` | `startLevel`, `finishLevel` |
+| `render/*` | фон и тайлы, вода, платформы, игрок и зонтик, предметы и лавки, снаряды и частицы, HUD и `render()` |
+| `levels/desert/ruins.js` | руины на фоне пустыни |
+| `audio/music.js` | секвенсор, `compileSong`, песни `SONGS`, `playSong` |
+| `ui/i18n.js` | тексты `I18N.ru / I18N.en`, функция `T(key)` |
+| `ui/shop.js` | товары и покупка |
+| `ui/screens.js` | все экраны-карточки: меню, настройки, управление, звук, выбор уровня, «сразу к боссу», лавка, клавиатурная навигация |
+| `levels/forest/level.js` … `swamp/level.js` | регистрация уровней 1–3 |
+| `levels/ice/*` | **весь уровень 4**: `gen.js` (генератор, проверка, снег), `draw.js`, `foes.js` (слизень, голем, ведьма, их снаряды), `snowman.js` (босс), `music.js`, `level.js` (регистрация всего) |
+| `debug.js` | `window.__grib.dbg` для тестов |
+| `main.js` | старт игры и главный цикл (физика 120 Гц, отрисовка до 60 к/с) |
+
+## Реестры
+
+Движок не спрашивает «это ледяной уровень?», а ищет нужное в таблицах. Образец — `levels/ice/level.js`: всё про уровень 4 подключается там, и в движке нет ни одной проверки на `'ice'`.
+
+**Уровень** — `registerLevel(n, def)`. Обязательны только `biome`, `boss` и `song`; остальные поля можно не указывать.
+
+| Поле | Значение |
+|---|---|
+| `biome` | имя биома (строка), `boss` — вид босса из `BOSSES`, `song` — ключ в `SONGS` |
+| `gen(seed)`, `validate()` | свой генератор и проверка проходимости; если их нет, используется классический генератор |
+| `roof` | над верхним рядом камень, а не небо |
+| `startY()` | y пола в точке старта (иначе берётся верх тайла в колонке 3) |
+| `pal` | палитра: `sky1 sky2 hill hill2 dirt dirt2 stone top top2 sun` |
+| `dust`, `debris`, `breakSfx` | цвет пыли, обломков стен и звук разбивания |
+| `plank:[верх,низ]`, `thorn` | цвета досок и шипов |
+| `openRubble` | на месте разбитой стены виден фон, а не тёмная земля |
+| `update(dt)` | эффекты каждый кадр (снег, яд) |
+| `drawBG()`, `drawSolid(c,r,t,p)`, `drawBack()` | фон, твёрдые тайлы, слой позади деревьев и тайлов |
+| `floorControl(p)` | сцепление с полом: `{acc, dec, maxv}` или `null` (лёд) |
+| `onPlayerMove(p,dir)` | вызывается каждый кадр после движения игрока |
+| `i18n:{ru:{…},en:{…}}` | тексты уровня: `lvlNameN, lvlNDesc, bossShortN, bossN, nextNTitle/Text/Tip` и реплики |
+
+**Босс** — `registerBoss(kind, {make, update(dt), draw(), hitMult?(test), contact?(pb), burst, nameKey, introT?, camBottom?})`.
+- `make()` возвращает объект `B` с полями `{kind, x, y, w, h, hp, max, state, t, face, flash}`.
+- Обязательные состояния: `'sleep'` до входа на арену, `'intro'`, `'dying'` (ставит `hitBoss`) и `'dead'` (ставит `bossDefeated()`, его нужно вызвать в конце `'dying'`).
+- `hitMult(test)` возвращает множитель урона попадания (0 — промах). `test(box)` проверяет, задевает ли удар прямоугольник.
+
+**Враг** — `registerEnemy(type, def)`:
+```js
+registerEnemy('iceGolem',{size:{w,h,hp}, update(e,dt), draw(e),
+  init?(e), contact?(e)=>({hurt:[коробки], stomp:коробка_или_e, dmg}), blocks?(e,srcX), onHit?(e,srcX), onStomp?(e),
+  heart:.7, deathColor:'#bfe6fa'});
+```
+Ставится на карту через `makeEnemy(type, колонка, {y})`. Старые враги (уровни 1–3) пока записаны в таблицах `EDEF/EUPD/EDRAW` и в `switch` функции `contactInfo`; работают они так же.
+
+**Вражеский снаряд** — `registerShot(k, {update(b,dt,pb), draw(b), deflect?})`. Создаётся как `eshots.push({k, x, y, ...})`. При `deflect:true` удар кулаком или ударная волна его отбивают.
+
+**Декорация** — `registerDecor(k, d=>…)`, объект создаётся как `decor.push({k, x, y, s})`. **Стиль осыпающейся платформы** — `registerPlatStyle(k, (pl,w)=>…)`, у платформы ставится `style:k`.
+
+## Главные переменные
+
+- **Объекты на сцене:** `P` (игрок), `B` (босс), `enemies`, `eshots`, `shots` (грибы игрока), `parts` (частицы), `items`, `plats`, `checks`, `shops`, `decor`.
+- **Карта:** `grid[r][c]` — тайл, `flow[r][c]` — доп. метка.
+  - Тайлы: `T_EMPTY 0, T_SOLID 1, T_PLANK 2, T_THORN 3, T_CRACK 4, T_WATER 5, T_SAND 6, T_FAKE 7, T_CRACKW 8`.
+  - Метки `flow` в пещере: `ICE_F=11` (гладкий лёд), `ICE_B=12` (ледяной блок).
+- **Размеры и границы:** `TS=40` — размер тайла, `ROWS/COLS/WH` — размеры мира, `FLOOR` — пол арены, `ARENA_L/ARENA_R` — границы арены.
+- **Состояние игры:** `state` (`'title' 'play' 'pause' 'shop' 'next' 'win'`), `LEVEL`, `BIOME`, `arenaLocked`, `bossDead`.
+- **Камера:** `camX/camY`, `VW` — ширина вида, `time` — игровое время.
+
+## Отладка и тесты
+
+`window.__grib.dbg` в консоли браузера:
+- **Запуск:** `start(уровень,сид)`, `startBoss(уровень)`.
+- **Шаги без реального времени:** `freeze()` / `freeze(false)`, `sim(секунд, i=>{…})` — прокрутка логики шагами по 1/120 с.
+- **Управление сценой:** `key('j',1)` (зажать ввод), `spawn(тип,x,y)`, `attack(враг,урон,откуда_x)`, `hitBoss(урон,x,y)`, `lock()` (закрыть арену), `look()` (камера на игрока), `render()`.
+- **Чтение состояния:** `P, B, enemies, grid, flow, levels, bosses…`
+
+Тесты (`pip install playwright && playwright install chromium`):
+```
+python3 tests/run.py               # список тестов и тегов
+python3 tests/run.py boss4         # один тест или тег
+python3 tests/run.py --changed     # только то, что могли задеть изменённые файлы (по git), + smoke
+python3 tests/run.py --all         # всё (около 25 с)
+```
+- Какие тесты задевает каждый файл, описано в `tests/zones.py`. Например, `levels/ice/snowman.js` → только `boss4` (и всегда `smoke`).
+- Генераторы (`gen1…gen4`) запускаются, только если менялся генератор или общий код уровней.
+- Скриншоты сохраняются в `tests/out/`.
+- Новый тест — функция с `@test('имя','тег')` в `tests/cases.py`.
+
+## Рецепты
+
+**Новый враг.** Создать файл `src/levels/<уровень>/<враг>.js` с функциями `update/draw`, вызвать `registerEnemy(...)` в `level.js` уровня, расставить через `makeEnemy` в генераторе. Затем добавить тест или тег в `tests/zones.py`.
+
+**Новый уровень 5.** Создать папку `src/levels/<имя>/` с файлами:
+- `gen.js` — `genX(seed)` и `validateX()`, по образцу `levels/ice/gen.js`;
+- `draw.js`;
+- `music.js` — `Object.assign(SONGS,{…})`;
+- `level.js` — `registerLevel(5,{…})` с текстами в `i18n`.
+
+Потом добавить файлы в конец `manifest.txt` (перед `debug.js`), строку в `tests/zones.py` и тест `gen5` в `tests/cases.py`. Экран выбора уровня и строка «Сразу к боссу» берут список уровней из реестра сами.
+
+**Новый босс.** Создать файл с `makeX/updateX/drawX` и вызвать `registerBoss('x',{…})`. В определении уровня указать `boss:'x'`, а в `SONGS` добавить песню с ключом `'x'`: она играет при закрытии арены.
+
+## Что ещё устроено по-старому
+
+В уровнях 1–3 остались проверки `BIOME==='forest'/'desert'/'swamp'` и `B.kind==='hydra'` внутри движка. Они есть в `core/fx.js`, `core/items.js`, `core/player.js`, `core/projectiles.js`, `levels/common/generator.js`, `render/*.js`. Всё работает, но при правке этих уровней их стоит постепенно переносить в определения уровней, как сделано для пещеры.
+
+## Как экономно просить правки
+
+Приложите `ARCHITECTURE.md` и нужные файлы из `src/`, а не всю игру. Укажите, что проверять: например, «правка снеговика, проверь только boss4». Если работа идёт в папке проекта (Claude Code), достаточно сказать, что сделать: нужные файлы и тесты по `zones.py` находятся сами.

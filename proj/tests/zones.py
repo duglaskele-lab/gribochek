@@ -1,0 +1,38 @@
+# Which tests a changed file can affect. The first matching pattern wins, so specific paths go first.
+# A changed file under src/ that matches nothing makes --changed run every test.
+ALWAYS={'smoke'}
+ZONES=[
+  ('src/levels/ice/snowman.js', {'boss4'}),
+  ('src/levels/ice/foes.js',    {'ice_foes','boss4'}),          # boss4: the snowman shares the ice projectiles
+  ('src/levels/ice/gen.js',     {'gen4','ice_physics','boss4'}),
+  ('src/levels/ice/draw.js',    {'render'}),
+  ('src/levels/ice/music.js',   set()),
+  ('src/levels/ice/*',          {'gen4','ice_foes','ice_physics','boss4'}),
+  ('src/levels/swamp/*',        {'gen3','boss3'}),
+  ('src/levels/desert/*',       {'gen2','boss2'}),
+  ('src/levels/forest/*',       {'gen1','boss1'}),
+  ('src/levels/common/*',       {'gen1','gen2','gen3','gen4'}),
+  ('src/bosses/croc.js',        {'boss1'}),
+  ('src/bosses/dragon.js',      {'boss2'}),
+  ('src/bosses/hydra.js',       {'boss3'}),
+  ('src/bosses/*',              {'boss1','boss2','boss3','boss4'}),
+  ('src/enemies/*',             {'enemies','ice_foes'}),
+  ('src/core/player.js',        {'player','ice_physics','ice_foes'}),
+  ('src/core/projectiles.js',   {'enemies','ice_foes','boss1','boss2','boss3','boss4'}),
+  ('src/core/step.js',          {'player','boss1','boss2','boss3','boss4'}),
+  ('src/core/*',                {'player','enemies'}),
+  ('src/render/water.js',       {'render','water'}),
+  ('src/render/*',              {'render'}),
+  ('src/ui/*',                  {'ui'}),
+  ('src/style.css',             {'ui'}),
+  ('src/page.html',             {'ui'}),
+  ('src/audio/*',               set()),
+  ('src/debug.js',              set()),
+  ('src/main.js',               set()),
+  ('src/manifest.txt',          {'gen1','gen2','gen3','gen4','boss1','boss2','boss3','boss4','ui'}),
+  ('src/sprites/*',             {'render'}),
+  ('assets/*',                  {'render'}),
+  ('tests/*',                   set()),
+  ('*.md',                      set()),
+  ('build.py',                  {'ui'}),
+]
