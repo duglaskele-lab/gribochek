@@ -337,12 +337,19 @@ function buildLevel(level,seed,attempt){
   // desert: the ruined town fills the middle of the level; single ruins can still turn up near the start and the end
   const midA=Math.floor(total*.36), midB=Math.floor(total*.62);
   let heavy=0,sinceCP=0,tension=0,last='';const recent=[];
+  // a level with a mini-boss gets a clearing for it past the middle: checkpoint, a low step, a flat field with two
+  // planks to jump from, another low step. The steps keep the mini-boss in its clearing.
+  const MB=LEVELS[level].miniboss, mbAt=MB?Math.floor(total*.68):-1;
+  const miniArena=()=>{stepTo(clamp(h,3,5));SEG.rest(true);run(1,h+1);
+    const n=22,c0=x,pr=ROWS-h-3;run(n,h);plank(c0+3,pr,3);plank(c0+n-6,pr,3);
+    sporeLine(c0+9,c0+12,h,150);spawn(MB,c0+n-6,{force:true});run(1,h+1);run(3,h)};
   for(let i=0;i<total;i++){
     progress=i/total;
     // after two hard sections, or when a checkpoint is due, give a breather that ends at the flag
     if(heavy>=2||sinceCP>=4||(sinceCP>=3&&tension>=1.4)){
       const cp=sinceCP>=2,sx=x;SEG.rest(cp);PLAN.push({t:'rest',cp,c:sx});heavy=0;if(cp){sinceCP=0;tension=0}}
     if(i===Math.floor(total/2)){run(9,h);shops.push({x:(x-5)*TS+TS/2,y:top(h)})}
+    if(i===mbAt){const sx=x;miniArena();PLAN.push({t:'miniboss',k:MB,c:sx});heavy=0;sinceCP=1;tension=0}
     const tg=target(progress),sx=x;
     let type,L=0,d=.2;
     if(secretAt.has(i)){type=secretAt.get(i);runSecret(type);PLAN.push({t:'secret:'+type,d,c:sx})}

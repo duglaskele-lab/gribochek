@@ -42,7 +42,8 @@
 | `ui/i18n.js` | тексты `I18N.ru / I18N.en`, функция `T(key)` |
 | `ui/shop.js` | товары и покупка |
 | `ui/screens.js` | все экраны-карточки: меню, настройки, управление, звук, выбор уровня, «сразу к боссу», лавка, клавиатурная навигация |
-| `levels/forest/level.js` … `swamp/level.js` | регистрация уровней 1–3 |
+| `levels/forest/bigslime.js` | минибосс уровня 1 — огромный фиолетовый слайм и его снаряды (`goo`, `gooWave`) |
+| `levels/forest/level.js` … `swamp/level.js` | регистрация уровней 1–3 (в `forest/level.js` — и минибосса) |
 | `levels/ice/*` | **весь уровень 4**: `gen.js` (генератор, проверка, снег), `draw.js`, `foes.js` (слизень, голем, ведьма, их снаряды), `snowman.js` (босс), `music.js`, `level.js` (регистрация всего) |
 | `debug.js` | `window.__grib.dbg` для тестов |
 | `main.js` | старт игры и главный цикл (физика 120 Гц, отрисовка до 60 к/с) |
@@ -67,6 +68,7 @@
 | `drawBG()`, `drawSolid(c,r,t,p)`, `drawBack()` | фон, твёрдые тайлы, слой позади деревьев и тайлов |
 | `floorControl(p)` | сцепление с полом: `{acc, dec, maxv}` или `null` (лёд) |
 | `onPlayerMove(p,dir)` | вызывается каждый кадр после движения игрока |
+| `miniboss` | тип врага-минибосса: классический генератор строит для него поляну после чекпойнта во второй половине уровня (уровень 1 — `'bigSlime'`) |
 | `i18n:{ru:{…},en:{…}}` | тексты уровня: `lvlNameN, lvlNDesc, bossShortN, bossN, nextNTitle/Text/Tip` и реплики |
 
 **Босс** — `registerBoss(kind, {make, update(dt), draw(), hitMult?(test), contact?(pb), burst, nameKey, introT?, camBottom?})`.
@@ -77,7 +79,7 @@
 **Враг** — `registerEnemy(type, def)`:
 ```js
 registerEnemy('iceGolem',{size:{w,h,hp}, update(e,dt), draw(e),
-  init?(e), contact?(e)=>({hurt:[коробки], stomp:коробка_или_e, dmg}), blocks?(e,srcX), onHit?(e,srcX), onStomp?(e),
+  init?(e), contact?(e)=>({hurt:[коробки], stomp:коробка_или_e, dmg}), blocks?(e,srcX), onHit?(e,srcX), onStomp?(e), onDeath?(e),
   heart:.7, deathColor:'#bfe6fa'});
 ```
 Ставится на карту через `makeEnemy(type, колонка, {y})`. Старые враги (уровни 1–3) пока записаны в таблицах `EDEF/EUPD/EDRAW` и в `switch` функции `contactInfo`; работают они так же.

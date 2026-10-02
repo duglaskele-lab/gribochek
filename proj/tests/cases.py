@@ -138,6 +138,32 @@ def ice_foes(c):
     assert all(r.values()), r
     return 'slime, golem, witch run; golem guard blocks only its side'
 
+@test('bigslime','forest')
+def bigslime(c):
+    # every forest map has the mini-boss in its clearing; it wakes, uses all its moves, sheds kids and can be beaten
+    for seed in range(1,11):
+        c.start(1,seed)
+        n=c.js("return g.enemies.filter(e=>e.type==='bigSlime').length")
+        assert n==1, (seed,n)
+    c.start(1,4)
+    r=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;
+      P.x=e.x-260;P.y=e.y+e.h-P.h;P.vx=0;P.vy=0;
+      const seen=new Set(),shots=new Set();let kids=0;
+      g.sim(14,()=>{P.inv=1e9;seen.add(e.state);for(const b of g.eshots)shots.add(b.k)});
+      const out={states:[...seen].sort().join(','),shots:[...shots].sort().join(','),inRange:e.x>=e.x0-1&&e.x+e.w<=e.x1+1};
+      for(let i=0;i<40&&!e.dead;i++){g.attack(e,1.25,e.x-10);g.sim(.05,()=>{P.inv=1e9})}
+      out.dead=e.dead;out.kids=g.enemies.filter(k=>k.mini).length;
+      g.sim(3,()=>{P.inv=1e9});
+      return out""")
+    assert r['dead'] and r['kids']>=3 and r['inRange'], r
+    for s in ('wake','crouch','air','spitWind'): assert s in r['states'], r
+    assert 'goo' in r['shots'] and 'gooWave' in r['shots'], r
+    c.start(1,4)
+    c.js("const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.x=e.x-200;P.y=e.y+e.h-P.h;P.inv=1e9;g.sim(.4,()=>{P.inv=1e9})")
+    c.shot('bigslime_sleep')
+    c.js("const P=g.P;g.sim(2.2,()=>{P.inv=1e9})"); c.shot('bigslime_awake')
+    return f"states {r['states']}; kids {r['kids']}"
+
 # ------------------------------------------------------------------ rendering / ui (screenshots for a human look)
 @test('render')
 def render(c):
