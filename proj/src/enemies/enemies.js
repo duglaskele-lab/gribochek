@@ -123,13 +123,14 @@ function doStomp(e,ct){
     e.helmet=false;e.state='stun';e.t=.55;e.vx=0;e.flash=.1;clang(P.x+P.w/2,P.y+P.h);shake(.12,4);
     parts.push({x:e.x+e.w/2,y:e.y-6,vx:-e.face*170+rand(-40,40),vy:-460,g:1300,c:'',s:1,life:1.3,max:0,t:'helm',rot:0});
     floater(e.x+e.w/2,e.y-40,T('fHelm'))}
-  else{damageEnemy(e,ct.dmg,P.x+P.w/2);
+  else{damageEnemy(e,e.prop?ct.dmg:DMG_STOMP,P.x+P.w/2);   // a stomp does 1 damage to any foe (boxes still break)
     if(!e.dead&&ENEMY_HOOKS[e.type]&&ENEMY_HOOKS[e.type].onStomp) ENEMY_HOOKS[e.type].onStomp(e);
     // two stomps on the bare head: the commander raises an arm over it (a ledge to stand on, but no more head stomps)
     if(ct.chief&&!e.dead){e.hs=(e.hs||0)+1;if(e.hs>=2){e.hs=0;e.guard=CHIEF_GUARD;chiefArm(e);floater(e.x+e.w/2,e.y-40,T('fGuard'))}}}
   // holding (or pressing right after) jump springs off the monster's head much higher
+  if(!e.prop) gainMana(MANA_HIT);
   const high=inp.j||P.buffer>0;
-  P.vy=high?-HIGH_BOUNCE:-480;P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;
+  P.vy=high?-HIGH_BOUNCE:-STOMP_BOUNCE;P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;
   P.onGround=false;P.airDash=airDashMax();dust(P.x+P.w/2,P.y+P.h,4);
   if(high){sfx('jump');stars(P.x+P.w/2,P.y+P.h,5)}
 }

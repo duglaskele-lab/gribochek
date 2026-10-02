@@ -3,7 +3,7 @@ let COLS=240, ARENA_L=0, ARENA_R=0, BIOME='forest', LEVEL=1, SEED=1;
 let grid, flow;
 let P,B,enemies,shots,eshots,parts,items,plats,dynPlats,checks,shops,door,camX,time,shakeT,shakeM,hitstop,
     arenaLocked,bossDead,cp,sporeTotal,spores,sporesGot,runTime,floaters,ghosts,powerSpots,pwaves,
-    nearShop=null,shopMsg='',hasBag=false,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH,
+    nearShop=null,shopMsg='',manaUps=0,shotLvl=1,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH,
     enemySnap=[],magnetT=0,arenaIn=false;   // enemySnap: the level's foes as generated (brought back when the player dies); magnetT: see collectSporesOnScreen
 
 let SKY_TILE=T_EMPTY;   // what lies above the top row: open sky, or rock for levels with a roof (level def: roof:true)

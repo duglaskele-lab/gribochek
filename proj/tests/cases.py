@@ -331,6 +331,51 @@ def witch_flake(c):
     assert r[0]>60 and r[1]>500 and not r[2], r
     return f'through rock for {r[0]} steps, speed 230 -> {r[1]:.0f}'
 
+@test('mana','player')
+def mana(c):
+    # punches and stomps do 1 damage and give 5 mana; L throws mushrooms for mana; shop upgrades and pickups
+    c.start(1,2)
+    r=c.js("""const P=g.P,out={};P.inv=1e9;g.enemies.length=0;const press=k=>{g.key(k,1);g.sim(.02);g.key(k,0)};
+      out.start=[P.mana,g.maxMana()];
+      // a punch on a foe: 1 damage, +5 mana (once per punch)
+      P.mana=20;let e=g.spawn('orc',P.x+70,P.y+P.h);e.hp=10;e.face=1;P.face=1;g.punch();g.sim(.4,()=>{P.inv=1e9});
+      out.punch=[10-e.hp,P.mana];g.enemies.length=0;
+      // a stomp: 1 damage, +5 mana, a bounce 30% higher
+      P.mana=20;e=g.spawn('orc',P.x+P.w/2,P.y+P.h);e.hp=10;P.x=e.x+e.w/2-P.w/2;P.y=e.y-P.h-2;P.vy=300;P.onGround=false;P.inv=0;let vy=null;
+      g.sim(.1,()=>{if(vy===null&&g.P.vy<0)vy=g.P.vy});out.stomp=[10-e.hp,g.P.mana,Math.round(vy)];g.enemies.length=0;
+      // L: one mushroom for 5 mana; with no mana, nothing
+      g.P.inv=1e9;g.P.y=0;g.sim(1.5,()=>{g.P.inv=1e9});const Q=g.P;Q.mana=12;Q.shootCD=0;g.throwShroom();out.throw1=[Q.mana,g.shots.length];
+      Q.shootCD=0;Q.mana=3;const n0=g.shots.length;g.throwShroom();out.empty=[Q.mana,g.shots.length-n0];
+      // the shop: upgrades
+      g.setSpores(500);g.openShop();g.buy('manaUp');g.buy('manaUp');g.buy('manaUp');g.buy('manaUp');g.buy('manaUp');out.maxMana=g.maxMana();
+      g.buy('shots');out.lvl2=g.shotLvl;g.buy('shots');out.lvl3=g.shotLvl;out.spent=500-g.spores;
+      Q.mana=0;g.buy('mush');out.mush=Q.mana;
+      document.getElementById('go').click();
+      Q.shootCD=0;Q.mana=20;const n1=g.shots.length;g.throwShroom();out.throw3=[Q.mana,g.shots.length-n1];
+      // the big mushroom on the ground: +100 mana
+      Q.mana=10;g.items.push({k:'power',x:Q.x+Q.w/2,y:Q.y+Q.h/2,ph:0});g.sim(.05,()=>{Q.inv=1e9});out.pick=Q.mana;
+      return out""")
+    assert r['start']==[50,50], r
+    assert r['punch']==[1,25], r
+    assert r['stomp'][0]==1 and r['stomp'][1]==25 and abs(r['stomp'][2]+547)<3, r
+    assert r['throw1']==[7,1] and r['empty']==[3,0], r
+    assert r['maxMana']==150 and r['lvl2']==2 and r['lvl3']==3, r
+    assert r['spent']==4*25+30+60, r
+    assert r['mush']==100 and r['throw3']==[10,3] and r['pick']==110, r
+    return 'punch/stomp 1 dmg +5 mana; throws 5/8/10; shop and pickups work'
+
+@test('dragon_gust','boss2')
+def dragon_gust(c):
+    # the dragon never starts the gust closer than half a screen to the player
+    c.js('g.startBoss(2);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P;B.phase=2;let near=0,far=0;
+      for(let i=0;i<400;i++){B.state='hover';B.t=0;B.last='';B.infCD=99;const d=i%2?150:600;B.x=P.x+P.w/2+d-B.w/2;g.dragon();
+        if(B.state==='gust'){if(d<g.vw/2)near++;else far++}}
+      return [near,far]""")
+    assert r[0]==0 and r[1]>0, r
+    return f'gusts started from afar: {r[1]}, from close by: {r[0]}'
+
 @test('boss_start','boss')
 def boss_start(c):
     # every boss fight starts once its sprite comes into view, wherever the player is, without the crash and roar
@@ -403,7 +448,7 @@ def ui(c):
     n=c.page.evaluate("document.querySelectorAll('.boss-btn').length")
     assert n==c.js('return Object.keys(g.levels).length'), n
     k.press('Escape');c.page.wait_for_timeout(100)
-    for w,h,cols in [(1280,720,3),(800,600,2),(1366,560,3)]:
+    for w,h,cols in [(1280,720,4),(800,600,3),(1366,560,4)]:
         c.resize(w,h); c.js('g.start(1,5);g.setSpores(50);g.openShop()'); c.page.wait_for_timeout(150)
         r=c.page.evaluate("()=>{const c=document.getElementById('card');return [c.scrollHeight<=c.clientHeight+2,getComputedStyle(document.querySelector('.shop-list')).gridTemplateColumns.split(' ').length]}")
         assert r==[True,cols], (w,h,r)

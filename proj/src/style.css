@@ -42,16 +42,17 @@ h2{font-size:24px;font-weight:400;margin:14px 0 8px}
 .actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:18px}
 .ghost-btn{font-size:21px;padding:8px 18px}
 .card h1.sm{font-size:clamp(28px,4.5vw,36px)}
-.shop-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0}
+.shop-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0}
 .card.wide{max-width:min(1060px,100%)}
 .shop-row{grid-template-rows:auto 1fr}
 .shop-list .shop-row{grid-template-columns:40px 1fr;align-items:start}
-.shop-list .shop-row .buy{grid-column:1/3;justify-self:end;align-self:end}
-@media (max-width:900px){.shop-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.shop-list .shop-row .foot{grid-column:1/3;display:flex;justify-content:space-between;align-items:flex-end;gap:6px;align-self:end}
+@media (max-width:1000px){.shop-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.shop-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.shop-list{grid-template-columns:1fr}}
 @media (max-height:640px){.card.wide{padding:12px 16px 14px}.card.wide h1.sm{font-size:26px;margin-bottom:2px}.card.wide p.seller{display:none}
   .card.wide .wallet{margin-bottom:6px;font-size:19px}.shop-list{gap:6px}.shop-list .shop-row{padding:5px 8px;gap:4px 8px}.shop-row .nm{font-size:18px}
-  .shop-row small{font-size:14px}.card.wide .actions{margin-top:6px}.card.wide p.shop-msg{margin-top:2px;min-height:1.1em}.card.wide .shop-hint{display:none}}
+  .shop-row small{font-size:14px;line-height:1.15}.card.wide .actions{margin-top:6px}.card.wide p.shop-msg{margin-top:2px;min-height:1.1em}.card.wide .shop-hint{display:none}}
 @media (max-height:460px){.shop-list .shop-row small:not(.why):not(.sold-n){display:none}}
 .card.lv{max-width:min(700px,100%)}
 .lvl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
@@ -71,6 +72,8 @@ body.kbd #card .boss-btn:focus{background:#b3503a}
 .shop-row small{font-size:16px;opacity:.8}
 .shop-row small.why{color:#a23a2a;opacity:1}
 .shop-row small.sold-n{opacity:1;font-weight:bold}
+.shop-row .pips{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
+.shop-row .pip{display:inline-flex}
 .shop-row{position:relative}
 .shop-row.sold{background:#cfcfcf;border-color:#6b6b6b}
 .shop-row.sold .shop-ico,.shop-row.sold .nm,.shop-row.sold small{filter:grayscale(1);opacity:.6}
@@ -112,6 +115,7 @@ body.touch #touch{display:block}
 #bj{right:max(18px,env(safe-area-inset-right,0px));bottom:18px;width:92px;height:92px}
 #bs{right:calc(max(18px,env(safe-area-inset-right,0px)) + 104px);bottom:34px;width:74px;height:74px}
 #bd{right:calc(max(18px,env(safe-area-inset-right,0px)) + 14px);bottom:124px;width:66px;height:66px;font-size:18px}
+#bm{right:calc(max(18px,env(safe-area-inset-right,0px)) + 100px);bottom:122px;width:62px;height:62px;font-size:17px}
 #bshop{display:none;left:50%;transform:translateX(-50%);bottom:24px;width:auto;height:54px;border-radius:27px;padding:0 22px;font-size:20px}
 body.touch.near-shop #bshop{display:flex}
 #bp{right:max(14px,env(safe-area-inset-right,0px));top:12px;width:48px;height:48px;font-size:18px}

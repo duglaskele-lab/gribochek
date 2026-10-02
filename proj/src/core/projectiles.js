@@ -138,8 +138,8 @@ function updateItems(dt){
       if(it.k==='spore'){spores++;sporesGot++;sfx('coin');burst(it.x,it.y,6,'#ffcf6b',120,300,[2,4])}
       else if(it.k==='gold'){spores+=5;sporesGot+=5;sfx('power');stars(it.x,it.y,10);floater(it.x,it.y-30,'+5')}
       else if(it.k==='heart'){if(P.hp<P.maxhp)P.hp++;else{spores+=2;floater(it.x,it.y-30,T('fHeartFull'))}sfx('coin');burst(it.x,it.y,10,'#ff6b7a',160)}
-      else if(it.k==='power'){const was=P.power;P.power=Math.min(powerCap(),P.power+1);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);
-        floater(it.x,it.y-40,T(P.power>was?['','fPower1','fPower2','fPower3'][P.power]:'fPowerMax'))}
+      else if(it.k==='power'){const was=P.mana;gainMana(MANA_PICK);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);   // the big mushroom: +100 mana
+        floater(it.x,it.y-40,'+'+Math.round(P.mana-was)+' '+T('manaL'))}
     }
   }
   items=items.filter(i=>!i.taken);
