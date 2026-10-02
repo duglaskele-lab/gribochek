@@ -59,6 +59,8 @@ function damageEnemy(e,dmg,srcX){
 }
 function shrink(e,a=4){return{x:e.x+a,y:e.y+a,w:e.w-a*2,h:e.h-a}}
 function catHead(e){const s=e.segs[0];return{x:s.x-20,y:e.gy-38,w:40,h:38}}
+// the caterpillar only hurts with a small box low in front of its head: standing on its head is safe
+function catBite(e){const s=e.segs[0];return{x:e.dir>0?s.x+6:s.x-24,y:e.gy-19,w:18,h:19}}
 function enemyHurtBoxes(e){
   if(e.dead) return [];
   switch(e.type){
@@ -95,7 +97,7 @@ function contactInfo(e){
   switch(e.type){
     case 'slime': return{hurt:[shrink(e)],stomp:e,dmg:9};
     case 'monkey': return{hurt:[shrink(e,8)],stomp:e,dmg:2};
-    case 'caterpillar': {const h=catHead(e);return{hurt:[h],stomp:h,dmg:2}}
+    case 'caterpillar': return{hurt:[catBite(e)],stomp:catHead(e),dmg:2};
     case 'orc': {const hb=[shrink(e)];if(e.state==='swing')hb.push(swingBox(e,96,60,-8));return{hurt:hb,stomp:e,dmg:3}}
     case 'goblin': return{hurt:[shrink(e)],stomp:e,dmg:9};
     case 'scorpion': {const hb=[shrink(e)];if(e.state==='strike')hb.push(swingBox(e,60,34,-8));return{hurt:hb,stomp:e,dmg:2}}
@@ -123,7 +125,7 @@ function doStomp(e,ct){
     e.helmet=false;e.state='stun';e.t=.55;e.vx=0;e.flash=.1;clang(P.x+P.w/2,P.y+P.h);shake(.12,4);
     parts.push({x:e.x+e.w/2,y:e.y-6,vx:-e.face*170+rand(-40,40),vy:-460,g:1300,c:'',s:1,life:1.3,max:0,t:'helm',rot:0});
     floater(e.x+e.w/2,e.y-40,T('fHelm'))}
-  else{damageEnemy(e,e.prop?ct.dmg:DMG_STOMP,P.x+P.w/2);   // a stomp does 1 damage to any foe (boxes still break)
+  else{damageEnemy(e,e.prop?ct.dmg:DMG_STOMP,P.x+P.w/2);   // a stomp does DMG_STOMP to any foe (boxes still break)
     if(!e.dead&&ENEMY_HOOKS[e.type]&&ENEMY_HOOKS[e.type].onStomp) ENEMY_HOOKS[e.type].onStomp(e);
     // two stomps on the bare head: the commander raises an arm over it (a ledge to stand on, but no more head stomps)
     if(ct.chief&&!e.dead){e.hs=(e.hs||0)+1;if(e.hs>=2){e.hs=0;e.guard=CHIEF_GUARD;chiefArm(e);floater(e.x+e.w/2,e.y-40,T('fGuard'))}}}

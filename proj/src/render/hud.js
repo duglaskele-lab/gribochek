@@ -5,13 +5,13 @@ function drawHUD(){
   ctx.font='26px '+FONT;ctx.textAlign='left';ctx.fillStyle='#fff';ctx.strokeStyle=INK;ctx.lineWidth=5;
   const t=`${spores}`;ctx.strokeText(t,50,80);ctx.fillText(t,50,80);
   // mana: a blue bar as long as the mana pool, with the mushrooms per throw next to it
-  {const mm=maxMana(),bw=mm*1.3,bx=50,by=101,cost=SHOT_COST[shotLvl];
+  // the bar grows by a tenth for each upgrade (the pool by a quarter); no numbers, just the bar
+  {const mm=maxMana(),bw=150*(1+.1*manaUps),bx=50,by=101,cost=SHOT_COST[shotLvl];
    mushroom(30,114,11,Math.sin(time*3)*.12,shotLvl>1,shotLvl>=3);
    ctx.fillStyle='rgba(43,26,18,.75)';ctx.beginPath();ctx.roundRect(bx-3,by-3,bw+6,20,10);ctx.fill();
    ctx.fillStyle=P.mana>=cost?'#3b7fe0':'#7a8aa6';ctx.beginPath();ctx.roundRect(bx,by,Math.max(0,bw*P.mana/mm),14,7);ctx.fill();
    ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(bx+4,by+2,Math.max(0,bw*P.mana/mm-8),3);
-   ctx.font='15px '+FONT;ctx.lineWidth=3;ctx.fillStyle='#fff';const mt=`${Math.floor(P.mana)}/${mm}`+(shotLvl>1?`  ×${shotLvl}`:'');
-   ctx.strokeText(mt,bx+bw+10,by+13);ctx.fillText(mt,bx+bw+10,by+13)}
+   if(shotLvl>1){ctx.font='15px '+FONT;ctx.lineWidth=3;ctx.fillStyle='#fff';const mt='×'+shotLvl;ctx.strokeText(mt,bx+bw+10,by+13);ctx.fillText(mt,bx+bw+10,by+13)}}
   {let gx=24;const gy=150;
    if(hasCloak){ctx.save();ctx.translate(gx+8,gy);ctx.fillStyle='#7a4ab8';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-5,-12);ctx.lineTo(5,-12);ctx.lineTo(12,12);ctx.quadraticCurveTo(0,8,-12,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();gx+=34}
    if(hasUmbrella){ctx.save();ctx.translate(gx+8,gy+2);ctx.scale(.42,.42);ctx.fillStyle='#e33b2e';ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.ellipse(0,0,30,21,0,Math.PI,0);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,22);ctx.quadraticCurveTo(0,29,-7,27);ctx.stroke();ctx.restore()}}

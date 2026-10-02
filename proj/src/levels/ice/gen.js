@@ -44,6 +44,20 @@ function buildIce(seed,attempt){
       const g=clamp(g0,1,Math.max(1,maxGap(nr-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;
       for(let i=0;i<w;i++)pit(x+i,top);crumbIce(x,nr,w);spore(x+(w>>1),nr*TS-30);x+=w;r=nr}
     return r};
+  // over a bottomless chasm open to the sky (it snows into it): a path of stops - ice blocks, crumbling slabs and
+  // lifts - to a ledge on the far side. stop: {k:'block'|'crumb'|'lift', g: gap before it, w, r (row; lift: from -> to)}
+  const liftIce=(c,w,ra,rb,sp)=>{const y0=Math.min(ra,rb)*TS,y1=Math.max(ra,rb)*TS;
+    plats.push({style:'ice',x:c*TS,y:rb*TS,w:w*TS,h:16,x0:c*TS,x1:c*TS,vx:0,y0,y1,vy:(rb<ra?-1:1)*sp,wt:.7})};
+  const skyRun=(stops,nf,L)=>{run(2,H);const c0=x,todo=[];let r=fl,cx=x;
+    for(const st of stops){const land=st.k==='lift'?st.from:st.r;
+      const g=clamp(st.g,1,Math.max(1,maxGap(land-r,false,.72)));cx+=g;const at=cx;
+      todo.push(()=>{if(st.k==='block')iceBlock(at,st.r,st.w);else if(st.k==='crumb')crumbIce(at,st.r,st.w);else liftIce(at,st.w,st.from,st.to,st.sp||85+L*15);
+        spore(at+(st.w>>1),(st.k==='lift'?Math.min(st.from,st.to):st.r)*TS-30)});
+      cx+=st.w;r=st.k==='lift'?st.to:st.r}
+    cx+=clamp(2,1,Math.max(1,maxGap(nf-r,false,.72)));
+    for(let c=c0;c<cx;c++)carve(c,0,ROWS-1);skylights.push({x0:c0*TS,x1:cx*TS,fy:WH,acc:0});
+    for(const f of todo)f();
+    x=cx;fl=nf;run(4,H);return c0};
   const landOn=(top,r,nf)=>{const g=clamp(2,1,Math.max(1,maxGap(nf-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;fl=nf};
   // strong but few: at most three golems and three witches in the whole cave
   const golemOK=()=>golems<3&&progress>.12, witchOK=()=>witches<3&&progress>.1;
@@ -89,6 +103,24 @@ function buildIce(seed,attempt){
       for(let i=0;i<n;i++)pit(x+i,top);
       for(let i=1;i<n-1;i+=3)crumbIce(x+i,fl,Math.min(2,n-1-i));
       arc(x,x+n-1,fl*TS-40,50);x+=n;run(4,hh)},
+    // chasms under an open roof, with snow falling in: lifts, ice blocks and crumbling slabs at different heights
+    skyLiftUp(L){stepFl(clamp(fl,FMIN+5,FMAX));const f0=fl;
+      skyRun([{k:'crumb',g:2,w:2,r:f0},{k:'lift',g:1,w:2,from:f0,to:f0-4}],f0-4,L);
+      if(L>0&&witchOK()&&chance(.35)){spawnAt('iceWitch',x-8,fl-4);witches++}},
+    skyLiftDown(L){stepFl(clamp(fl,FMIN,FMAX-5));const f0=fl;
+      skyRun([{k:'block',g:2,w:2,r:f0-1},{k:'lift',g:1,w:2,from:f0-1,to:f0+3},{k:'crumb',g:2,w:L>1?1:2,r:f0+3}],f0+4,L)},
+    skyStones(L){stepFl(clamp(fl,FMIN+3,FMAX));const f0=fl,n=L>1?1:2;
+      skyRun([{k:'block',g:2,w:3,r:f0-1},{k:'crumb',g:2,w:n,r:f0-2},{k:'block',g:2,w:2,r:f0-3},{k:'crumb',g:2,w:n,r:f0-1},{k:'crumb',g:1,w:n,r:f0}],f0,L);
+      if(L>0&&chance(.45))spawnAt('iceSlime',x-2,fl)},
+    skyTwinLifts(L){stepFl(clamp(fl,FMIN+4,FMAX-1));const f0=fl;
+      skyRun([{k:'lift',g:2,w:2,from:f0,to:f0-3},{k:'crumb',g:2,w:2,r:f0-3},{k:'lift',g:2,w:2,from:f0-3,to:f0+1,sp:110+L*15}],f0+1,L);
+      if(L>0&&witchOK()&&chance(.3)){spawnAt('iceWitch',x-7,fl-4);witches++}},
+    skyCrumbClimb(L){stepFl(clamp(fl,FMIN+4,FMAX));const f0=fl,w=L>1?1:2;
+      skyRun([{k:'crumb',g:2,w,r:f0-1},{k:'crumb',g:2,w,r:f0-2},{k:'crumb',g:2,w,r:f0-3},{k:'block',g:2,w:3,r:f0-4},{k:'crumb',g:2,w,r:f0-3},{k:'crumb',g:2,w,r:f0-2}],f0-1,L);
+      if(L>0&&witchOK()&&chance(.35)){spawnAt('iceWitch',x-9,fl-5);witches++}},
+    skyGauntlet(L){stepFl(clamp(fl,FMIN+4,FMAX));const f0=fl;
+      skyRun([{k:'crumb',g:2,w:2,r:f0},{k:'lift',g:1,w:2,from:f0,to:f0-3},{k:'block',g:2,w:2,r:f0-3},{k:'crumb',g:2,w:1,r:f0-2},{k:'crumb',g:2,w:1,r:f0-1},{k:'crumb',g:2,w:1,r:f0}],f0,L);
+      if(L>0&&chance(.4))spawnAt('iceSlime',x-2,fl)},
     // crumbling-slab trials: stairs up, stairs down, a zigzag and a long bridge with a safe ice island halfway
     crumbStairs(L){const hh=6,k=3+(L>1?1:0);stepFl(clamp(fl,FMIN+k+1,FMAX),hh);run(2,hh);const top=fl-k-1-hh;
       const r=slabs(top,fl,Array.from({length:k},()=>[ri(1,2),-1,L>1?1:2]));landOn(top,r,r-1);run(4,hh)},
@@ -181,8 +213,10 @@ function buildIce(seed,attempt){
   run(12,6,false);deco('torch',10,fl*TS);sporeRow(5,8,fl);
   const total=ri(17,19);
   const W={tunnel:1.6,hall:1.5,slide:1.5,chasm:1.6,climb:1.9,descent:1.8,snake:1.9,crystal:1.4,nook:1,skylight:.35,iceBridge:1.1,
-    crumbStairs:.8,crumbDrop:.7,crumbZig:.8,crumbIsle:.7};
-  const CRUMB=['iceBridge','crumbStairs','crumbDrop','crumbZig','crumbIsle'];
+    crumbStairs:.8,crumbDrop:.7,crumbZig:.8,crumbIsle:.7,
+    skyLiftUp:.45,skyLiftDown:.45,skyStones:.5,skyTwinLifts:.6,skyCrumbClimb:.5,skyGauntlet:.6};
+  const CRUMB=['iceBridge','crumbStairs','crumbDrop','crumbZig','crumbIsle','skyLiftUp','skyLiftDown','skyStones','skyTwinLifts','skyCrumbClimb','skyGauntlet'];
+  const SKY_T=CRUMB.slice(5);   // the open-roof chasms are medium or hard: rare early on
   // the roof opens to the sky at least twice: once in each half of the cave
   const skyAt=new Set([ri(2,Math.floor(total*.42)),ri(Math.floor(total*.58),total-2)]);
   const secKinds=[],secPool=[['falseFloor',1],['crackHall',1],['shelf',1]],nSec=chance(.75)?2:1;
@@ -202,6 +236,7 @@ function buildIce(seed,attempt){
       if(ty==='climb')w*=fl-4<FMIN?0:fl>=14?1.8:fl<=10?.4:1;
       if(ty==='descent')w*=fl+3>FMAX?0:fl<=10?1.8:fl>=14?.4:1;
       if(i<2&&(ty==='chasm'||CRUMB.indexOf(ty)>=0))w*=.3;
+      if(SKY_T.indexOf(ty)>=0&&progress<.25)w*=.2;
       if(CRUMB.indexOf(ty)>=0&&recent.slice(-2).some(t=>CRUMB.indexOf(t)>=0))w*=.25;   // not two slab trials in a row
       if(w>0)cands.push([ty,w])}
     const ty=skyAt.has(i)&&last!=='skylight'?'skylight':wpick(cands);PLAN.push({t:ty,L,c:x,fl});SEG[ty](L);last=ty;recent.push(ty);sinceCP++;
@@ -243,11 +278,14 @@ function validateIce(){
 }
 function validateIceGraph(){
   const goalC=Math.floor(ARENA_L/TS), nodes=[], byCol=Array.from({length:COLS},()=>[]);
-  const add=(c,y,k)=>{if(c<0||c>=COLS)return;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n)};
+  const add=(c,y,k)=>{if(c<0||c>=COLS)return null;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n);return n};
+  const rides=[];   // [top node, bottom node] of every column of a lift
   const free=t=>!isSolidT(t);
   for(let c=0;c<COLS;c++)for(let r=2;r<ROWS;r++){const t=grid[r][c],up=grid[r-1][c];
     if(isFloorT(t)&&free(up)&&up!==T_THORN&&free(grid[r-2][c]))add(c,r*TS,t===T_PLANK?'plank':'floor')}
-  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
+  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);
+    if(pl.vy&&pl.y0!==pl.y1){for(let c=a;c<b;c++){const t=add(c,pl.y0,'plat'),d=add(c,pl.y1,'plat');if(t&&d)rides.push([t,d])}continue}
+    for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
   const clearCol=(c,r0,r1)=>{if(c<0||c>=COLS)return false;for(let r=r0;r<=r1;r++){if(r<0)return false;if(isSolidT(grid[r][c]))return false}return true};
   const oneway=k=>k==='plank'||k==='plat';
   const canMove=(a,b)=>{
@@ -263,6 +301,7 @@ function validateIceGraph(){
     return true;
   };
   for(const a of nodes)for(let c=Math.max(0,a.c-4);c<=Math.min(COLS-1,a.c+8);c++)for(const b of byCol[c])if(b!==a&&canMove(a,b)){a.out.push(b);b.inn.push(a)}
+  for(const [t,d] of rides){t.out.push(d);d.inn.push(t);d.out.push(t);t.inn.push(d)}
   const start=byCol[3].find(n=>n.y===startY)||byCol[3][0];if(!start)return{ok:false,why:'start'};
   const fw=new Set([start]),q=[start];
   while(q.length){const a=q.shift();for(const b of a.out)if(!fw.has(b)){fw.add(b);q.push(b)}}
@@ -287,9 +326,14 @@ function openIceGate(){
   iceGate=[];sfx('shatter');shake(.3,6);
 }
 function snowPuff(x,y,n){for(let i=0;i<n;i++)parts.push({x:x+rand(-14,14),y:y+rand(-8,8),vx:rand(-120,120),vy:rand(-220,-40),g:600,c:Math.random()<.5?'rgba(255,255,255,.95)':'rgba(215,236,252,.95)',s:rand(4,9),life:rand(.3,.6),max:0,t:'puff'})}
+// snow falls in a skylight while it is in view. When it comes into view, the air below the roof is filled with flakes
+// at once, as if it had been snowing all along (not a first wave that has just started to fall).
+function snowFlake(s,y,vy){parts.push({x:rand(s.x0+4,s.x1-4),y,vx:rand(-14,14),vy,g:0,c:'#fff',s:rand(1.8,4),life:(s.fy-y)/vy,max:0,t:'snow',ph:rand(0,6)})}
 function updateSnow(dt){
-  for(const s of skylights){if(s.x1<camX-60||s.x0>camX+VW+60)continue;
-    s.acc+=dt*(s.x1-s.x0)/TS*3;
-    while(s.acc>=1){s.acc--;const y=Math.max(-10,camY-OFFY-10),vy=rand(45,90);if(y>=s.fy)break;
-      parts.push({x:rand(s.x0+4,s.x1-4),y,vx:rand(-14,14),vy,g:0,c:'#fff',s:rand(1.8,4),life:(s.fy-y)/vy,max:0,t:'snow',ph:rand(0,6)})}}
+  for(const s of skylights){if(s.x1<camX-60||s.x0>camX+VW/camZ+60){s.on=false;continue}
+    const rate=(s.x1-s.x0)/TS*3;
+    if(!s.on){s.on=true;const y0=Math.max(-10,camY-OFFY-10),n=Math.min(260,Math.round(rate*(s.fy-y0)/67));
+      for(let i=0;i<n;i++)snowFlake(s,rand(y0,s.fy-4),rand(45,90))}
+    s.acc+=dt*rate;
+    while(s.acc>=1){s.acc--;const y=Math.max(-10,camY-OFFY-10);if(y>=s.fy)break;snowFlake(s,y,rand(45,90))}}
 }

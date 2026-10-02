@@ -158,13 +158,13 @@ const TS=40, VH=14*TS, MAXC=560;
 // ROWS/WH: world height in tiles/px (level 3 is two screens tall); FLOOR: boss-arena floor
 let ROWS=14, WH=VH, FLOOR=12*TS, ARENA_TRIG_Y=9*TS, CAM_BOT=0;   // CAM_BOT: lowest point the camera shows outside the boss arena
 const G=2000, JV=Math.round(740*Math.sqrt(1.25)), MAXV=275, SC=0.8, DASH_V=780, DASH_T=.17;
-// STOMP_BOUNCE: the plain bounce off a foe's head, 30% higher than it was (480 px/s before)
-const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=1000, STOMP_BOUNCE=Math.round(480*Math.sqrt(1.3)), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
+// STOMP_BOUNCE: the plain bounce off a foe's head, raised twice by 30% in height (480 px/s originally)
+const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=1000, STOMP_BOUNCE=Math.round(480*1.3), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
 const WAVE_LIFE=.15, WAVE_SPEED=540, MAXHP_CAP=7, HP_BASE=3, GLIDE_V=71;
-const DMG_PUNCH=1, DMG_STOMP=1, DMG_SHROOM=0.8, TRIPLE_PENALTY=.85, TAIL_MULT=1.25, EPS=1e-6;
+const DMG_PUNCH=1, DMG_STOMP=1.5, DMG_SHROOM=0.8, TRIPLE_PENALTY=.85, TAIL_MULT=1.25, EPS=1e-6;
 const FLOW_V=150, WATER_G=.3;
 // mana: thrown mushrooms (key L) cost mana; punching or stomping a foe gives it back
-const MANA_BASE=50, MANA_UP=25, MANA_UPS=4, MANA_HIT=5, MANA_PICK=100, SHOT_COST=[0,5,8,10];   // SHOT_COST[number of mushrooms per throw]
+const MANA_BASE=100, MANA_UP=25, MANA_UPS=4, MANA_HIT=5, MANA_PICK=100, SHOT_COST=[0,5,8,10];   // SHOT_COST[number of mushrooms per throw]
 const FPS_CAP=60;
 // tile types
 const T_EMPTY=0, T_SOLID=1, T_PLANK=2, T_THORN=3, T_CRACK=4, T_WATER=5, T_SAND=6, T_FAKE=7, T_CRACKW=8;
@@ -1249,7 +1249,7 @@ function punchMana(set){if(!set.mana){set.mana=true;gainMana(MANA_HIT)}}
 // L: throw mushrooms - one, two or three of them (shop upgrades), paid with mana
 function throwShroom(){
   const p=P,n=shotLvl,cost=SHOT_COST[n];
-  if(p.mana<cost){p.shootCD=.25;sfx('deny');floater(p.x+p.w/2,p.y-20,T('fNoMana'));return}
+  if(p.mana<cost){p.shootCD=.25;sfx('deny');return}
   p.mana-=cost;p.shootCD=.44; if(p.onGround)p.atkT=.2;
   const x=p.x+p.w/2+p.face*16, y=p.y+20;
   const dmg=DMG_SHROOM*(n>=3?TRIPLE_PENALTY:1);
@@ -1536,6 +1536,8 @@ function damageEnemy(e,dmg,srcX){
 }
 function shrink(e,a=4){return{x:e.x+a,y:e.y+a,w:e.w-a*2,h:e.h-a}}
 function catHead(e){const s=e.segs[0];return{x:s.x-20,y:e.gy-38,w:40,h:38}}
+// the caterpillar only hurts with a small box low in front of its head: standing on its head is safe
+function catBite(e){const s=e.segs[0];return{x:e.dir>0?s.x+6:s.x-24,y:e.gy-19,w:18,h:19}}
 function enemyHurtBoxes(e){
   if(e.dead) return [];
   switch(e.type){
@@ -1572,7 +1574,7 @@ function contactInfo(e){
   switch(e.type){
     case 'slime': return{hurt:[shrink(e)],stomp:e,dmg:9};
     case 'monkey': return{hurt:[shrink(e,8)],stomp:e,dmg:2};
-    case 'caterpillar': {const h=catHead(e);return{hurt:[h],stomp:h,dmg:2}}
+    case 'caterpillar': return{hurt:[catBite(e)],stomp:catHead(e),dmg:2};
     case 'orc': {const hb=[shrink(e)];if(e.state==='swing')hb.push(swingBox(e,96,60,-8));return{hurt:hb,stomp:e,dmg:3}}
     case 'goblin': return{hurt:[shrink(e)],stomp:e,dmg:9};
     case 'scorpion': {const hb=[shrink(e)];if(e.state==='strike')hb.push(swingBox(e,60,34,-8));return{hurt:hb,stomp:e,dmg:2}}
@@ -1600,7 +1602,7 @@ function doStomp(e,ct){
     e.helmet=false;e.state='stun';e.t=.55;e.vx=0;e.flash=.1;clang(P.x+P.w/2,P.y+P.h);shake(.12,4);
     parts.push({x:e.x+e.w/2,y:e.y-6,vx:-e.face*170+rand(-40,40),vy:-460,g:1300,c:'',s:1,life:1.3,max:0,t:'helm',rot:0});
     floater(e.x+e.w/2,e.y-40,T('fHelm'))}
-  else{damageEnemy(e,e.prop?ct.dmg:DMG_STOMP,P.x+P.w/2);   // a stomp does 1 damage to any foe (boxes still break)
+  else{damageEnemy(e,e.prop?ct.dmg:DMG_STOMP,P.x+P.w/2);   // a stomp does DMG_STOMP to any foe (boxes still break)
     if(!e.dead&&ENEMY_HOOKS[e.type]&&ENEMY_HOOKS[e.type].onStomp) ENEMY_HOOKS[e.type].onStomp(e);
     // two stomps on the bare head: the commander raises an arm over it (a ledge to stand on, but no more head stomps)
     if(ct.chief&&!e.dead){e.hs=(e.hs||0)+1;if(e.hs>=2){e.hs=0;e.guard=CHIEF_GUARD;chiefArm(e);floater(e.x+e.w/2,e.y-40,T('fGuard'))}}}
@@ -3770,7 +3772,7 @@ function startLevel(level,seed){
   hitstop=0;shakeT=0;shakeM=0;arenaLocked=false;arenaIn=false;bossDead=false;skyHeat=0;secretsFound=0;
   const y=(LV().startY?LV().startY():topY(3))-58;
   P=newPlayer(3*TS,y);
-  if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.mana=Math.min(maxMana(),carry.mana)} // a new level starts at full health
+  if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.mana=maxMana()}   // a new level starts with full health and mana // a new level starts at full health
   cp={x:P.x,y:P.y};camX=0;poisonLvl=0;camZ=1;camY=camTargetY();
   enemySnap=structuredClone(enemies.filter(e=>!e.prop));magnetT=0;
   playSong('level');
@@ -4085,6 +4087,7 @@ function drawCrumble(pl){
 function drawPlats(){
   for(const pl of plats){
     if(pl.crumble){drawCrumble(pl);continue}
+    if(pl.style&&PLAT_STYLES[pl.style]){if(pl.x+pl.w>camX-40&&pl.x<camX+VW+40){ctx.save();ctx.translate(pl.x+pl.w/2,pl.y+8);PLAT_STYLES[pl.style](pl,pl.w);ctx.restore()}continue}
     if(pl.swamp||pl.lift){if(pl.x+pl.w>camX-40&&pl.x<camX+VW+40)drawRaft(pl);continue}
     ctx.fillStyle=BIOME==='desert'?'#e6c98f':'#e0c89a'; ctx.strokeStyle=INK; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(pl.x,pl.y+4);
@@ -4353,13 +4356,13 @@ function drawHUD(){
   ctx.font='26px '+FONT;ctx.textAlign='left';ctx.fillStyle='#fff';ctx.strokeStyle=INK;ctx.lineWidth=5;
   const t=`${spores}`;ctx.strokeText(t,50,80);ctx.fillText(t,50,80);
   // mana: a blue bar as long as the mana pool, with the mushrooms per throw next to it
-  {const mm=maxMana(),bw=mm*1.3,bx=50,by=101,cost=SHOT_COST[shotLvl];
+  // the bar grows by a tenth for each upgrade (the pool by a quarter); no numbers, just the bar
+  {const mm=maxMana(),bw=150*(1+.1*manaUps),bx=50,by=101,cost=SHOT_COST[shotLvl];
    mushroom(30,114,11,Math.sin(time*3)*.12,shotLvl>1,shotLvl>=3);
    ctx.fillStyle='rgba(43,26,18,.75)';ctx.beginPath();ctx.roundRect(bx-3,by-3,bw+6,20,10);ctx.fill();
    ctx.fillStyle=P.mana>=cost?'#3b7fe0':'#7a8aa6';ctx.beginPath();ctx.roundRect(bx,by,Math.max(0,bw*P.mana/mm),14,7);ctx.fill();
    ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(bx+4,by+2,Math.max(0,bw*P.mana/mm-8),3);
-   ctx.font='15px '+FONT;ctx.lineWidth=3;ctx.fillStyle='#fff';const mt=`${Math.floor(P.mana)}/${mm}`+(shotLvl>1?`  ×${shotLvl}`:'');
-   ctx.strokeText(mt,bx+bw+10,by+13);ctx.fillText(mt,bx+bw+10,by+13)}
+   if(shotLvl>1){ctx.font='15px '+FONT;ctx.lineWidth=3;ctx.fillStyle='#fff';const mt='×'+shotLvl;ctx.strokeText(mt,bx+bw+10,by+13);ctx.fillText(mt,bx+bw+10,by+13)}}
   {let gx=24;const gy=150;
    if(hasCloak){ctx.save();ctx.translate(gx+8,gy);ctx.fillStyle='#7a4ab8';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-5,-12);ctx.lineTo(5,-12);ctx.lineTo(12,12);ctx.quadraticCurveTo(0,8,-12,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();gx+=34}
    if(hasUmbrella){ctx.save();ctx.translate(gx+8,gy+2);ctx.scale(.42,.42);ctx.fillStyle='#e33b2e';ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.ellipse(0,0,30,21,0,Math.PI,0);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,22);ctx.quadraticCurveTo(0,29,-7,27);ctx.stroke();ctx.restore()}}
@@ -4633,7 +4636,7 @@ const I18N={
   shopHint:'Стрелки — выбор, Enter или K — купить, 1–7 — быстро купить, Esc — уйти',
   healName:'Лечебный отвар',healDesc:'восстанавливает 1 сердце',maxhpName:'Сердце-жёлудь',maxhpDesc:'+1 к максимуму сердец (до 7), с каждым дороже на 5',heartsSold:(a,b)=>`Продано: ${a} из ${b}`,
   cloakName:'Плащ',cloakDesc:'второй рывок в воздухе',umbrellaName:'Зонтик',umbrellaDesc:'держи прыжок в падении — плавно паришь',
-  mushName:'Красный гриб',mushDesc:'+100 маны',manaUpName:'Звёздная пыльца',manaUpDesc:'+25 к запасу маны (до 4 раз)',shotsName:'Грибная связка',shotsDesc:'по 2 гриба за бросок (8 маны), потом по 3 (10)',
+  mushName:'Красный гриб',mushDesc:'+100 маны',manaUpName:'Звёздная пыльца',manaUpDesc:'увеличивает запас маны на 25% (до 4 раз)',shotsName:'Грибная связка',shotsDesc:'по 2 гриба за бросок (8 маны), потом по 3 (10)',
   noMoney:'не хватает спор',fullHp:'здоровье и так полное',maxHp:'больше сердец не унести',fullMana:'мана и так полная',owned:'уже куплено',
   shopPrompt:'E — лавка',buyLabel:(n,p)=>`Купить «${n}» за ${p} спор`},
  en:{name:'English',docTitle:'Mushroom Girl',title:'Mushroom Girl',
@@ -4652,7 +4655,7 @@ const I18N={
   shopHint:'Arrows to select, Enter or K to buy, 1–7 quick buy, Esc to leave',
   healName:'Healing brew',healDesc:'restores 1 heart',maxhpName:'Acorn heart',maxhpDesc:'+1 max heart (up to 7), each costs 5 more',heartsSold:(a,b)=>`Sold: ${a} of ${b}`,
   cloakName:'Cloak',cloakDesc:'a second dash in the air',umbrellaName:'Umbrella',umbrellaDesc:'hold jump while falling to glide',
-  mushName:'Red mushroom',mushDesc:'+100 mana',manaUpName:'Star pollen',manaUpDesc:'+25 max mana (up to 4 times)',shotsName:'Shroom bunch',shotsDesc:'2 mushrooms a throw (8 mana), then 3 (10)',
+  mushName:'Red mushroom',mushDesc:'+100 mana',manaUpName:'Star pollen',manaUpDesc:'increases your mana by 25% (up to 4 times)',shotsName:'Shroom bunch',shotsDesc:'2 mushrooms a throw (8 mana), then 3 (10)',
   noMoney:'not enough spores',fullHp:'health is already full',maxHp:'can’t carry more hearts',fullMana:'mana is already full',owned:'already owned',
   shopPrompt:'E: shop',buyLabel:(n,p)=>`Buy ${n} for ${p} spores`}
 };
@@ -5176,6 +5179,20 @@ function buildIce(seed,attempt){
       const g=clamp(g0,1,Math.max(1,maxGap(nr-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;
       for(let i=0;i<w;i++)pit(x+i,top);crumbIce(x,nr,w);spore(x+(w>>1),nr*TS-30);x+=w;r=nr}
     return r};
+  // over a bottomless chasm open to the sky (it snows into it): a path of stops - ice blocks, crumbling slabs and
+  // lifts - to a ledge on the far side. stop: {k:'block'|'crumb'|'lift', g: gap before it, w, r (row; lift: from -> to)}
+  const liftIce=(c,w,ra,rb,sp)=>{const y0=Math.min(ra,rb)*TS,y1=Math.max(ra,rb)*TS;
+    plats.push({style:'ice',x:c*TS,y:rb*TS,w:w*TS,h:16,x0:c*TS,x1:c*TS,vx:0,y0,y1,vy:(rb<ra?-1:1)*sp,wt:.7})};
+  const skyRun=(stops,nf,L)=>{run(2,H);const c0=x,todo=[];let r=fl,cx=x;
+    for(const st of stops){const land=st.k==='lift'?st.from:st.r;
+      const g=clamp(st.g,1,Math.max(1,maxGap(land-r,false,.72)));cx+=g;const at=cx;
+      todo.push(()=>{if(st.k==='block')iceBlock(at,st.r,st.w);else if(st.k==='crumb')crumbIce(at,st.r,st.w);else liftIce(at,st.w,st.from,st.to,st.sp||85+L*15);
+        spore(at+(st.w>>1),(st.k==='lift'?Math.min(st.from,st.to):st.r)*TS-30)});
+      cx+=st.w;r=st.k==='lift'?st.to:st.r}
+    cx+=clamp(2,1,Math.max(1,maxGap(nf-r,false,.72)));
+    for(let c=c0;c<cx;c++)carve(c,0,ROWS-1);skylights.push({x0:c0*TS,x1:cx*TS,fy:WH,acc:0});
+    for(const f of todo)f();
+    x=cx;fl=nf;run(4,H);return c0};
   const landOn=(top,r,nf)=>{const g=clamp(2,1,Math.max(1,maxGap(nf-r,false,.75)));for(let i=0;i<g;i++)pit(x+i,top);x+=g;fl=nf};
   // strong but few: at most three golems and three witches in the whole cave
   const golemOK=()=>golems<3&&progress>.12, witchOK=()=>witches<3&&progress>.1;
@@ -5221,6 +5238,24 @@ function buildIce(seed,attempt){
       for(let i=0;i<n;i++)pit(x+i,top);
       for(let i=1;i<n-1;i+=3)crumbIce(x+i,fl,Math.min(2,n-1-i));
       arc(x,x+n-1,fl*TS-40,50);x+=n;run(4,hh)},
+    // chasms under an open roof, with snow falling in: lifts, ice blocks and crumbling slabs at different heights
+    skyLiftUp(L){stepFl(clamp(fl,FMIN+5,FMAX));const f0=fl;
+      skyRun([{k:'crumb',g:2,w:2,r:f0},{k:'lift',g:1,w:2,from:f0,to:f0-4}],f0-4,L);
+      if(L>0&&witchOK()&&chance(.35)){spawnAt('iceWitch',x-8,fl-4);witches++}},
+    skyLiftDown(L){stepFl(clamp(fl,FMIN,FMAX-5));const f0=fl;
+      skyRun([{k:'block',g:2,w:2,r:f0-1},{k:'lift',g:1,w:2,from:f0-1,to:f0+3},{k:'crumb',g:2,w:L>1?1:2,r:f0+3}],f0+4,L)},
+    skyStones(L){stepFl(clamp(fl,FMIN+3,FMAX));const f0=fl,n=L>1?1:2;
+      skyRun([{k:'block',g:2,w:3,r:f0-1},{k:'crumb',g:2,w:n,r:f0-2},{k:'block',g:2,w:2,r:f0-3},{k:'crumb',g:2,w:n,r:f0-1},{k:'crumb',g:1,w:n,r:f0}],f0,L);
+      if(L>0&&chance(.45))spawnAt('iceSlime',x-2,fl)},
+    skyTwinLifts(L){stepFl(clamp(fl,FMIN+4,FMAX-1));const f0=fl;
+      skyRun([{k:'lift',g:2,w:2,from:f0,to:f0-3},{k:'crumb',g:2,w:2,r:f0-3},{k:'lift',g:2,w:2,from:f0-3,to:f0+1,sp:110+L*15}],f0+1,L);
+      if(L>0&&witchOK()&&chance(.3)){spawnAt('iceWitch',x-7,fl-4);witches++}},
+    skyCrumbClimb(L){stepFl(clamp(fl,FMIN+4,FMAX));const f0=fl,w=L>1?1:2;
+      skyRun([{k:'crumb',g:2,w,r:f0-1},{k:'crumb',g:2,w,r:f0-2},{k:'crumb',g:2,w,r:f0-3},{k:'block',g:2,w:3,r:f0-4},{k:'crumb',g:2,w,r:f0-3},{k:'crumb',g:2,w,r:f0-2}],f0-1,L);
+      if(L>0&&witchOK()&&chance(.35)){spawnAt('iceWitch',x-9,fl-5);witches++}},
+    skyGauntlet(L){stepFl(clamp(fl,FMIN+4,FMAX));const f0=fl;
+      skyRun([{k:'crumb',g:2,w:2,r:f0},{k:'lift',g:1,w:2,from:f0,to:f0-3},{k:'block',g:2,w:2,r:f0-3},{k:'crumb',g:2,w:1,r:f0-2},{k:'crumb',g:2,w:1,r:f0-1},{k:'crumb',g:2,w:1,r:f0}],f0,L);
+      if(L>0&&chance(.4))spawnAt('iceSlime',x-2,fl)},
     // crumbling-slab trials: stairs up, stairs down, a zigzag and a long bridge with a safe ice island halfway
     crumbStairs(L){const hh=6,k=3+(L>1?1:0);stepFl(clamp(fl,FMIN+k+1,FMAX),hh);run(2,hh);const top=fl-k-1-hh;
       const r=slabs(top,fl,Array.from({length:k},()=>[ri(1,2),-1,L>1?1:2]));landOn(top,r,r-1);run(4,hh)},
@@ -5313,8 +5348,10 @@ function buildIce(seed,attempt){
   run(12,6,false);deco('torch',10,fl*TS);sporeRow(5,8,fl);
   const total=ri(17,19);
   const W={tunnel:1.6,hall:1.5,slide:1.5,chasm:1.6,climb:1.9,descent:1.8,snake:1.9,crystal:1.4,nook:1,skylight:.35,iceBridge:1.1,
-    crumbStairs:.8,crumbDrop:.7,crumbZig:.8,crumbIsle:.7};
-  const CRUMB=['iceBridge','crumbStairs','crumbDrop','crumbZig','crumbIsle'];
+    crumbStairs:.8,crumbDrop:.7,crumbZig:.8,crumbIsle:.7,
+    skyLiftUp:.45,skyLiftDown:.45,skyStones:.5,skyTwinLifts:.6,skyCrumbClimb:.5,skyGauntlet:.6};
+  const CRUMB=['iceBridge','crumbStairs','crumbDrop','crumbZig','crumbIsle','skyLiftUp','skyLiftDown','skyStones','skyTwinLifts','skyCrumbClimb','skyGauntlet'];
+  const SKY_T=CRUMB.slice(5);   // the open-roof chasms are medium or hard: rare early on
   // the roof opens to the sky at least twice: once in each half of the cave
   const skyAt=new Set([ri(2,Math.floor(total*.42)),ri(Math.floor(total*.58),total-2)]);
   const secKinds=[],secPool=[['falseFloor',1],['crackHall',1],['shelf',1]],nSec=chance(.75)?2:1;
@@ -5334,6 +5371,7 @@ function buildIce(seed,attempt){
       if(ty==='climb')w*=fl-4<FMIN?0:fl>=14?1.8:fl<=10?.4:1;
       if(ty==='descent')w*=fl+3>FMAX?0:fl<=10?1.8:fl>=14?.4:1;
       if(i<2&&(ty==='chasm'||CRUMB.indexOf(ty)>=0))w*=.3;
+      if(SKY_T.indexOf(ty)>=0&&progress<.25)w*=.2;
       if(CRUMB.indexOf(ty)>=0&&recent.slice(-2).some(t=>CRUMB.indexOf(t)>=0))w*=.25;   // not two slab trials in a row
       if(w>0)cands.push([ty,w])}
     const ty=skyAt.has(i)&&last!=='skylight'?'skylight':wpick(cands);PLAN.push({t:ty,L,c:x,fl});SEG[ty](L);last=ty;recent.push(ty);sinceCP++;
@@ -5375,11 +5413,14 @@ function validateIce(){
 }
 function validateIceGraph(){
   const goalC=Math.floor(ARENA_L/TS), nodes=[], byCol=Array.from({length:COLS},()=>[]);
-  const add=(c,y,k)=>{if(c<0||c>=COLS)return;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n)};
+  const add=(c,y,k)=>{if(c<0||c>=COLS)return null;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n);return n};
+  const rides=[];   // [top node, bottom node] of every column of a lift
   const free=t=>!isSolidT(t);
   for(let c=0;c<COLS;c++)for(let r=2;r<ROWS;r++){const t=grid[r][c],up=grid[r-1][c];
     if(isFloorT(t)&&free(up)&&up!==T_THORN&&free(grid[r-2][c]))add(c,r*TS,t===T_PLANK?'plank':'floor')}
-  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
+  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);
+    if(pl.vy&&pl.y0!==pl.y1){for(let c=a;c<b;c++){const t=add(c,pl.y0,'plat'),d=add(c,pl.y1,'plat');if(t&&d)rides.push([t,d])}continue}
+    for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
   const clearCol=(c,r0,r1)=>{if(c<0||c>=COLS)return false;for(let r=r0;r<=r1;r++){if(r<0)return false;if(isSolidT(grid[r][c]))return false}return true};
   const oneway=k=>k==='plank'||k==='plat';
   const canMove=(a,b)=>{
@@ -5395,6 +5436,7 @@ function validateIceGraph(){
     return true;
   };
   for(const a of nodes)for(let c=Math.max(0,a.c-4);c<=Math.min(COLS-1,a.c+8);c++)for(const b of byCol[c])if(b!==a&&canMove(a,b)){a.out.push(b);b.inn.push(a)}
+  for(const [t,d] of rides){t.out.push(d);d.inn.push(t);d.out.push(t);t.inn.push(d)}
   const start=byCol[3].find(n=>n.y===startY)||byCol[3][0];if(!start)return{ok:false,why:'start'};
   const fw=new Set([start]),q=[start];
   while(q.length){const a=q.shift();for(const b of a.out)if(!fw.has(b)){fw.add(b);q.push(b)}}
@@ -5419,11 +5461,16 @@ function openIceGate(){
   iceGate=[];sfx('shatter');shake(.3,6);
 }
 function snowPuff(x,y,n){for(let i=0;i<n;i++)parts.push({x:x+rand(-14,14),y:y+rand(-8,8),vx:rand(-120,120),vy:rand(-220,-40),g:600,c:Math.random()<.5?'rgba(255,255,255,.95)':'rgba(215,236,252,.95)',s:rand(4,9),life:rand(.3,.6),max:0,t:'puff'})}
+// snow falls in a skylight while it is in view. When it comes into view, the air below the roof is filled with flakes
+// at once, as if it had been snowing all along (not a first wave that has just started to fall).
+function snowFlake(s,y,vy){parts.push({x:rand(s.x0+4,s.x1-4),y,vx:rand(-14,14),vy,g:0,c:'#fff',s:rand(1.8,4),life:(s.fy-y)/vy,max:0,t:'snow',ph:rand(0,6)})}
 function updateSnow(dt){
-  for(const s of skylights){if(s.x1<camX-60||s.x0>camX+VW+60)continue;
-    s.acc+=dt*(s.x1-s.x0)/TS*3;
-    while(s.acc>=1){s.acc--;const y=Math.max(-10,camY-OFFY-10),vy=rand(45,90);if(y>=s.fy)break;
-      parts.push({x:rand(s.x0+4,s.x1-4),y,vx:rand(-14,14),vy,g:0,c:'#fff',s:rand(1.8,4),life:(s.fy-y)/vy,max:0,t:'snow',ph:rand(0,6)})}}
+  for(const s of skylights){if(s.x1<camX-60||s.x0>camX+VW/camZ+60){s.on=false;continue}
+    const rate=(s.x1-s.x0)/TS*3;
+    if(!s.on){s.on=true;const y0=Math.max(-10,camY-OFFY-10),n=Math.min(260,Math.round(rate*(s.fy-y0)/67));
+      for(let i=0;i<n;i++)snowFlake(s,rand(y0,s.fy-4),rand(45,90))}
+    s.acc+=dt*rate;
+    while(s.acc>=1){s.acc--;const y=Math.max(-10,camY-OFFY-10);if(y>=s.fy)break;snowFlake(s,y,rand(45,90))}}
 }
 // ==== levels/ice/draw.js ====
 /* ---------- ice cave drawing ---------- */
@@ -5661,11 +5708,14 @@ const ICE_EDRAW={
     const hw=19*sx,hh=27/sx,f=e.face;
     shadow(0,0,hw);blob(0,0,hw,hh);
     ctx.fillStyle=col(e,'#9fdcf5');ctx.fill();ctx.lineWidth=2.1;ctx.strokeStyle=INK;ctx.stroke();
-    // frosty cap and a few crystals growing on top
+    // a frosty cap and lines of cracked ice running over the round body (no spikes)
     ctx.save();blob(0,0,hw,hh);ctx.clip();ctx.fillStyle=col(e,'#e6f7ff');ctx.beginPath();ctx.ellipse(0,-hh*1.02,hw*1.1,hh*.36,0,0,7);ctx.fill();
-    ctx.fillStyle='rgba(70,140,190,.25)';ctx.beginPath();ctx.ellipse(0,0,hw*1.2,hh*.3,0,0,7);ctx.fill();ctx.restore();
-    ctx.fillStyle=col(e,'#c9f0ff');ctx.lineWidth=1.6;
-    for(const [x,hgt,a] of [[-6,9,-.3],[2,12,.05],[9,8,.4]]){ctx.save();ctx.translate(x*sx,-hh*.93);ctx.rotate(a);ctx.beginPath();ctx.moveTo(-3,2);ctx.lineTo(0,-hgt);ctx.lineTo(3,2);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+    ctx.fillStyle='rgba(70,140,190,.25)';ctx.beginPath();ctx.ellipse(0,0,hw*1.2,hh*.3,0,0,7);ctx.fill();
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    for(const pts of [[[-.95,-.35],[-.55,-.45],[-.35,-.75],[-.1,-.85]],[[-.55,-.45],[-.6,-.15]],[[.95,-.25],[.6,-.3],[.45,-.6],[.6,-.85]],[[.6,-.3],[.4,-.05],[.55,.1]],[[-.2,-.05],[.05,-.2],[.2,-.12]]])
+      pts.forEach(([u,v],i)=>i?ctx.lineTo(u*hw,v*hh):ctx.moveTo(u*hw,v*hh));
+    ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=2.6;ctx.stroke();ctx.strokeStyle='rgba(40,90,140,.7)';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.restore();ctx.strokeStyle=INK;
     ctx.fillStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.ellipse(-hw*.45,-hh*.62,3.5,6,-.5,0,7);ctx.fill();
     eyes(f*3,-hh*.5,f,6.5,3,true);
     if(e.state==='bwind'||e.state==='breath'){ctx.fillStyle=INK;ctx.beginPath();ctx.ellipse(f*(hw*.55),-hh*.28,e.state==='breath'?4.5:2.5,e.state==='breath'?5:3,0,0,7);ctx.fill()}
@@ -5765,7 +5815,7 @@ function updateIceShot(b,dt,pb){
       b.x+=b.vx*dt;b.y+=b.vy*dt;
       if(Math.random()<.5)parts.push({x:b.x+rand(-10,10),y:b.y+rand(-10,10),vx:0,vy:20,g:0,c:'rgba(200,240,255,.8)',s:rand(2,4),life:.35,max:0,t:'dot'});
       if(b.life<=0||b.y>WH+40||b.y<-200){b.dead=true;if(b.life<=0)iceShards(b.x,b.y,10,170)}   // flies through walls and floors
-      else if(!P.dead&&circleBox(b.x,b.y,b.r*.8,pb)){hurt(b.x);b.dead=true;iceShards(b.x,b.y,10,170);sfx('shatter')}
+      else if(!P.dead&&!b.hitP&&circleBox(b.x,b.y,b.r*.8,pb)){hurt(b.x);b.hitP=true;iceShards(b.x,b.y,6,150);sfx('shatter')}   // it hurts once and flies on
       return}
     case 'snowball':
       b.vy+=b.g*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.rot=(b.rot||0)+dt*8;
@@ -5952,7 +6002,7 @@ function updateSnowman(dt){
   // stomping on the bucket hurts it
   if(!P.dead&&P.vy>0&&B.stompCD<=0&&Math.abs(pcx-head.x)<head.r+14&&P.prevBottom<=headTop+14&&P.y+P.h>=headTop&&bossHittable()&&B.state!=='intro'){
     hitBoss(DMG_STOMP,head.x,headTop);gainMana(MANA_HIT);B.sqv[2]+=6;B.stompCD=.25;clang(head.x,headTop);
-    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*Math.sqrt(1.3));P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
+    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*1.3);P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
     P.vx+=(pcx<head.x?-1:1)*120;
     if(B.state==='dying')return}
   const above=!P.dead&&Math.abs(pcx-cx)<100&&P.y+P.h<headTop+10;
@@ -6182,7 +6232,8 @@ registerLevel(4,{
   plank:['#cdeefc','#8cc3e3'], thorn:'#d4f1ff',
   openRubble:true,             // smashed crystal walls show the cave behind, not dark earth
   update:dt=>{updateSnow(dt);openIceGate()}, drawBG:drawIceBG,
-  exitRight:true,              // the level goes on past the boss hall: the camera may follow once the boss is beaten drawSolid:drawIceSolid, drawBack:drawSkylights,
+  drawSolid:drawIceSolid, drawBack:drawSkylights,
+  exitRight:true,              // the level goes on past the boss hall: the camera may follow once the boss is beaten
   // glassy frozen floor: very slippery; clear ice blocks: a little
   floorControl:p=>{const iu=iceUnder(p);return iu===2?{acc:760,dec:250,maxv:1.15}:iu===1?{acc:1700,dec:950}:null},
   // sparkles fly from under her feet while she slides on the glassy floor
@@ -6248,7 +6299,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
     get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
-    croc:()=>crocChoose(),dragon:()=>dragonChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
+    croc:()=>crocChoose(),dragon:()=>dragonChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
 // ==== main.js ====
 /* ---------- main loop (render capped at 60 fps, fixed 120 Hz physics) ---------- */
 newGame();

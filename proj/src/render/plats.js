@@ -19,6 +19,7 @@ function drawCrumble(pl){
 function drawPlats(){
   for(const pl of plats){
     if(pl.crumble){drawCrumble(pl);continue}
+    if(pl.style&&PLAT_STYLES[pl.style]){if(pl.x+pl.w>camX-40&&pl.x<camX+VW+40){ctx.save();ctx.translate(pl.x+pl.w/2,pl.y+8);PLAT_STYLES[pl.style](pl,pl.w);ctx.restore()}continue}
     if(pl.swamp||pl.lift){if(pl.x+pl.w>camX-40&&pl.x<camX+VW+40)drawRaft(pl);continue}
     ctx.fillStyle=BIOME==='desert'?'#e6c98f':'#e0c89a'; ctx.strokeStyle=INK; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(pl.x,pl.y+4);
