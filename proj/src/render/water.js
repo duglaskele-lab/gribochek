@@ -23,9 +23,10 @@ const waterTint=()=>BIOME==='desert'?'rgba(70,170,190,.55)':BIOME==='swamp'?'rgb
 // everything below the surface of the hydra's poison, which is drawn behind her.
 let tintCv=null,tintCx=null;
 function drawPlayerTint(wc){
-  const fr=P&&P._fr; if(!fr||!sheet.complete) return;
-  const [n,i,cx,by,face,alpha,sy]=fr, f=FRAMES[n][i]; if(!f) return;
-  const bx=cx-80,byy=by-150,bw=160,bh=170;
+  const fr=P&&P._fr; if(!fr) return;
+  // _fr: [anim, frame, x, bottom, face, alpha, squash, atlas?, frame rect?, scale?] - Raithwyn passes her own atlas
+  const [n,i,cx,by,face,alpha,sy]=fr, img=fr[7]||sheet, f=fr[8]||FRAMES[n][i]; if(!f||!img.complete) return;
+  const big=!!fr[7], bx=cx-(big?110:80),byy=by-(big?215:150),bw=big?220:160,bh=big?235:170;
   const zones=[];
   // rock tiles touching water (beside, above or below it) count as under water
   const cA=Math.floor(bx/TS),cB=Math.floor((bx+bw)/TS),rA=Math.max(0,Math.floor(byy/TS)),rB=Math.min(ROWS-1,Math.floor((byy+bh)/TS));
@@ -42,8 +43,8 @@ function drawPlayerTint(wc){
   if(tintCv.width<W||tintCv.height<Hh){tintCv.width=Math.max(W,tintCv.width);tintCv.height=Math.max(Hh,tintCv.height)}
   const silhouette=col=>{const t=tintCx;t.setTransform(1,0,0,1,0,0);t.globalCompositeOperation='source-over';t.clearRect(0,0,tintCv.width,tintCv.height);
     t.setTransform(S,0,0,S,-bx*S,-byy*S);
-    const [fx,fy,fw,fh,ax]=f, sc=SC*(ANIM_SCALE[n]||1);
-    t.save();t.globalAlpha=alpha;t.translate(cx,by);t.scale(face,sy);t.drawImage(sheet,fx,fy,fw,fh,-ax*sc,-fh*sc,fw*sc,fh*sc);t.restore();
+    const [fx,fy,fw,fh,ax]=f, sc=fr[9]||SC*(ANIM_SCALE[n]||1);
+    t.save();t.globalAlpha=alpha;t.translate(cx,by);t.scale(face,sy);t.drawImage(img,fx,fy,fw,fh,-ax*sc,-fh*sc,fw*sc,fh*sc);t.restore();
     t.globalCompositeOperation='source-in';t.setTransform(1,0,0,1,0,0);t.fillStyle=col;t.fillRect(0,0,tintCv.width,tintCv.height);
     t.globalCompositeOperation='source-over'};
   const blit=()=>ctx.drawImage(tintCv,0,0,W,Hh,bx,byy,W/S,Hh/S);

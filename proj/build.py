@@ -17,8 +17,9 @@ def rd(p):
 def build(markers=True, out='dist/gribochek.html'):
     files=[l.strip() for l in rd('src/manifest.txt').splitlines() if l.strip() and not l.strip().startswith('#')]
     atlas=base64.b64encode(open(os.path.join(ROOT,'assets/sprites.png'),'rb').read()).decode()
+    raith=base64.b64encode(open(os.path.join(ROOT,'assets/raith.webp'),'rb').read()).decode()   # Raithwyn's frames
     page=(rd('src/page.html').replace('{{STYLE}}',rd('src/style.css'))
-          .replace('{{PRE}}',rd('src/sprites/frames.js')).replace('{{ATLAS}}',atlas))
+          .replace('{{PRE}}',rd('src/sprites/frames.js')).replace('{{ATLAS}}',atlas).replace('{{RAITH}}',raith))
     head,tail=page.split('{{CODE}}')
     line=head.count('\n')+1            # 1-based line of the first code line
     chunks=[];linemap=[]

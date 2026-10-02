@@ -18,6 +18,8 @@ const SHOP=[
  {id:'shots',price:30,icon:shotsIcon(3,true)},
  {id:'cloak',price:50,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M14 6 H26 L35 34 Q28 30 20 35 Q12 30 5 34Z" fill="#7a4ab8" stroke="#2b1a12" stroke-width="2.5" stroke-linejoin="round"/><path d="M14 6 Q20 13 26 6" fill="#5a3290" stroke="#2b1a12" stroke-width="2"/><circle cx="20" cy="11" r="2.6" fill="#f2b830" stroke="#2b1a12" stroke-width="1.5"/><path d="M15 20 L12 31 M25 20 L28 31" stroke="#5a3290" stroke-width="2"/></svg>`},
  {id:'umbrella',price:60,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M3 20 A17 12 0 0 1 37 20 Q32 17 28.5 20 Q24 17 20 20 Q16 17 11.5 20 Q8 17 3 20Z" fill="#e33b2e" stroke="#2b1a12" stroke-width="2.5" stroke-linejoin="round"/><path d="M20 8 Q14 12 11.5 20 M20 8 Q26 12 28.5 20" fill="none" stroke="#fff3e0" stroke-width="2.5"/><path d="M20 20 V29 Q20 33 16 32" fill="none" stroke="#2b1a12" stroke-width="2.5" stroke-linecap="round"/></svg>`}];
+// the goods this hero can buy (Raithwyn: only hearts for now)
+const shopItems=()=>HERO().shop?SHOP.filter(it=>HERO().shop.indexOf(it.id)>=0):SHOP;
 const heartsSold=()=>Math.max(0,P.maxhp-HP_BASE), heartsMax=MAXHP_CAP-HP_BASE;
 // acorn hearts get dearer with every one sold: 20, 25, 30, 35; the second mushroom upgrade (three at once) costs 60
 const itemPrice=it=>it.id==='maxhp'?20+5*heartsSold():it.id==='shots'?(shotLvl>=2?60:30):it.price;
@@ -40,7 +42,7 @@ function shopProgress(it){
 }
 let shopSel=0;
 function buy(id){
-  const it=SHOP.find(i=>i.id===id); if(!it) return;
+  const it=shopItems().find(i=>i.id===id); if(!it) return;
   if(shopBlock(it)){sfx('deny');return}
   spores-=itemPrice(it);
   if(id==='heal') P.hp=Math.min(P.maxhp,P.hp+1);
@@ -60,12 +62,12 @@ function shopFocus(){
   btns[shopSel]&&btns[shopSel].focus();
 }
 function shopKey(e){
-  const n=SHOP.length+1;
+  const L=shopItems(),n=L.length+1;
   // the grid has 3, 2 or 1 columns depending on the window, so arrows move by the actual layout
   const d=NAV_DIRS[e.code]; if(d){e.preventDefault();menuNav(d[0],d[1]);return}
-  if(/^Digit[1-7]$/.test(e.code)&&!e.repeat){e.preventDefault();const i=+e.code.slice(5)-1;shopSel=i;buy(SHOP[i].id);return}
+  if(/^Digit[1-7]$/.test(e.code)&&!e.repeat){e.preventDefault();const i=+e.code.slice(5)-1;if(L[i]){shopSel=i;buy(L[i].id)}return}
   if((e.code==='Enter'||e.code==='Space'||e.code==='KeyK'||e.code==='KeyE')&&!e.repeat){e.preventDefault();
-    if(shopSel>=SHOP.length) screenAction(); else buy(SHOP[shopSel].id)}
+    if(shopSel>=L.length) screenAction(); else buy(L[shopSel].id)}
 }
 function openShop(){state='shop';shopMsg='';shopSel=0;P.vx=0;for(const k in inp) inp[k]=0;showScreen('shop')}
 

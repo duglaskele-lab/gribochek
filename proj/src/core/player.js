@@ -1,5 +1,5 @@
 /* ---------- player ---------- */
-function newPlayer(x,y){return{x,y,w:30,h:58,vx:0,vy:0,face:1,onGround:true,coyote:0,buffer:0,hp:3,maxhp:3,inv:0,hurtT:0,lockT:0,
+function newPlayer(x,y){return{x,y,w:HERO().w,h:HERO().h,vx:0,vy:0,face:1,onGround:true,coyote:0,buffer:0,hp:3,maxhp:3,inv:0,hurtT:0,lockT:0,
   shootCD:0,atkT:0,turnT:0,landT:0,airT:0,drop:0,ride:null,runPh:0,mana:MANA_BASE,pickT:-1,dead:false,deadT:0,fell:false,entering:false,enterT:0,alpha:1,prevBottom:0,jumpT:1,
   dashT:0,dashCD:0,airDash:true,dashDir:1,ghostT:0,peakY:0,heavyT:0,punchT:0,punchHit:null,inWater:false,flowV:0,windV:0,inSand:false,sandCD:0}}
 const maxMana=()=>MANA_BASE+MANA_UP*manaUps;
@@ -7,11 +7,18 @@ function gainMana(n){if(P.dead)return;P.mana=Math.min(maxMana(),P.mana+n)}
 const airDashMax=()=>hasCloak?2:1;
 // K: a punch with a shockwave (1 damage); every punch that lands on a foe gives mana back
 function punch(){
-  const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
-  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});
+  const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();p.strong=false;sfx('punch');
+  if(HERO().wave) pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});
+}
+// Raithwyn's L: a strong punch for mana that sends a big shockwave over a medium distance
+function strongPunch(){
+  const p=P,st=HERO().strong;
+  if(p.mana<st.cost){p.shootCD=.25;sfx('deny');return}
+  p.mana-=st.cost;p.shootCD=st.t+.12;p.punchT=st.t;p.strong=true;p.punchHit=new Set();sfx('punch');sfx('dash');
+  pwaves.push({delay:st.t*.45,face:p.face,x:0,y:0,vx:0,life:st.life,hit:p.punchHit,dmg:st.dmg,big:true,noMana:true});
 }
 // once per punch (the punch and its shockwave share one set of hits): +mana for the first foe it hits
-function punchMana(set){if(!set.mana){set.mana=true;gainMana(MANA_HIT)}}
+function punchMana(set){if(!set.mana&&!set.noMana){set.mana=true;gainMana(MANA_HIT)}}
 // L: throw mushrooms - one, two or three of them (shop upgrades), paid with mana
 function throwShroom(){
   const p=P,n=shotLvl,cost=SHOT_COST[n];
@@ -69,28 +76,29 @@ function attackEnemy(e,dmg,srcX,fx,fy,test){
 }
 function clang(x,y){sfx('clang');for(let i=0;i<8;i++)parts.push({x,y,vx:rand(-200,200),vy:rand(-260,-40),g:900,c:'#fff3b0',s:rand(2,4),life:rand(.15,.35),max:0,t:'dot'})}
 function punchHits(){
-  const p=P, box={x:p.face>0?p.x+p.w/2:p.x+p.w/2-52,y:p.y+8,w:52,h:p.h-12};
-  const fx=p.x+p.w/2+p.face*40, fy=p.y+p.h/2;
+  const p=P, R=HERO().reach, box={x:p.face>0?p.x+p.w/2:p.x+p.w/2-R,y:p.y+8,w:R,h:p.h-12}, DMG=HERO().punch;
+  const fx=p.x+p.w/2+p.face*(R-12), fy=p.y+p.h/2;
   for(const e of enemies){ if(e.dead||p.punchHit.has(e)) continue;
     if(enemyHurtBoxes(e).some(b=>overlap(box,b))){p.punchHit.add(e);
-      if(attackEnemy(e,DMG_PUNCH,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.prop)punchMana(p.punchHit);if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
+      if(attackEnemy(e,DMG,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.prop)punchMana(p.punchHit);if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
       else {p.vx=-p.face*180}}}
-  if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG_PUNCH*m,fx,fy);punchMana(p.punchHit);shake(.06,3)}}
+  if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG*m,fx,fy);punchMana(p.punchHit);shake(.06,3)}}
   for(const b of eshots) if(b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect)) if(!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
 }
 function updateWaves(dt){
   for(const w of pwaves){
     if(w.delay>0){ w.delay-=dt;
       if(w.delay<=0){ if(P.dead||P.punchT<=0){w.life=0;continue}
-        w.face=P.face; w.x=P.x+P.w/2+w.face*34; w.y=P.y+P.h/2; w.vx=w.face*WAVE_SPEED+P.vx*.4 }
+        w.face=P.face; w.x=P.x+P.w/2+w.face*(w.big?40:34); w.y=P.y+P.h/2; w.vx=w.face*WAVE_SPEED+P.vx*.4;w.life0=w.life;
+        if(w.big){w.hit.noMana=true;shake(.15,5);dust(P.x+P.w/2+w.face*30,P.y+P.h,8,w.face)} }
       continue }
     w.life-=dt; w.x+=w.vx*dt;
     {const wc=Math.floor((w.x+w.face*10)/TS),wr=Math.floor(w.y/TS);if(solid(wc,wr)){breakWall(wc,wr);w.life=0;burst(w.x,w.y,6,'#fff',140);continue}}
-    const box={x:w.x-16,y:w.y-24,w:32,h:48};
+    const box=w.big?{x:w.x-28,y:w.y-52,w:56,h:96}:{x:w.x-16,y:w.y-24,w:32,h:48}, WD=w.dmg||DMG_PUNCH;
     for(const e of enemies){ if(e.dead||w.hit.has(e)) continue;
       if(enemyHurtBoxes(e).some(b=>overlap(box,b))){w.hit.add(e);
-        if(attackEnemy(e,DMG_PUNCH,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
-    if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(DMG_PUNCH*m,w.x,w.y);punchMana(w.hit)}}
+        if(attackEnemy(e,WD,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
+    if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(WD*m,w.x,w.y);punchMana(w.hit)}}
     for(const b of eshots) if((b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect))&&!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
   }
   pwaves=pwaves.filter(w=>w.life>0);
@@ -131,7 +139,7 @@ function updatePlayer(dt){
   if(p.dead){
     p.deadT+=dt;
     if(!p.fell){p.vy+=G*dt;moveBody(p,dt)}
-    if(p.deadT>1.7) respawn();
+    if(p.deadT>(hero==='raith'&&!p.fell?RAITH_DEATH+.25:1.7)) respawn();
     return;
   }
   if(p.entering){
@@ -162,7 +170,7 @@ function updatePlayer(dt){
   dashEdge=false;
   if(p.dashT>0){
     p.dashT-=dt; p.vx=p.dashDir*DASH_V*(p.inWater?.6:p.inSand?.5:1);
-    p.ghostT-=dt; if(p.ghostT<=0){p.ghostT=.028;ghosts.push({x:p.x+p.w/2,y:p.y+p.h+2,face:p.face,life:.22,cape:hasCloak})}
+    p.ghostT-=dt; if(p.ghostT<=0){p.ghostT=.028;ghosts.push({x:p.x+p.w/2,y:p.y+p.h+2,face:p.face,life:.22,cape:hasCloak,hero})}
     if(p.dashT<=0) p.vx=p.dashDir*MAXV;
   }else if(dir){
     if(p.vx*dir<0) p.vx+=dir*dec*dt;
@@ -191,11 +199,11 @@ function updatePlayer(dt){
   }
   if(p.dashT>0) p.vy=0; else p.vy=Math.min(p.vy+g*dt,p.inWater?170:1000);
   // umbrella: holding jump while falling turns the fall into a slow glide
-  p.glide=hasUmbrella&&ctl&&inp.j&&!p.onGround&&!p.inWater&&!p.inSand&&p.dashT<=0&&p.vy>0&&!(p.springT>0);
+  p.glide=hasUmbrella&&HERO().umbrella&&ctl&&inp.j&&!p.onGround&&!p.inWater&&!p.inSand&&p.dashT<=0&&p.vy>0&&!(p.springT>0);
   if(p.glide&&p.vy>GLIDE_V) p.vy=approach(p.vy,GLIDE_V,3000*dt);
   if(p.inSand&&p.vy>SAND_SINK) p.vy=SAND_SINK;
   if(ctl&&(shootEdge||inp.s)&&p.shootCD<=0) punch();
-  else if(ctl&&(throwEdge||inp.m)&&p.shootCD<=0) throwShroom();
+  else if(ctl&&(throwEdge||inp.m)&&p.shootCD<=0){if(HERO().strong)strongPunch();else throwShroom()}
   shootEdge=false;throwEdge=false;
   if(p.onGround||p.dashT>0||p.inWater||p.inSand||p.glide) p.peakY=p.y; else p.peakY=Math.min(p.peakY,p.y);
   const was=p.onGround, preVy=p.vy;
@@ -214,11 +222,11 @@ function updatePlayer(dt){
   {const cx=p.x+p.w/2,cy=p.y+p.h/2;for(const z of secretZones) if(!z.found&&cx>z.x&&cx<z.x+z.w&&cy>z.y&&cy<z.y+z.h){
     z.found=true;secretsFound++;sfx('secret');stars(cx,cy-20,12);floater(cx,cy-50,T('fSecret'))}}
   if(hiddenPlanks) revealPlanks();
-  if(p.punchT<PUNCH_ACTIVE[0]&&p.punchT>PUNCH_ACTIVE[1]) punchHits();
+  if(!p.strong&&p.punchT<PUNCH_ACTIVE[0]&&p.punchT>PUNCH_ACTIVE[1]) punchHits();
   if(!was&&p.onGround){
     const fallH=p.y-p.peakY;
     if(fallH>HEAVY_H&&p.landTile===T_CRACK&&breakFloor(p.landC,p.landR)){p.onGround=false;p.vy=120}
-    else if(fallH>HEAVY_H&&!p.bounced){
+    else if(fallH>HEAVY_H&&!p.bounced&&HERO().heavyLand){
       p.heavyT=HEAVY_T;p.lockT=Math.max(p.lockT,HEAVY_T);p.vx*=.25;p.buffer=0;
       dust(p.x+p.w/2,p.y+p.h,14);stars(p.x+p.w/2,p.y+10,4);sfx('land');sfx('hit');shake(.18,6);
     }
