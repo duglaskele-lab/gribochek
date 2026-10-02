@@ -42,7 +42,7 @@ function showScreen(kind){
   if(kind==='shop'){
     card.innerHTML=`<h1 class="sm">${T('shopTitle')}</h1><p class="seller">${T('sellerLine')}</p>
     <div class="wallet">${SPORE_SVG}<span>${T('wallet')(spores)}</span></div>
-    <div class="shop-list">${SHOP.map((it,i)=>{const sold=soldOut(it),why=sold?'':shopBlock(it),nm=T(it.id+'Name'),pr=itemPrice(it);
+    <div class="shop-list">${shopItems().map((it,i)=>{const sold=soldOut(it),why=sold?'':shopBlock(it),nm=T(it.id+'Name'),pr=itemPrice(it);
       const pr2=shopProgress(it),pips=`<span class="pips"${pr2?` aria-label="${esc(T('boughtL'))}"`:''}>${pr2}</span>`;
       // the bought-marks and the price button share the bottom line of the card
       return `<div class="shop-row${sold?' sold':''}"><span class="shop-ico" aria-hidden="true">${it.icon}</span><span><b class="nm">${i+1}. ${nm}</b><br><small>${T(it.id+'Desc')}</small>${why?`<br><small class="why">${T(why)}</small>`:''}</span>
@@ -50,12 +50,16 @@ function showScreen(kind){
     <p class="shop-msg" aria-live="polite">${shopMsg}</p>
     <div class="actions"><button class="cap-btn" id="go">${T('leave')}</button></div>${isTouch?'':`<p class="shop-hint">${T('shopHint')}</p>`}`;
     card.querySelectorAll('.buy').forEach(b=>{b.addEventListener('click',()=>{shopSel=+b.dataset.i;buy(b.dataset.id)});b.addEventListener('focus',()=>{shopSel=+b.dataset.i;card.querySelectorAll('.shop-row').forEach((r,i)=>r.classList.toggle('sel',i===shopSel))})});
-    document.getElementById('go').addEventListener('focus',()=>{shopSel=SHOP.length;card.querySelectorAll('.shop-row').forEach(r=>r.classList.remove('sel'))});
+    document.getElementById('go').addEventListener('focus',()=>{shopSel=shopItems().length;card.querySelectorAll('.shop-row').forEach(r=>r.classList.remove('sel'))});
   }
   if(kind==='levels'){
-    card.innerHTML=`<h1>${T('chooseLevel')}</h1><div class="lvl-grid">${levelNums().map(l=>`<button class="lvl-btn" data-l="${l}"><b>${T('levelName')(l)}</b><small>${T('lvl'+l+'Desc')}</small></button>`).join('')}</div>
+    // who to play: the mushroom girl or Raithwyn (remembered; applies to the level started from here)
+    const heroRow=`<div class="hero-row"><span>${T('heroL')}</span><div class="seg">${Object.keys(HEROES).map(k=>`<button class="hero-btn" data-h="${k}" aria-pressed="${hero===k}">${T('hero_'+k)}</button>`).join('')}</div></div>`;
+    card.innerHTML=`<h1>${T('chooseLevel')}</h1>${heroRow}<div class="lvl-grid">${levelNums().map(l=>`<button class="lvl-btn" data-l="${l}"><b>${T('levelName')(l)}</b><small>${T('lvl'+l+'Desc')}</small></button>`).join('')}</div>
       <div class="boss-row"><h2>${T('bossRow')}</h2><p>${T('bossRowDesc')}</p><div class="boss-btns">${levelNums().map(l=>`<button class="boss-btn" data-b="${l}">${T('bossShort')(l)}</button>`).join('')}</div></div>
       <div class="actions"><button class="ghost-btn" id="go">${T('back')}</button></div>`;
+    card.querySelectorAll('.hero-btn').forEach(b=>b.addEventListener('click',()=>{setHero(b.dataset.h);sfx('select');
+      card.querySelectorAll('.hero-btn').forEach(q=>q.setAttribute('aria-pressed',q.dataset.h===hero))}));
     card.querySelectorAll('.lvl-btn').forEach(b=>b.addEventListener('click',()=>startAtLevel(+b.dataset.l)));
     card.querySelectorAll('.boss-btn').forEach(b=>b.addEventListener('click',()=>startBoss(+b.dataset.b)));
     focusSel='.lvl-btn';

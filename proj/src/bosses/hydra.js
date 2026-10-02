@@ -95,7 +95,7 @@ function hydraBounce(pb){
       P.vy=high?-HIGH_BOUNCE:-Math.round(720*Math.sqrt(1.5));P.y=top.y-P.h;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();P.bounceT=high?0:.14;P.peakY=P.y;
       h.sink=120;h.sinkT=.45;h.y+=45;h.flash=.06;shake(.12,4);sfx('jump');sfx('land');stars(P.x+P.w/2,P.y+P.h,5);dust(h.x,h.y-40,6);
       if(B.state==='fight'&&h.angry<=0){h.hops=h.hops.filter(t=>time-t<RAGE_WINDOW);h.hops.push(time);if(h.hops.length>=RAGE_HOPS)hydraEnrage(h)}
-      if(B.state==='fight') hydraDamage(h,DMG_HEAD_STOMP,h.x,h.y-40);
+      if(B.state==='fight') hydraDamage(h,DMG_HEAD_STOMP*HERO().stomp/DMG_STOMP,h.x,h.y-40);
       break}
   }
 }

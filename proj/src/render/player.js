@@ -5,6 +5,7 @@ function drawFrame(name,i,cx,by,face,alpha=1,sy=1){
   ctx.drawImage(sheet,fx,fy,fw,fh,-ax*s,-fh*s,fw*s,fh*s); ctx.restore();
 }
 function drawPlayer(){
+  if(hero==='raith'){drawRaith(P);return}
   const p=P, cx=p.x+p.w/2, by=p.y+p.h+2;
   let alpha=p.alpha;
   if(p.inv>0&&!p.dead&&Math.floor(p.inv*16)%2) alpha*=.35;
@@ -30,7 +31,7 @@ function drawPlayer(){
   else if(p.turnT>0){n='turn';i=0}
   else if(Math.abs(p.vx)>25){n='run';i=Math.floor(p.runPh)%4}
   else {n='idle';i=0;sy=1+Math.sin(time*4)*.018}
-  for(const g of ghosts){ctx.save();ctx.filter=g.cape?'sepia(1) saturate(4) hue-rotate(220deg) brightness(1.1)':'sepia(1) saturate(4) hue-rotate(-20deg) brightness(1.2)';drawFrame('run',1,g.x,g.y,g.face,g.life/.22*.45);ctx.restore()}
+  for(const g of ghosts){if(g.hero==='raith')continue;ctx.save();ctx.filter=g.cape?'sepia(1) saturate(4) hue-rotate(220deg) brightness(1.1)':'sepia(1) saturate(4) hue-rotate(-20deg) brightness(1.2)';drawFrame('run',1,g.x,g.y,g.face,g.life/.22*.45);ctx.restore()}
   if(p.glide&&!p.dead){n='jump';i=2}
   p._fr=[n,i,cx,by,p.face,alpha,sy];
   if(p.glide&&!p.dead) drawUmbrella(cx+p.face*4,p.y-16,alpha);   // behind her, so the shaft doesn't cross her face

@@ -9,7 +9,8 @@ function drawHUD(){
   // mana: a blue bar as long as the mana pool, with the mushrooms per throw next to it
   // the bar grows by a tenth for each upgrade (the pool by a quarter); no numbers, just the bar
   {const mm=maxMana(),bw=150*(1+.1*manaUps),bx=50,by=101,cost=SHOT_COST[shotLvl];
-   mushroom(30,114,11,Math.sin(time*3)*.12,false,false);
+   if(hero==='raith'){ctx.save();ctx.translate(30,110);ctx.lineCap='round';for(let j=0;j<3;j++){ctx.strokeStyle=INK;ctx.lineWidth=5-j;ctx.beginPath();ctx.arc(-j*6,0,12-j*3,-1,1);ctx.stroke();ctx.strokeStyle=j?'#e6d4ff':'#b77ee0';ctx.lineWidth=3-j;ctx.stroke()}ctx.restore()}
+   else mushroom(30,114,11,Math.sin(time*3)*.12,false,false);
    ctx.fillStyle='rgba(43,26,18,.75)';ctx.beginPath();ctx.roundRect(bx-3,by-3,bw+6,20,10);ctx.fill();
    ctx.fillStyle=P.mana>=cost?'#3b7fe0':'#7a8aa6';ctx.beginPath();ctx.roundRect(bx,by,Math.max(0,bw*P.mana/mm),14,7);ctx.fill();
    ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(bx+4,by+2,Math.max(0,bw*P.mana/mm-8),3);

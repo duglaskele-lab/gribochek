@@ -55,6 +55,8 @@ h2{font-size:24px;font-weight:400;margin:14px 0 8px}
   .shop-row small{font-size:14px;line-height:1.15}.card.wide .actions{margin-top:6px}.card.wide p.shop-msg{margin-top:2px;min-height:1.1em}.card.wide .shop-hint{display:none}}
 @media (max-height:460px){.shop-list .shop-row small:not(.why):not(.sold-n){display:none}}
 .card.lv{max-width:min(700px,100%)}
+.hero-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0 2px;font-size:19px}
+.hero-row .seg{margin:0}.hero-btn[aria-pressed="true"]{background:var(--cap);color:#fff;text-shadow:1px 1px 0 var(--ink)}
 .lvl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
 @media (max-width:560px){.lvl-grid{grid-template-columns:1fr}}
 .boss-row{margin:14px 0 4px;text-align:left}
