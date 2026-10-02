@@ -1,8 +1,19 @@
 /* ---------- crocodile ---------- */
-function makeCroc(){return{kind:'croc',x:ARENA_L+22*TS,y:FLOOR-112,w:270,h:112,hp:44,max:44,face:-1,state:'sleep',t:0,vx:0,vy:0,jaw:0,flash:0,leg:0,aboveT:0,last:'',repeat:0,windMax:.85,high:false,phase:1,spitCD:0,shots:0}}
+function makeCroc(){return{kind:'croc',x:ARENA_L+22*TS,y:FLOOR-112,w:270,h:112,hp:44,max:44,face:-1,state:'sleep',t:0,vx:0,vy:0,jaw:0,flash:0,leg:0,aboveT:0,last:'',repeat:0,windMax:.85,high:false,phase:1,spitCD:0,shots:0,chompRun:0}}
 function crocBody(){return{x:B.x+18,y:B.y+26,w:B.w-30,h:B.h-26}}
 function crocTail(){const cx=B.x+B.w/2,by=B.y+B.h;return B.face>0?{x:cx-218,y:by-82,w:101,h:70}:{x:cx+117,y:by-82,w:101,h:70}}
 function crocBite(){const hx=B.face>0?B.x+B.w-30:B.x-80;return{x:hx,y:B.y+10,w:110,h:70}}
+const CHOMP_LUNGE=62;   // how far the bite lunge carries it forward (420 px/s braking at 1400 px/s² for .28 s)
+const CHOMP_MAX=2;      // never more than two bites in a row
+// the danger zone of the bite, drawn while it opens its jaws: where the bite will land after the lunge
+function drawCrocBiteZone(){
+  const wind=B.state==='chompWind', b=crocBite(), k=wind?clamp(1-B.t/.45,0,1):1;
+  const x=b.x+(wind?B.face*CHOMP_LUNGE:0), a=wind?.12+.22*k:.38, pulse=.75+.25*Math.sin(time*30);
+  ctx.save();ctx.fillStyle=`rgba(230,40,30,${a*pulse})`;ctx.strokeStyle=`rgba(200,20,10,${(a+.25)*pulse})`;ctx.lineWidth=3;ctx.setLineDash([10,7]);
+  ctx.beginPath();ctx.roundRect(x,b.y,b.w,FLOOR-b.y,12);ctx.fill();ctx.stroke();
+  ctx.setLineDash([]);ctx.fillStyle=`rgba(200,20,10,${(a+.15)*pulse})`;ctx.beginPath();ctx.ellipse(x+b.w/2,FLOOR-2,b.w/2,6,0,0,7);ctx.fill();
+  ctx.restore();
+}
 function crocMouth(){return{x:B.x+B.w/2+B.face*172,y:B.y+B.h-52}}
 // one rock of the spit burst: a fast arc that always lands at least MIN_D ahead of the mouth
 // and flies high over anything closer, so standing next to the crocodile is safe
@@ -31,9 +42,12 @@ function crocChoose(){
   const p2=B.phase===2;
   const dx=P.x+P.w/2-(B.x+B.w/2), adx=Math.abs(dx), above=playerAbove();
   B.face=dx>0?1:-1;
-  if(above&&B.aboveT>aboveLimit()) return crocLeap(true);
-  const opts=[];
-  if(!above&&adx<270) opts.push(['chomp',5]);
+  if(above&&B.aboveT>aboveLimit()){B.chompRun=0;return crocLeap(true)}
+  // the player is pressed against a wall of the arena: usually jump, so she can slip out under it instead of being pinned
+  if(!above&&Math.min(P.x-ARENA_L,ARENA_R-(P.x+P.w))<200&&Math.random()<.75){B.last='leap';B.repeat=0;B.chompRun=0;return crocLeap(false)}
+  const opts=[], biteOk=B.chompRun<CHOMP_MAX;
+  if(!above&&adx<270&&biteOk) opts.push(['chomp',5]);
+  if(!above&&adx<=180&&!biteOk) opts.push(['leap',3]);   // too many bites already: something else, even up close
   if(!above&&adx>280) opts.push(['charge',3]);
   if(adx>180||above) opts.push(['leap',above?3:2]);
   if(!above&&adx>320) opts.push(['walk',1.5]);
@@ -43,7 +57,7 @@ function crocChoose(){
   for(const o of opts) if(o[0]===B.last) o[1]*=B.repeat>=1?.15:.6;
   let r=Math.random()*opts.reduce((a,o)=>a+o[1],0), pk=opts[0][0];
   for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
-  B.repeat=pk===B.last?B.repeat+1:0; B.last=pk;
+  B.repeat=pk===B.last?B.repeat+1:0; B.last=pk; B.chompRun=pk==='chomp'?B.chompRun+1:0;
   if(pk==='chomp'){B.state='chompWind';B.t=p2?.34:.45}
   else if(pk==='charge'){B.state='windup';B.t=B.windMax=p2?.65:.85}
   else if(pk==='leap') crocLeap(false);
@@ -67,13 +81,13 @@ function updateCroc(dt){
       if(B.t<=0) crocChoose();break;
     case 'walk': {const dx=P.x+P.w/2-(B.x+B.w/2);B.face=dx>0?1:-1;B.vx=B.face*140*mult;B.t-=dt;
       if(playerAbove()&&B.aboveT>aboveLimit()){B.state='idle';B.t=.1}
-      else if(Math.abs(dx)<220&&!playerAbove()){B.state='chompWind';B.t=.4}else if(B.t<=0){B.state='idle';B.t=.3}}break;
+      else if(Math.abs(dx)<220&&!playerAbove()&&B.chompRun<CHOMP_MAX){B.state='chompWind';B.t=.4;B.chompRun++;B.last='chomp'}else if(B.t<=0){B.state='idle';B.t=.3}}break;
     case 'leapWind': B.vx=approach(B.vx,0,2000*dt);B.t-=dt;B.face=(P.x+P.w/2>B.x+B.w/2)?1:-1;
       if(Math.random()<.3) dust(B.x+B.w/2+rand(-100,100),FLOOR,1);
       if(B.t<=0) crocLaunch();break;
     case 'windup': B.vx=0;B.t-=dt;B.jaw=.25;
       if(Math.random()<.4) parts.push({x:B.x+B.w/2+B.face*150,y:B.y+45,vx:B.face*rand(40,120),vy:rand(-40,0),g:-30,c:'rgba(255,255,255,.8)',s:rand(4,7),life:.4,max:0,t:'puff'});
-      if(B.t<=0){B.state='charge';B.vx=B.face*580*mult;sfx('roar');B.jaw=.6}break;
+      if(B.t<=0){B.state='charge';B.vx=B.face*760*mult;sfx('roar');B.jaw=.6}break;
     case 'charge': if(Math.random()<.5)dust(B.x+B.w/2-B.face*100,FLOOR,1,-B.face);
       if(wall){B.state='stun';B.t=1.3;B.vx=0;B.jaw=0;shake(.45,13);sfx('boom');
         const n=p2?5:3;for(let i=0;i<n;i++)eshots.push({k:'rock',x:rand(ARENA_L+60,ARENA_R-60),y:-40-i*90,vy:0,g:1300,r:17})}break;
@@ -140,7 +154,9 @@ function drawCroc(){
   else{ctx.beginPath();ctx.ellipse(15,-37,2.5,6,0,0,7);ctx.fill();ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-2,-50);ctx.lineTo(26,-44);ctx.stroke()}
   ctx.restore();
   ctx.restore();
+  if(B.state==='chompWind'||B.state==='chomp') drawCrocBiteZone();
   if(B.state==='stun') for(let k=0;k<3;k++){const a=time*5+k*2.1;drawStar(cx+f*60+Math.cos(a)*40,B.y-10+Math.sin(a)*10,7,time*4)}
 }
 
-registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6});
+registerBoss('croc',{make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
+  dmgMult:()=>B.state==='enrage'?.4:1});   // while it changes into phase 2 it takes 60% less damage

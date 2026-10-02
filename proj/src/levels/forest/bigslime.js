@@ -1,7 +1,8 @@
 /* ---------- level 1 mini-boss: the giant purple slime ---------- */
 // It sleeps in a clearing in the second half of the forest (the generator builds the clearing, see level.miniboss).
 // Woken up, it hops after the player, crouches and leaps high to land on her (the landing sends a wave of goo
-// along the floor both ways), and spits blobs of goo that a punch can knock away. Every third of its health it sheds
+// along the floor both ways), rams her, sliding fast along the floor (it stops before any drop), and spits blobs
+// of goo that a punch can knock away. Every third of its health it sheds
 // a small purple slime, and when it dies it bursts into two more. It falls through one-way planks, so they are
 // no safe refuge, and it never leaves its clearing.
 const BS_W=150, BS_H=112;
@@ -66,9 +67,16 @@ function bsUpdate(e,dt){
       if(adx>20) e.face=Math.sign(dx);
       if(e.t<=0&&e.onGround&&!P.dead){
         if(e.hops>=(rage?1:2)){e.hops=0;
-          if(adx>140&&(e.cd<=0||Math.random()<.55)){e.state='crouch';e.t=rage?.4:.55;e.cd=0;sfx('creak')}
-          else{e.state='spitWind';e.t=rage?.4:.55;e.cd=-1}}
-        else{e.hops++;e.vy=rage?-560:-500;e.vx=e.face*(rage?210:165);e.onGround=false;e.state='air';e.big=false}
+          const opts=[['spit',2]];
+          if(adx>140) opts.push(['leap',e.last==='leap'?1:3]);
+          if(adx>180&&Math.abs(dy)<70) opts.push(['ram',e.last==='ram'?1:rage?4:3]);   // only when she is on its floor
+          let r=Math.random()*opts.reduce((a,o)=>a+o[1],0),pk=opts[0][0];for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
+          e.last=pk;
+          if(pk==='leap'){e.state='crouch';e.t=rage?.4:.55;sfx('creak')}
+          else if(pk==='ram'){e.state='ramWind';e.t=rage?.45:.6;e.face=Math.sign(dx)||e.face;sfx('creak')}
+          else{e.state='spitWind';e.t=rage?.4:.55}}
+        else{e.hops++;const vy=rage?560:500,vx=rage?210:165,reach=vx*2*vy/G;   // a hop never ends over a drop: then it hops in place
+          e.vy=-vy;e.vx=groundAhead(e,e.face,reach*2)?e.face*vx:0;e.onGround=false;e.state='air';e.big=false}
       }
       break;
     case 'crouch': // squeezes down, trembling, then jumps at the player
@@ -82,6 +90,20 @@ function bsUpdate(e,dt){
         else{e.squash=.18;shake(.12,3);dust(cx,e.y+e.h,4);sfx('land');e.state='idle';e.t=rage?.25:.35}
         e.vx=0}
       break;
+    case 'ramWind': // backs up a little, trembling and scraping the ground
+      e.vx=groundAhead(e,-e.face,TS*.4)?-e.face*45:0;
+      if(Math.random()<.4) dust(cx-e.face*e.w*.4,e.y+e.h,1,-e.face);
+      if(e.t<=0){e.state='ram';e.t=1.6;e.rx=cx;e.vx=e.face*(rage?660:560);sfx('roar');shake(.15,4)}
+      break;
+    case 'ram':{ // slides at her; stops before a drop, at the edge of the clearing or at a wall
+      e.vx=e.face*(rage?660:560);
+      if(Math.random()<.6) dust(cx-e.face*e.w*.45,e.y+e.h,1,-e.face);
+      const edge=e.face>0?e.x+e.w>=e.x1-2:e.x<=e.x0+2, passed=e.face*(cx-(P.x+P.w/2))>240;
+      if(e.hitWall||edge||!groundAhead(e,e.face,TS*.6)||passed||e.t<=0){
+        const hard=e.hitWall||edge;e.vx=0;e.state='ramStop';e.t=hard?.7:.45;e.squash=.25;
+        shake(hard?.3:.12,hard?7:3);sfx(hard?'boom':'land');dust(cx+e.face*e.w*.45,e.y+e.h,6,e.face)}
+      break}
+    case 'ramStop': e.vx=0;if(e.t<=0){e.state='idle';e.t=rage?.25:.4}break;
     case 'spitWind':
       e.vx=0;if(adx>20) e.face=Math.sign(dx);
       if(e.t<=0){bsSpit(e);e.state='idle';e.t=rage?.6:.85}
@@ -95,8 +117,12 @@ function bsDraw(e){
   else if(e.state==='air') sx=e.vy<0?.82:.9;
   else if(e.squash>0) sx=1+e.squash;
   else if(e.state==='spitWind') sx=.94;
+  else if(e.state==='ramWind') sx=.9+Math.sin(time*45)*.02;
+  else if(e.state==='ram') sx=1.14;
   const hw=e.w/2*sx,hh=e.h*.96/sx;
-  ctx.save();ctx.translate(cx,by);if(e.state==='crouch')ctx.translate(rand(-1.5,1.5),0);
+  ctx.save();ctx.translate(cx,by);if(e.state==='crouch'||e.state==='ramWind')ctx.translate(rand(-1.5,1.5),0);
+  if(e.state==='ram') ctx.transform(1,0,f*.22,1,0,0);          // leans forward into the charge
+  else if(e.state==='ramWind') ctx.transform(1,0,-f*.1,1,0,0);  // leans back before it
   shadow(0,0,hw);
   // body, with a darker core and bubbles floating up inside it
   blob(0,0,hw,hh);

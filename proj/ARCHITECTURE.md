@@ -71,7 +71,8 @@
 | `miniboss` | тип врага-минибосса: классический генератор строит для него поляну после чекпойнта во второй половине уровня (уровень 1 — `'bigSlime'`) |
 | `i18n:{ru:{…},en:{…}}` | тексты уровня: `lvlNameN, lvlNDesc, bossShortN, bossN, nextNTitle/Text/Tip` и реплики |
 
-**Босс** — `registerBoss(kind, {make, update(dt), draw(), hitMult?(test), contact?(pb), burst, nameKey, introT?, camBottom?})`.
+**Босс** — `registerBoss(kind, {make, update(dt), draw(), hitMult?(test), contact?(pb), dmgMult?(), burst, nameKey, introT?, camBottom?})`.
+- `dmgMult()` — множитель всего входящего урона (крокодил: 0.4 во время перехода во вторую фазу).
 - `make()` возвращает объект `B` с полями `{kind, x, y, w, h, hp, max, state, t, face, flash}`.
 - Обязательные состояния: `'sleep'` до входа на арену, `'intro'`, `'dying'` (ставит `hitBoss`) и `'dead'` (ставит `bossDefeated()`, его нужно вызвать в конце `'dying'`).
 - `hitMult(test)` возвращает множитель урона попадания (0 — промах). `test(box)` проверяет, задевает ли удар прямоугольник.
@@ -97,6 +98,11 @@ registerEnemy('iceGolem',{size:{w,h,hp}, update(e,dt), draw(e),
 - **Размеры и границы:** `TS=40` — размер тайла, `ROWS/COLS/WH` — размеры мира, `FLOOR` — пол арены, `ARENA_L/ARENA_R` — границы арены.
 - **Состояние игры:** `state` (`'title' 'play' 'pause' 'shop' 'next' 'win'`), `LEVEL`, `BIOME`, `arenaLocked`, `bossDead`.
 - **Камера:** `camX/camY`, `VW` — ширина вида, `time` — игровое время.
+
+## Общие правила игры
+
+- **Смерть игрока:** все враги (кроме ящиков, бочек и хижин) возвращаются в состояние начала уровня — убитые возрождаются, раненые лечатся. Снимок врагов `enemySnap` делается в `startLevel`, восстанавливается в `respawn()`.
+- **Быстрый сбор спор:** `collectSporesOnScreen(also?)` (в `core/projectiles.js`) — все споры на экране (и те, что выбрал `also(it)`) сами летят к игроку. Через 0,5 с после смерти босса так собираются и все его споры (`magnetT`).
 
 ## Отладка и тесты
 

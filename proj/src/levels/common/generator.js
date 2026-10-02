@@ -402,6 +402,9 @@ function buildLevel(level,seed,attempt){
      if(taken.some(q=>Math.abs(q-c)<(PROPS.has(spawns.find(z=>z.c===q)?.type)?7:2))) continue;
      spawn(pick(kinds),c);taken.push(c);nb--;
      if(chance(.3)&&boxCols.indexOf(c+1)>=0){spawn(pick(kinds),c+1);taken.push(c+1)}}}
+  // mummies get stuck inside the ruined buildings: inside the ruined town they are replaced by other desert foes
+  const inRuins=c=>ruins.some(q=>c*TS+TS>=q.x0-TS&&c*TS<=q.x1+TS);
+  for(const s of spawns) if(s.type==='mummy'&&inRuins(s.c)) s.type=pick(['scorpion','scarab']);
   for(const s of spawns){
     if(s.c<22||(s.type!=='parrot'&&!PROPS.has(s.type)&&!(s.extra&&s.extra.force)&&safe.some(c=>Math.abs(c-s.c)<5))) continue;
     const e=makeEnemy(s.type,s.c,s.extra);if(!e) continue; enemies.push(e);

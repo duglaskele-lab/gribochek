@@ -12,7 +12,7 @@ function drawPlayer(){
   p._fr=null;
   if(p.dead){ if(p.fell) return; n=p.deadT<.25?'hurt':'death'; i=0 }
   else if(p.entering){n='door';i=p.enterT<.35?0:1}
-  else if(p.pickT>=0){const t=p.pickT; if(t<.15){n='pickup';i=0}else if(t<.35){n='pickup';i=1}else if(t<.55){n='pickup';i=2}else if(t<.8){n='special';i=1}else{n='special';i=2}}
+  else if(p.pickT>=0){const t=p.pickT; if(t<.15){n='pickup';i=0}else if(t<.35){n='pickup';i=1}else{n='pickup';i=2}}
   else if(p.heavyT>0){const e=HEAVY_T-p.heavyT; if(e<HEAVY_T*.68){n='fall';i=e<HEAVY_T*.34?0:1}else{n='land';i=0}}
   else if(p.dashT>0){n='run';i=1}
   else if(p.punchT>0){n='attack';i=p.punchT>PUNCH_ACTIVE[0]?0:1}
