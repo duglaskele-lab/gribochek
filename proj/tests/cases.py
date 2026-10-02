@@ -104,7 +104,33 @@ def boss3(c): return boss_fight(c,3)
 @test('boss4','boss','ice')
 def boss4(c):
     return boss_fight(c,4,['idle','slamWind','slam','punchWind','punch','throwWind','headThrow','volleyWind','volley',
-                           'hopWind','hop','splitWind','split','reform','enrage'],secs=120)
+                           'hopWind','hop','splitWind','split','reform','enrage','clapWind','clapOut','clap','frostWind','frost'],secs=150)
+
+@test('snowman_moves','boss4','ice')
+def snowman_moves(c):
+    c.js('g.startBoss(4);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,out={},mid=(g.arena[0]+g.arena[1])/2;
+      const reset=()=>{B.state='idle';B.t=9;B.pieces=null;B.x=mid-B.w/2;B.y=g.B.y;B.vx=0;g.P.x=mid-400;g.P.vx=0;g.P.vy=0};
+      // the clap: hurts her in the air beside it, not on the ground
+      const clap=air=>{reset();const P=g.P;P.inv=0;P.hurtT=0;P.hp=5;P.x=mid+200;const y0=P.y;B.face=1;B.state='clapWind';B.t=.3;
+        let hurt=false;g.sim(1,()=>{if(air){P.y=y0-120;P.vy=0;P.onGround=false}if(P.hurtT>0)hurt=true;if(B.state==='idle')return false});P.y=y0;P.inv=1e9;return hurt};
+      out.clapAir=clap(true);out.clapGround=clap(false);
+      // 75% less damage while it is apart
+      reset();B.state='split';const h=B.hp;g.hitBoss(4,B.x,B.y);out.splitDmg=h-B.hp;B.state='idle';
+      // the frost beam walks away from it
+      reset();B.phase=2;B.face=1;g.P.x=mid-300;B.state='frostWind';B.t=.05;const xs=[];
+      g.sim(2,()=>{g.P.inv=1e9;if(B.frost&&B.state==='frost')xs.push(B.frost.gx);if(B.state==='idle')return false});
+      out.frostNear=xs[0]-mid;out.frostFar=xs[xs.length-1]-mid;
+      // after reassembly the arms start short
+      reset();B.forceThrow='roll';g.P.x=mid+400;B.state='throwWind';B.t=.05;B.tMax=.05;let arm=null;
+      g.sim(10,()=>{g.P.inv=1e9;if(B.state==='reform'&&arm===null&&B.hf){const b=B.pieces;arm=1}if(B.state==='reform'&&B.hf&&arm===1){arm=Math.hypot(B.hf.x-(B.x+B.w/2),B.hf.y-(B.y+80))}if(B.state==='idle'&&arm!==null)return false});
+      out.arm=arm;return out""")
+    assert r['clapAir'] and not r['clapGround'], r
+    assert abs(r['splitDmg']-1)<.01, r
+    assert 0<r['frostNear']<200 and r['frostFar']>400, r
+    assert r['arm'] is not None and r['arm']<140, r
+    return f"clap hits only in the air; frost beam {r['frostNear']:.0f} -> {r['frostFar']:.0f} px; arms regrow from {r['arm']:.0f} px"
 
 @test('snowman_throw','boss4','ice')
 def snowman_throw(c):
@@ -292,6 +318,17 @@ def dragon_armor(c):
       return [first,after,second,B.state]""")
     assert abs(r[0]-1)<.01 and abs(r[1]-4)<.01 and abs(r[2]-4)<.01, r
     return 'first inferno armoured, later ones not'
+
+@test('witch_flake','ice')
+def witch_flake(c):
+    # the witch's snowflake flies through rock and speeds up
+    c.start(4,3)
+    r=c.js("""const P=g.P;P.inv=1e9;g.enemies.length=0;const G=g.grid;
+      // fired along row 1, inside the rock of the cave roof
+      g.eshots.push({k:'flake',x:P.x,y:60,vx:230,vy:0,sp:230,home:0,r:17,life:4,rot:0});const b=g.eshots[g.eshots.length-1];let inRock=0;const v0=230;g.sim(1.5,()=>{P.inv=1e9;P.x=b.x+600;if(!b.dead&&G[Math.floor(b.y/40)]&&G[Math.floor(b.y/40)][Math.floor(b.x/40)]===1)inRock++});
+      return [inRock,Math.hypot(b.vx,b.vy),b.dead]""")
+    assert r[0]>60 and r[1]>500 and not r[2], r
+    return f'through rock for {r[0]} steps, speed 230 -> {r[1]:.0f}'
 
 @test('frog_warn','enemies')
 def frog_warn(c):
