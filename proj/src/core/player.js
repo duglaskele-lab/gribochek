@@ -15,7 +15,7 @@ function punchMana(set){if(!set.mana){set.mana=true;gainMana(MANA_HIT)}}
 // L: throw mushrooms - one, two or three of them (shop upgrades), paid with mana
 function throwShroom(){
   const p=P,n=shotLvl,cost=SHOT_COST[n];
-  if(p.mana<cost){p.shootCD=.25;sfx('deny');floater(p.x+p.w/2,p.y-20,T('fNoMana'));return}
+  if(p.mana<cost){p.shootCD=.25;sfx('deny');return}
   p.mana-=cost;p.shootCD=.44; if(p.onGround)p.atkT=.2;
   const x=p.x+p.w/2+p.face*16, y=p.y+20;
   const dmg=DMG_SHROOM*(n>=3?TRIPLE_PENALTY:1);

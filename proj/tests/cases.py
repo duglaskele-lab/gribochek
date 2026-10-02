@@ -327,8 +327,12 @@ def witch_flake(c):
     r=c.js("""const P=g.P;P.inv=1e9;g.enemies.length=0;const G=g.grid;
       // fired along row 1, inside the rock of the cave roof
       g.eshots.push({k:'flake',x:P.x,y:60,vx:230,vy:0,sp:230,home:0,r:17,life:4,rot:0});const b=g.eshots[g.eshots.length-1];let inRock=0;const v0=230;g.sim(1.5,()=>{P.inv=1e9;P.x=b.x+600;if(!b.dead&&G[Math.floor(b.y/40)]&&G[Math.floor(b.y/40)][Math.floor(b.x/40)]===1)inRock++});
-      return [inRock,Math.hypot(b.vx,b.vy),b.dead]""")
-    assert r[0]>60 and r[1]>500 and not r[2], r
+      const speed=Math.hypot(b.vx,b.vy);
+      // it hits her once and flies on
+      const hp=P.hp;P.inv=0;P.hp=5;b.x=P.x+P.w/2-40;b.y=P.y+P.h/2;b.vx=300;b.vy=0;b.hitP=false;let alive=0;
+      g.sim(.4,()=>{if(!b.dead)alive++});const hurt=P.hp<5;P.inv=1e9;
+      return [inRock,speed,b.dead,hurt,alive>40]""")
+    assert r[0]>60 and r[1]>500 and r[3] and r[4], r
     return f'through rock for {r[0]} steps, speed 230 -> {r[1]:.0f}'
 
 @test('mana','player')
@@ -340,7 +344,7 @@ def mana(c):
       // a punch on a foe: 1 damage, +5 mana (once per punch)
       P.mana=20;let e=g.spawn('orc',P.x+70,P.y+P.h);e.hp=10;e.face=1;P.face=1;g.punch();g.sim(.4,()=>{P.inv=1e9});
       out.punch=[10-e.hp,P.mana];g.enemies.length=0;
-      // a stomp: 1 damage, +5 mana, a bounce 30% higher
+      // a stomp: 1.5 damage, +5 mana, a bounce 1.3*1.3 higher (624 px/s)
       P.mana=20;e=g.spawn('orc',P.x+P.w/2,P.y+P.h);e.hp=10;P.x=e.x+e.w/2-P.w/2;P.y=e.y-P.h-2;P.vy=300;P.onGround=false;P.inv=0;let vy=null;
       g.sim(.1,()=>{if(vy===null&&g.P.vy<0)vy=g.P.vy});out.stomp=[10-e.hp,g.P.mana,Math.round(vy)];g.enemies.length=0;
       // L: one mushroom for 5 mana; with no mana, nothing
@@ -355,14 +359,14 @@ def mana(c):
       // the big mushroom on the ground: +100 mana
       Q.mana=10;g.items.push({k:'power',x:Q.x+Q.w/2,y:Q.y+Q.h/2,ph:0});g.sim(.05,()=>{Q.inv=1e9});out.pick=Q.mana;
       return out""")
-    assert r['start']==[50,50], r
+    assert r['start']==[100,100], r
     assert r['punch']==[1,25], r
-    assert r['stomp'][0]==1 and r['stomp'][1]==25 and abs(r['stomp'][2]+547)<3, r
+    assert r['stomp'][0]==1.5 and r['stomp'][1]==25 and abs(r['stomp'][2]+624)<3, r
     assert r['throw1']==[7,1] and r['empty']==[3,0], r
-    assert r['maxMana']==150 and r['lvl2']==2 and r['lvl3']==3, r
+    assert r['maxMana']==200 and r['lvl2']==2 and r['lvl3']==3, r
     assert r['spent']==4*25+30+60, r
     assert r['mush']==100 and r['throw3']==[10,3] and r['pick']==110, r
-    return 'punch/stomp 1 dmg +5 mana; throws 5/8/10; shop and pickups work'
+    return 'punch 1 / stomp 1.5 dmg, +5 mana; throws 5/8/10; shop and pickups work'
 
 @test('dragon_gust','boss2')
 def dragon_gust(c):
@@ -395,6 +399,31 @@ def boss_start(c):
         assert r[0] and r[1] and r[2]=='intro' and not r[3], (l,r)
         out.append(l)
     return 'levels %s: the fight starts when the boss comes into view'%out
+
+@test('caterpillar_bite','enemies')
+def caterpillar_bite(c):
+    # the caterpillar only bites with a small box low in front of its head; standing on its head is safe
+    c.start(1,1)
+    r=c.js("""const P=g.P;g.enemies.length=0;const e=g.spawn('caterpillar',P.x+400,P.y+P.h);e.hp=99;const out={};
+      const h=e.segs[0];P.inv=0;P.hp=9;P.x=h.x-P.w/2;P.y=e.gy-38-P.h;P.vy=0;let hits=0;
+      g.sim(1,()=>{P.x=e.segs[0].x-P.w/2;P.inv=0;if(P.hurtT>0)hits++});out.onHead=hits;
+      P.hp=9;P.x=e.segs[0].x+e.dir*40-P.w/2;P.y=e.gy-P.h;P.vy=0;P.onGround=true;hits=0;
+      g.sim(.3,()=>{P.inv=0;if(P.hurtT>0)hits++});out.inFront=hits;P.inv=1e9;return out""")
+    assert r['onHead']==0 and r['inFront']>0, r
+    return 'safe on its head, bitten in front'
+
+@test('snow_fill','ice')
+def snow_fill(c):
+    # a skylight that comes into view is already full of falling snow, top to bottom
+    for seed in range(1,10):
+        c.start(4,seed)
+        r=c.js("""const S=window.__grib.dbg.skylights;if(!S.length)return null;const s=S[0],P=g.P;P.inv=1e9;
+          P.x=(s.x0+s.x1)/2;P.y=Math.min(s.fy,g.grid.length*40)-200;g.look();g.sim(1/60,()=>{P.inv=1e9;P.vy=0});
+          const fl=g.parts.filter(p=>p.t==='snow'&&p.x>=s.x0&&p.x<=s.x1);if(!fl.length)return [0,0];
+          const ys=fl.map(p=>p.y);return [fl.length,Math.max(...ys)-Math.min(...ys)]""")
+        if r: break
+    assert r[0]>30 and r[1]>250, r
+    return f'{r[0]} flakes over {r[1]:.0f} px at once'
 
 @test('frog_warn','enemies')
 def frog_warn(c):

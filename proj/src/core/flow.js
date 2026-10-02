@@ -5,7 +5,7 @@ function startLevel(level,seed){
   hitstop=0;shakeT=0;shakeM=0;arenaLocked=false;arenaIn=false;bossDead=false;skyHeat=0;secretsFound=0;
   const y=(LV().startY?LV().startY():topY(3))-58;
   P=newPlayer(3*TS,y);
-  if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.mana=Math.min(maxMana(),carry.mana)} // a new level starts at full health
+  if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.mana=maxMana()}   // a new level starts with full health and mana // a new level starts at full health
   cp={x:P.x,y:P.y};camX=0;poisonLvl=0;camZ=1;camY=camTargetY();
   enemySnap=structuredClone(enemies.filter(e=>!e.prop));magnetT=0;
   playSong('level');

@@ -4,7 +4,7 @@ ALWAYS={'smoke'}
 ZONES=[
   ('src/levels/ice/snowman.js', {'boss4','snowman_throw','snowman_moves'}),
   ('src/levels/ice/foes.js',    {'ice_foes','boss4','witch_flake'}),          # boss4: the snowman shares the ice projectiles
-  ('src/levels/ice/gen.js',     {'gen4','ice_physics','boss4','snowman_throw'}),
+  ('src/levels/ice/gen.js',     {'gen4','ice_physics','boss4','snowman_throw','snow_fill'}),
   ('src/levels/ice/draw.js',    {'render'}),
   ('src/levels/ice/music.js',   set()),
   ('src/levels/ice/*',          {'gen4','ice_foes','ice_physics','boss4'}),
@@ -16,7 +16,7 @@ ZONES=[
   ('src/bosses/dragon.js',      {'boss2','dragon_armor','dragon_gust'}),
   ('src/bosses/hydra.js',       {'boss3'}),
   ('src/bosses/*',              {'boss1','boss2','boss3','boss4','magnet','croc_rules','boss_start'}),
-  ('src/enemies/*',             {'enemies','ice_foes','bigslime','frog_warn'}),
+  ('src/enemies/*',             {'enemies','ice_foes','bigslime','frog_warn','caterpillar_bite'}),
   ('src/core/player.js',        {'player','ice_physics','ice_foes','respawn','pickup','mana'}),
   ('src/core/projectiles.js',   {'enemies','ice_foes','boss1','boss2','boss3','boss4','magnet','pickup'}),
   ('src/core/step.js',          {'player','boss1','boss2','boss3','boss4'}),

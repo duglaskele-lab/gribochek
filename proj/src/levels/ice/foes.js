@@ -132,11 +132,14 @@ const ICE_EDRAW={
     const hw=19*sx,hh=27/sx,f=e.face;
     shadow(0,0,hw);blob(0,0,hw,hh);
     ctx.fillStyle=col(e,'#9fdcf5');ctx.fill();ctx.lineWidth=2.1;ctx.strokeStyle=INK;ctx.stroke();
-    // frosty cap and a few crystals growing on top
+    // a frosty cap and lines of cracked ice running over the round body (no spikes)
     ctx.save();blob(0,0,hw,hh);ctx.clip();ctx.fillStyle=col(e,'#e6f7ff');ctx.beginPath();ctx.ellipse(0,-hh*1.02,hw*1.1,hh*.36,0,0,7);ctx.fill();
-    ctx.fillStyle='rgba(70,140,190,.25)';ctx.beginPath();ctx.ellipse(0,0,hw*1.2,hh*.3,0,0,7);ctx.fill();ctx.restore();
-    ctx.fillStyle=col(e,'#c9f0ff');ctx.lineWidth=1.6;
-    for(const [x,hgt,a] of [[-6,9,-.3],[2,12,.05],[9,8,.4]]){ctx.save();ctx.translate(x*sx,-hh*.93);ctx.rotate(a);ctx.beginPath();ctx.moveTo(-3,2);ctx.lineTo(0,-hgt);ctx.lineTo(3,2);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+    ctx.fillStyle='rgba(70,140,190,.25)';ctx.beginPath();ctx.ellipse(0,0,hw*1.2,hh*.3,0,0,7);ctx.fill();
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    for(const pts of [[[-.95,-.35],[-.55,-.45],[-.35,-.75],[-.1,-.85]],[[-.55,-.45],[-.6,-.15]],[[.95,-.25],[.6,-.3],[.45,-.6],[.6,-.85]],[[.6,-.3],[.4,-.05],[.55,.1]],[[-.2,-.05],[.05,-.2],[.2,-.12]]])
+      pts.forEach(([u,v],i)=>i?ctx.lineTo(u*hw,v*hh):ctx.moveTo(u*hw,v*hh));
+    ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=2.6;ctx.stroke();ctx.strokeStyle='rgba(40,90,140,.7)';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.restore();ctx.strokeStyle=INK;
     ctx.fillStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.ellipse(-hw*.45,-hh*.62,3.5,6,-.5,0,7);ctx.fill();
     eyes(f*3,-hh*.5,f,6.5,3,true);
     if(e.state==='bwind'||e.state==='breath'){ctx.fillStyle=INK;ctx.beginPath();ctx.ellipse(f*(hw*.55),-hh*.28,e.state==='breath'?4.5:2.5,e.state==='breath'?5:3,0,0,7);ctx.fill()}
@@ -236,7 +239,7 @@ function updateIceShot(b,dt,pb){
       b.x+=b.vx*dt;b.y+=b.vy*dt;
       if(Math.random()<.5)parts.push({x:b.x+rand(-10,10),y:b.y+rand(-10,10),vx:0,vy:20,g:0,c:'rgba(200,240,255,.8)',s:rand(2,4),life:.35,max:0,t:'dot'});
       if(b.life<=0||b.y>WH+40||b.y<-200){b.dead=true;if(b.life<=0)iceShards(b.x,b.y,10,170)}   // flies through walls and floors
-      else if(!P.dead&&circleBox(b.x,b.y,b.r*.8,pb)){hurt(b.x);b.dead=true;iceShards(b.x,b.y,10,170);sfx('shatter')}
+      else if(!P.dead&&!b.hitP&&circleBox(b.x,b.y,b.r*.8,pb)){hurt(b.x);b.hitP=true;iceShards(b.x,b.y,6,150);sfx('shatter')}   // it hurts once and flies on
       return}
     case 'snowball':
       b.vy+=b.g*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.rot=(b.rot||0)+dt*8;

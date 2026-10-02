@@ -16,7 +16,7 @@ const I18N={
   shopHint:'Стрелки — выбор, Enter или K — купить, 1–7 — быстро купить, Esc — уйти',
   healName:'Лечебный отвар',healDesc:'восстанавливает 1 сердце',maxhpName:'Сердце-жёлудь',maxhpDesc:'+1 к максимуму сердец (до 7), с каждым дороже на 5',heartsSold:(a,b)=>`Продано: ${a} из ${b}`,
   cloakName:'Плащ',cloakDesc:'второй рывок в воздухе',umbrellaName:'Зонтик',umbrellaDesc:'держи прыжок в падении — плавно паришь',
-  mushName:'Красный гриб',mushDesc:'+100 маны',manaUpName:'Звёздная пыльца',manaUpDesc:'+25 к запасу маны (до 4 раз)',shotsName:'Грибная связка',shotsDesc:'по 2 гриба за бросок (8 маны), потом по 3 (10)',
+  mushName:'Красный гриб',mushDesc:'+100 маны',manaUpName:'Звёздная пыльца',manaUpDesc:'увеличивает запас маны на 25% (до 4 раз)',shotsName:'Грибная связка',shotsDesc:'по 2 гриба за бросок (8 маны), потом по 3 (10)',
   noMoney:'не хватает спор',fullHp:'здоровье и так полное',maxHp:'больше сердец не унести',fullMana:'мана и так полная',owned:'уже куплено',
   shopPrompt:'E — лавка',buyLabel:(n,p)=>`Купить «${n}» за ${p} спор`},
  en:{name:'English',docTitle:'Mushroom Girl',title:'Mushroom Girl',
@@ -35,7 +35,7 @@ const I18N={
   shopHint:'Arrows to select, Enter or K to buy, 1–7 quick buy, Esc to leave',
   healName:'Healing brew',healDesc:'restores 1 heart',maxhpName:'Acorn heart',maxhpDesc:'+1 max heart (up to 7), each costs 5 more',heartsSold:(a,b)=>`Sold: ${a} of ${b}`,
   cloakName:'Cloak',cloakDesc:'a second dash in the air',umbrellaName:'Umbrella',umbrellaDesc:'hold jump while falling to glide',
-  mushName:'Red mushroom',mushDesc:'+100 mana',manaUpName:'Star pollen',manaUpDesc:'+25 max mana (up to 4 times)',shotsName:'Shroom bunch',shotsDesc:'2 mushrooms a throw (8 mana), then 3 (10)',
+  mushName:'Red mushroom',mushDesc:'+100 mana',manaUpName:'Star pollen',manaUpDesc:'increases your mana by 25% (up to 4 times)',shotsName:'Shroom bunch',shotsDesc:'2 mushrooms a throw (8 mana), then 3 (10)',
   noMoney:'not enough spores',fullHp:'health is already full',maxHp:'can’t carry more hearts',fullMana:'mana is already full',owned:'already owned',
   shopPrompt:'E: shop',buyLabel:(n,p)=>`Buy ${n} for ${p} spores`}
 };
