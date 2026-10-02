@@ -1,37 +1,44 @@
 /* ---------- player ---------- */
 function newPlayer(x,y){return{x,y,w:30,h:58,vx:0,vy:0,face:1,onGround:true,coyote:0,buffer:0,hp:3,maxhp:3,inv:0,hurtT:0,lockT:0,
-  shootCD:0,atkT:0,turnT:0,landT:0,airT:0,drop:0,ride:null,runPh:0,power:0,pickT:-1,dead:false,deadT:0,fell:false,entering:false,enterT:0,alpha:1,prevBottom:0,jumpT:1,
+  shootCD:0,atkT:0,turnT:0,landT:0,airT:0,drop:0,ride:null,runPh:0,mana:MANA_BASE,pickT:-1,dead:false,deadT:0,fell:false,entering:false,enterT:0,alpha:1,prevBottom:0,jumpT:1,
   dashT:0,dashCD:0,airDash:true,dashDir:1,ghostT:0,peakY:0,heavyT:0,punchT:0,punchHit:null,inWater:false,flowV:0,windV:0,inSand:false,sandCD:0}}
-const powerCap=()=>hasBag?3:2;
+const maxMana=()=>MANA_BASE+MANA_UP*manaUps;
+function gainMana(n){if(P.dead)return;P.mana=Math.min(maxMana(),P.mana+n)}
 const airDashMax=()=>hasCloak?2:1;
-function shoot(){
-  const p=P;
-  if(!p.power){p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
-    pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});return}
-  p.shootCD=.44; if(p.onGround)p.atkT=.2;
+// K: a punch with a shockwave (1 damage); every punch that lands on a foe gives mana back
+function punch(){
+  const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
+  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});
+}
+// once per punch (the punch and its shockwave share one set of hits): +mana for the first foe it hits
+function punchMana(set){if(!set.mana){set.mana=true;gainMana(MANA_HIT)}}
+// L: throw mushrooms - one, two or three of them (shop upgrades), paid with mana
+function throwShroom(){
+  const p=P,n=shotLvl,cost=SHOT_COST[n];
+  if(p.mana<cost){p.shootCD=.25;sfx('deny');floater(p.x+p.w/2,p.y-20,T('fNoMana'));return}
+  p.mana-=cost;p.shootCD=.44; if(p.onGround)p.atkT=.2;
   const x=p.x+p.w/2+p.face*16, y=p.y+20;
-  const dmg=DMG_SHROOM*(p.power>=3?TRIPLE_PENALTY:1);
-  const mk=vy=>shots.push({x,y,vx:p.face*580+p.vx*.35,vy,r:p.power>1?10:9,life:1.6,b:0,dmg,red:p.power>1,gold:p.power>=3,rot:0});
-  if(p.power>=3){mk(-60);mk(-320);mk(-580)} else if(p.power===2){mk(-140);mk(-460)} else mk(-80);
+  const dmg=DMG_SHROOM*(n>=3?TRIPLE_PENALTY:1);
+  const mk=vy=>shots.push({x,y,vx:p.face*580+p.vx*.35,vy,r:n>1?10:9,life:1.6,b:0,dmg,red:n>1,gold:n>=3,rot:0});
+  if(n>=3){mk(-60);mk(-320);mk(-580)} else if(n===2){mk(-140);mk(-460)} else mk(-80);
   sfx('shoot');
 }
 function hurt(srcX){
   const p=P; if(p.inv>0||p.dead||p.entering||p.dashT>0) return;
-  if(p.power){p.power--;stars(p.x+p.w/2,p.y,10);floater(p.x+p.w/2,p.y-20,T('fPowerLost'))}
-  else p.hp--;
+  p.hp--;
   p.inv=1.4;p.hurtT=.35;p.vx=(p.x+p.w/2<srcX?-1:1)*280;p.vy=-400;p.onGround=false;p.ride=null;p.heavyT=0;
   shake(.25,7);sfx('hurt');hitstop=.06;
   if(p.hp<=0) kill(false);
 }
 function kill(fell){
   const p=P; if(p.dead) return;
-  p.dead=true;p.deadT=0;p.fell=fell;p.hp=0;p.vx=0;p.power=0;
+  p.dead=true;p.deadT=0;p.fell=fell;p.hp=0;p.vx=0;
   if(!fell) p.vy=-300;
   shake(.3,8);sfx('hurt');
 }
 function respawn(){
-  const keepMax=P.maxhp;
-  P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.inv=1.2;
+  const keepMax=P.maxhp, keepMana=P.mana;
+  P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.mana=keepMana; P.inv=1.2;
   eshots=[];pwaves=[];
   // every foe comes back as it was at the start of the level: the killed ones return, the wounded ones heal.
   // Breakable boxes and huts stay as they are; whatever a foe spawned (slime kids, hut lizards) goes away.
@@ -66,9 +73,9 @@ function punchHits(){
   const fx=p.x+p.w/2+p.face*40, fy=p.y+p.h/2;
   for(const e of enemies){ if(e.dead||p.punchHit.has(e)) continue;
     if(enemyHurtBoxes(e).some(b=>overlap(box,b))){p.punchHit.add(e);
-      if(attackEnemy(e,DMG_PUNCH,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
+      if(attackEnemy(e,DMG_PUNCH,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.prop)punchMana(p.punchHit);if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
       else {p.vx=-p.face*180}}}
-  if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG_PUNCH*m,fx,fy);shake(.06,3)}}
+  if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG_PUNCH*m,fx,fy);punchMana(p.punchHit);shake(.06,3)}}
   for(const b of eshots) if(b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect)) if(!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
 }
 function updateWaves(dt){
@@ -82,8 +89,8 @@ function updateWaves(dt){
     const box={x:w.x-16,y:w.y-24,w:32,h:48};
     for(const e of enemies){ if(e.dead||w.hit.has(e)) continue;
       if(enemyHurtBoxes(e).some(b=>overlap(box,b))){w.hit.add(e);
-        if(attackEnemy(e,DMG_PUNCH,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
-    if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(DMG_PUNCH*m,w.x,w.y)}}
+        if(attackEnemy(e,DMG_PUNCH,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
+    if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(DMG_PUNCH*m,w.x,w.y);punchMana(w.hit)}}
     for(const b of eshots) if((b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect))&&!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
   }
   pwaves=pwaves.filter(w=>w.life>0);
@@ -187,8 +194,9 @@ function updatePlayer(dt){
   p.glide=hasUmbrella&&ctl&&inp.j&&!p.onGround&&!p.inWater&&!p.inSand&&p.dashT<=0&&p.vy>0&&!(p.springT>0);
   if(p.glide&&p.vy>GLIDE_V) p.vy=approach(p.vy,GLIDE_V,3000*dt);
   if(p.inSand&&p.vy>SAND_SINK) p.vy=SAND_SINK;
-  if(ctl&&(shootEdge||inp.s)&&p.shootCD<=0) shoot();
-  shootEdge=false;
+  if(ctl&&(shootEdge||inp.s)&&p.shootCD<=0) punch();
+  else if(ctl&&(throwEdge||inp.m)&&p.shootCD<=0) throwShroom();
+  shootEdge=false;throwEdge=false;
   if(p.onGround||p.dashT>0||p.inWater||p.inSand||p.glide) p.peakY=p.y; else p.peakY=Math.min(p.peakY,p.y);
   const was=p.onGround, preVy=p.vy;
   p.prevBottom=p.y+p.h;

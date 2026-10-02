@@ -1,8 +1,8 @@
 /* ---------- input ---------- */
-const inp={l:0,r:0,j:0,s:0,d:0,dash:0,shop:0};
-let jumpEdge=false, shootEdge=false, dashEdge=false, shopEdge=false;
+const inp={l:0,r:0,j:0,s:0,m:0,d:0,dash:0,shop:0};
+let jumpEdge=false, shootEdge=false, throwEdge=false, dashEdge=false, shopEdge=false;
 const KEYMAP={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowDown:'d',KeyS:'d',
-  Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',ShiftLeft:'dash',KeyE:'shop'};
+  Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',KeyL:'m',KeyC:'m',ShiftLeft:'dash',KeyE:'shop'};   // m: throw a mushroom
 let state='title', screenShownAt=0;
 addEventListener('keydown',e=>{
   document.body.classList.add('kbd');
@@ -16,6 +16,7 @@ addEventListener('keydown',e=>{
   if(e.repeat) return;
   if(a==='j'&&!inp.j) jumpEdge=true;
   if(a==='s'&&!inp.s) shootEdge=true;
+  if(a==='m'&&!inp.m) throwEdge=true;
   if(a==='dash'&&!inp.dash) dashEdge=true;
   if(a==='shop'||a==='d') shopEdge=true;
   inp[a]=1;
@@ -37,10 +38,10 @@ pad.addEventListener('pointermove',e=>{if(padPtrs.has(e.pointerId)){padPtrs.set(
 ['pointerup','pointercancel','lostpointercapture'].forEach(t=>pad.addEventListener(t,e=>{padPtrs.delete(e.pointerId);padUpdate()}));
 function holdBtn(el,key){
   el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);
-    if(key==='j'&&!inp.j) jumpEdge=true; if(key==='s'&&!inp.s) shootEdge=true; if(key==='dash'&&!inp.dash) dashEdge=true; inp[key]=1; el.classList.add('on')});
+    if(key==='j'&&!inp.j) jumpEdge=true; if(key==='s'&&!inp.s) shootEdge=true; if(key==='m'&&!inp.m) throwEdge=true; if(key==='dash'&&!inp.dash) dashEdge=true; inp[key]=1; el.classList.add('on')});
   ['pointerup','pointercancel','lostpointercapture'].forEach(t=>el.addEventListener(t,()=>{inp[key]=0;el.classList.remove('on')}));
 }
-holdBtn(document.getElementById('bj'),'j'); holdBtn(document.getElementById('bs'),'s'); holdBtn(document.getElementById('bd'),'dash');
+holdBtn(document.getElementById('bj'),'j'); holdBtn(document.getElementById('bs'),'s'); holdBtn(document.getElementById('bm'),'m'); holdBtn(document.getElementById('bd'),'dash');
 document.getElementById('bshop').addEventListener('pointerdown',e=>{e.preventDefault();if(state==='play'&&nearShop)openShop()});
 document.getElementById('bp').addEventListener('pointerdown',e=>{e.preventDefault();togglePause()});
 

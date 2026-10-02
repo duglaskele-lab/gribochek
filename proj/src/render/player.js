@@ -28,8 +28,7 @@ function drawPlayer(){
   else if(p.atkT>0){n='attack';i=p.atkT>.1?0:1}
   else if(p.turnT>0){n='turn';i=0}
   else if(Math.abs(p.vx)>25){n='run';i=Math.floor(p.runPh)%4}
-  else {n=p.power>1?'special':'idle';i=0;sy=1+Math.sin(time*4)*.018}
-  if(p.power>1&&!p.dead&&Math.random()<.15) parts.push({x:cx+rand(-20,20),y:p.y+rand(0,20),vx:0,vy:-30,g:0,c:p.power>=3?'#ffd84a':'#ff5a4a',s:rand(4,6),life:.5,max:0,t:'star',rot:0});
+  else {n='idle';i=0;sy=1+Math.sin(time*4)*.018}
   for(const g of ghosts){ctx.save();ctx.filter=g.cape?'sepia(1) saturate(4) hue-rotate(220deg) brightness(1.1)':'sepia(1) saturate(4) hue-rotate(-20deg) brightness(1.2)';drawFrame('run',1,g.x,g.y,g.face,g.life/.22*.45);ctx.restore()}
   if(p.glide&&!p.dead){n='jump';i=2}
   p._fr=[n,i,cx,by,p.face,alpha,sy];

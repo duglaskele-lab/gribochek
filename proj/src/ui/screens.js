@@ -43,9 +43,10 @@ function showScreen(kind){
     card.innerHTML=`<h1 class="sm">${T('shopTitle')}</h1><p class="seller">${T('sellerLine')}</p>
     <div class="wallet">${SPORE_SVG}<span>${T('wallet')(spores)}</span></div>
     <div class="shop-list">${SHOP.map((it,i)=>{const sold=soldOut(it),why=sold?'':shopBlock(it),nm=T(it.id+'Name'),pr=itemPrice(it);
-      const extra=it.id==='maxhp'?`<br><small class="sold-n">${T('heartsSold')(heartsSold(),heartsMax)}</small>`:'';
-      return `<div class="shop-row${sold?' sold':''}"><span class="shop-ico" aria-hidden="true">${it.icon}</span><span><b class="nm">${i+1}. ${nm}</b><br><small>${T(it.id+'Desc')}</small>${extra}${why?`<br><small class="why">${T(why)}</small>`:''}</span>
-      ${sold?`<span class="stamp" aria-hidden="true">Sold Out</span>`:''}<button class="buy" data-id="${it.id}" data-i="${i}" aria-disabled="${!!(why||sold)}" aria-label="${esc(sold?nm+': Sold Out':T('buyLabel')(nm,pr))}">${sold?'—':SPORE_SVG+pr}</button></div>`}).join('')}</div>
+      const pr2=shopProgress(it),pips=`<span class="pips"${pr2?` aria-label="${esc(T('boughtL'))}"`:''}>${pr2}</span>`;
+      // the bought-marks and the price button share the bottom line of the card
+      return `<div class="shop-row${sold?' sold':''}"><span class="shop-ico" aria-hidden="true">${it.icon}</span><span><b class="nm">${i+1}. ${nm}</b><br><small>${T(it.id+'Desc')}</small>${why?`<br><small class="why">${T(why)}</small>`:''}</span>
+      ${sold?`<span class="stamp" aria-hidden="true">Sold Out</span>`:''}<div class="foot">${pips}<button class="buy" data-id="${it.id}" data-i="${i}" aria-disabled="${!!(why||sold)}" aria-label="${esc(sold?nm+': Sold Out':T('buyLabel')(nm,pr))}">${sold?'—':SPORE_SVG+pr}</button></div></div>`}).join('')}</div>
     <p class="shop-msg" aria-live="polite">${shopMsg}</p>
     <div class="actions"><button class="cap-btn" id="go">${T('leave')}</button></div>${isTouch?'':`<p class="shop-hint">${T('shopHint')}</p>`}`;
     card.querySelectorAll('.buy').forEach(b=>{b.addEventListener('click',()=>{shopSel=+b.dataset.i;buy(b.dataset.id)});b.addEventListener('focus',()=>{shopSel=+b.dataset.i;card.querySelectorAll('.shop-row').forEach((r,i)=>r.classList.toggle('sel',i===shopSel))})});
@@ -73,12 +74,12 @@ function showScreen(kind){
   if(kind==='shop') setTimeout(shopFocus,20);
   else setTimeout(()=>{const b=card.querySelector(focusSel);if(b&&!card.contains(document.activeElement))b.focus()},30);
 }
-function closeScreen(){for(const k in inp) inp[k]=0; jumpEdge=shootEdge=dashEdge=shopEdge=false; screen.classList.add('hidden'); last=performance.now()}
+function closeScreen(){for(const k in inp) inp[k]=0; jumpEdge=shootEdge=throwEdge=dashEdge=shopEdge=false; screen.classList.add('hidden'); last=performance.now()}
 function openSettings(){settingsFrom=state==='play'?'play':'title';state='pause';showScreen('settings')}
-function snapshotLevel(){levelSnap={hp:P.hp,maxhp:P.maxhp,power:P.power,spores,sporesGot,hasBag,hasCloak,hasUmbrella}}
+function snapshotLevel(){levelSnap={hp:P.hp,maxhp:P.maxhp,mana:P.mana,spores,sporesGot,manaUps,shotLvl,hasCloak,hasUmbrella}}
 function beginLevel(level,seed){startLevel(level,seed);snapshotLevel()}
 function restartLevel(seed){
-  const s=levelSnap; spores=s.spores;sporesGot=s.sporesGot;hasBag=s.hasBag;hasCloak=s.hasCloak;hasUmbrella=s.hasUmbrella;carry={hp:s.hp,maxhp:s.maxhp,power:s.power};
+  const s=levelSnap; spores=s.spores;sporesGot=s.sporesGot;manaUps=s.manaUps;shotLvl=s.shotLvl;hasCloak=s.hasCloak;hasUmbrella=s.hasUmbrella;carry={hp:s.hp,maxhp:s.maxhp,mana:s.mana};
   startLevel(LEVEL,seed);if(s.boss)bossPrep();snapshotLevel();if(s.boss)levelSnap.boss=true;state='play';closeScreen();
 }
 const nextKey=()=>LEVEL===1?'next':'next'+(LEVEL+1);

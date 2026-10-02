@@ -64,7 +64,8 @@ function dragonHoverTarget(){
 function dragonChoose(){
   const p2=B.phase===2;
   const opts=[['breath',3],['volley',3],['dive',2.5]];
-  if(p2){opts.push(['meteor',2]);opts.push(['gust',2.2]);if(B.infCD<=0)opts.push(['inferno',1.8])}
+  // never a gust close to her: at least half a screen away
+  if(p2){opts.push(['meteor',2]);if(Math.abs(dcx()-(P.x+P.w/2))>=VW/2)opts.push(['gust',2.2]);if(B.infCD<=0)opts.push(['inferno',1.8])}
   for(const o of opts) if(o[0]===B.last) o[1]*=B.repeat>=1?.1:.5;
   let r=Math.random()*opts.reduce((a,o)=>a+o[1],0), pk=opts[0][0];
   for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
@@ -75,7 +76,8 @@ function dragonChoose(){
   else if(pk==='dive'){B.state='diveWind';B.t=.75;B.ty=70}
   else if(pk==='meteor'){B.state='meteorUp';sfx('screech')}
   else if(pk==='inferno') startInferno();
-  else {B.state='gust';B.t=2.4;B.gustSeed=Math.floor(Math.random()*4);B.tx=dcx()<(ARENA_L+ARENA_R)/2?ARENA_L+180:ARENA_R-180;B.ty=200;B.emitT=.3}
+  // the gust blows from its own side of the arena, away from her
+  else {B.state='gust';B.t=2.4;B.gustSeed=Math.floor(Math.random()*4);B.tx=dcx()<P.x+P.w/2?ARENA_L+180:ARENA_R-180;B.ty=200;B.emitT=.3}
 }
 // when the dragon slams into the ground it lobs burning boulders to both sides:
 // phase 1 - two boulders, phase 2 - three: one to each side, and a third on a high, slow arc far out

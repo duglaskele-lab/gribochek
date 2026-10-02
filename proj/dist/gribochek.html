@@ -49,16 +49,17 @@ h2{font-size:24px;font-weight:400;margin:14px 0 8px}
 .actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:18px}
 .ghost-btn{font-size:21px;padding:8px 18px}
 .card h1.sm{font-size:clamp(28px,4.5vw,36px)}
-.shop-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0}
+.shop-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0}
 .card.wide{max-width:min(1060px,100%)}
 .shop-row{grid-template-rows:auto 1fr}
 .shop-list .shop-row{grid-template-columns:40px 1fr;align-items:start}
-.shop-list .shop-row .buy{grid-column:1/3;justify-self:end;align-self:end}
-@media (max-width:900px){.shop-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.shop-list .shop-row .foot{grid-column:1/3;display:flex;justify-content:space-between;align-items:flex-end;gap:6px;align-self:end}
+@media (max-width:1000px){.shop-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.shop-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){.shop-list{grid-template-columns:1fr}}
 @media (max-height:640px){.card.wide{padding:12px 16px 14px}.card.wide h1.sm{font-size:26px;margin-bottom:2px}.card.wide p.seller{display:none}
   .card.wide .wallet{margin-bottom:6px;font-size:19px}.shop-list{gap:6px}.shop-list .shop-row{padding:5px 8px;gap:4px 8px}.shop-row .nm{font-size:18px}
-  .shop-row small{font-size:14px}.card.wide .actions{margin-top:6px}.card.wide p.shop-msg{margin-top:2px;min-height:1.1em}.card.wide .shop-hint{display:none}}
+  .shop-row small{font-size:14px;line-height:1.15}.card.wide .actions{margin-top:6px}.card.wide p.shop-msg{margin-top:2px;min-height:1.1em}.card.wide .shop-hint{display:none}}
 @media (max-height:460px){.shop-list .shop-row small:not(.why):not(.sold-n){display:none}}
 .card.lv{max-width:min(700px,100%)}
 .lvl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
@@ -78,6 +79,8 @@ body.kbd #card .boss-btn:focus{background:#b3503a}
 .shop-row small{font-size:16px;opacity:.8}
 .shop-row small.why{color:#a23a2a;opacity:1}
 .shop-row small.sold-n{opacity:1;font-weight:bold}
+.shop-row .pips{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
+.shop-row .pip{display:inline-flex}
 .shop-row{position:relative}
 .shop-row.sold{background:#cfcfcf;border-color:#6b6b6b}
 .shop-row.sold .shop-ico,.shop-row.sold .nm,.shop-row.sold small{filter:grayscale(1);opacity:.6}
@@ -119,6 +122,7 @@ body.touch #touch{display:block}
 #bj{right:max(18px,env(safe-area-inset-right,0px));bottom:18px;width:92px;height:92px}
 #bs{right:calc(max(18px,env(safe-area-inset-right,0px)) + 104px);bottom:34px;width:74px;height:74px}
 #bd{right:calc(max(18px,env(safe-area-inset-right,0px)) + 14px);bottom:124px;width:66px;height:66px;font-size:18px}
+#bm{right:calc(max(18px,env(safe-area-inset-right,0px)) + 100px);bottom:122px;width:62px;height:62px;font-size:17px}
 #bshop{display:none;left:50%;transform:translateX(-50%);bottom:24px;width:auto;height:54px;border-radius:27px;padding:0 22px;font-size:20px}
 body.touch.near-shop #bshop{display:flex}
 #bp{right:max(14px,env(safe-area-inset-right,0px));top:12px;width:48px;height:48px;font-size:18px}
@@ -130,6 +134,7 @@ body.touch.near-shop #bshop{display:flex}
   <div id="touch">
     <div class="tbtn" id="pad"><span>◀</span><span>▶</span></div>
     <div class="tbtn" id="bs">удар</div>
+    <div class="tbtn" id="bm">гриб</div>
     <div class="tbtn" id="bj">прыг</div>
     <div class="tbtn" id="bd">рывок</div>
     <div class="tbtn" id="bshop">лавка</div>
@@ -153,10 +158,13 @@ const TS=40, VH=14*TS, MAXC=560;
 // ROWS/WH: world height in tiles/px (level 3 is two screens tall); FLOOR: boss-arena floor
 let ROWS=14, WH=VH, FLOOR=12*TS, ARENA_TRIG_Y=9*TS, CAM_BOT=0;   // CAM_BOT: lowest point the camera shows outside the boss arena
 const G=2000, JV=Math.round(740*Math.sqrt(1.25)), MAXV=275, SC=0.8, DASH_V=780, DASH_T=.17;
-const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=1000, PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
+// STOMP_BOUNCE: the plain bounce off a foe's head, 30% higher than it was (480 px/s before)
+const HEAVY_H=250, HEAVY_T=.35, HIGH_BOUNCE=1000, STOMP_BOUNCE=Math.round(480*Math.sqrt(1.3)), PUNCH_T=.24, PUNCH_ACTIVE=[.18,.07];
 const WAVE_LIFE=.15, WAVE_SPEED=540, MAXHP_CAP=7, HP_BASE=3, GLIDE_V=71;
-const DMG_PUNCH=1.25, DMG_SHROOM=0.8, TRIPLE_PENALTY=.85, TAIL_MULT=1.25, EPS=1e-6;
+const DMG_PUNCH=1, DMG_STOMP=1, DMG_SHROOM=0.8, TRIPLE_PENALTY=.85, TAIL_MULT=1.25, EPS=1e-6;
 const FLOW_V=150, WATER_G=.3;
+// mana: thrown mushrooms (key L) cost mana; punching or stomping a foe gives it back
+const MANA_BASE=50, MANA_UP=25, MANA_UPS=4, MANA_HIT=5, MANA_PICK=100, SHOT_COST=[0,5,8,10];   // SHOT_COST[number of mushrooms per throw]
 const FPS_CAP=60;
 // tile types
 const T_EMPTY=0, T_SOLID=1, T_PLANK=2, T_THORN=3, T_CRACK=4, T_WATER=5, T_SAND=6, T_FAKE=7, T_CRACKW=8;
@@ -262,10 +270,10 @@ const sfx=n=>SFX[n]&&SFX[n]();
 
 // ==== core/input.js ====
 /* ---------- input ---------- */
-const inp={l:0,r:0,j:0,s:0,d:0,dash:0,shop:0};
-let jumpEdge=false, shootEdge=false, dashEdge=false, shopEdge=false;
+const inp={l:0,r:0,j:0,s:0,m:0,d:0,dash:0,shop:0};
+let jumpEdge=false, shootEdge=false, throwEdge=false, dashEdge=false, shopEdge=false;
 const KEYMAP={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowDown:'d',KeyS:'d',
-  Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',ShiftLeft:'dash',KeyE:'shop'};
+  Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',KeyL:'m',KeyC:'m',ShiftLeft:'dash',KeyE:'shop'};   // m: throw a mushroom
 let state='title', screenShownAt=0;
 addEventListener('keydown',e=>{
   document.body.classList.add('kbd');
@@ -279,6 +287,7 @@ addEventListener('keydown',e=>{
   if(e.repeat) return;
   if(a==='j'&&!inp.j) jumpEdge=true;
   if(a==='s'&&!inp.s) shootEdge=true;
+  if(a==='m'&&!inp.m) throwEdge=true;
   if(a==='dash'&&!inp.dash) dashEdge=true;
   if(a==='shop'||a==='d') shopEdge=true;
   inp[a]=1;
@@ -300,10 +309,10 @@ pad.addEventListener('pointermove',e=>{if(padPtrs.has(e.pointerId)){padPtrs.set(
 ['pointerup','pointercancel','lostpointercapture'].forEach(t=>pad.addEventListener(t,e=>{padPtrs.delete(e.pointerId);padUpdate()}));
 function holdBtn(el,key){
   el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);
-    if(key==='j'&&!inp.j) jumpEdge=true; if(key==='s'&&!inp.s) shootEdge=true; if(key==='dash'&&!inp.dash) dashEdge=true; inp[key]=1; el.classList.add('on')});
+    if(key==='j'&&!inp.j) jumpEdge=true; if(key==='s'&&!inp.s) shootEdge=true; if(key==='m'&&!inp.m) throwEdge=true; if(key==='dash'&&!inp.dash) dashEdge=true; inp[key]=1; el.classList.add('on')});
   ['pointerup','pointercancel','lostpointercapture'].forEach(t=>el.addEventListener(t,()=>{inp[key]=0;el.classList.remove('on')}));
 }
-holdBtn(document.getElementById('bj'),'j'); holdBtn(document.getElementById('bs'),'s'); holdBtn(document.getElementById('bd'),'dash');
+holdBtn(document.getElementById('bj'),'j'); holdBtn(document.getElementById('bs'),'s'); holdBtn(document.getElementById('bm'),'m'); holdBtn(document.getElementById('bd'),'dash');
 document.getElementById('bshop').addEventListener('pointerdown',e=>{e.preventDefault();if(state==='play'&&nearShop)openShop()});
 document.getElementById('bp').addEventListener('pointerdown',e=>{e.preventDefault();togglePause()});
 
@@ -313,7 +322,7 @@ let COLS=240, ARENA_L=0, ARENA_R=0, BIOME='forest', LEVEL=1, SEED=1;
 let grid, flow;
 let P,B,enemies,shots,eshots,parts,items,plats,dynPlats,checks,shops,door,camX,time,shakeT,shakeM,hitstop,
     arenaLocked,bossDead,cp,sporeTotal,spores,sporesGot,runTime,floaters,ghosts,powerSpots,pwaves,
-    nearShop=null,shopMsg='',hasBag=false,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH,
+    nearShop=null,shopMsg='',manaUps=0,shotLvl=1,hasCloak=false,hasUmbrella=false,carry=null,skyHeat=0,camY=0,trees=[],decor=[],springs=[],hiddenPlanks=false,covers=[],switches=[],ruins=[],ruinSpan=null,poisonLvl=0,camZ=1,VHZ=VH,
     enemySnap=[],magnetT=0,arenaIn=false;   // enemySnap: the level's foes as generated (brought back when the player dies); magnetT: see collectSporesOnScreen
 
 let SKY_TILE=T_EMPTY;   // what lies above the top row: open sky, or rock for levels with a roof (level def: roof:true)
@@ -1225,38 +1234,45 @@ function repairColumn(n){
 // ==== core/player.js ====
 /* ---------- player ---------- */
 function newPlayer(x,y){return{x,y,w:30,h:58,vx:0,vy:0,face:1,onGround:true,coyote:0,buffer:0,hp:3,maxhp:3,inv:0,hurtT:0,lockT:0,
-  shootCD:0,atkT:0,turnT:0,landT:0,airT:0,drop:0,ride:null,runPh:0,power:0,pickT:-1,dead:false,deadT:0,fell:false,entering:false,enterT:0,alpha:1,prevBottom:0,jumpT:1,
+  shootCD:0,atkT:0,turnT:0,landT:0,airT:0,drop:0,ride:null,runPh:0,mana:MANA_BASE,pickT:-1,dead:false,deadT:0,fell:false,entering:false,enterT:0,alpha:1,prevBottom:0,jumpT:1,
   dashT:0,dashCD:0,airDash:true,dashDir:1,ghostT:0,peakY:0,heavyT:0,punchT:0,punchHit:null,inWater:false,flowV:0,windV:0,inSand:false,sandCD:0}}
-const powerCap=()=>hasBag?3:2;
+const maxMana=()=>MANA_BASE+MANA_UP*manaUps;
+function gainMana(n){if(P.dead)return;P.mana=Math.min(maxMana(),P.mana+n)}
 const airDashMax=()=>hasCloak?2:1;
-function shoot(){
-  const p=P;
-  if(!p.power){p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
-    pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});return}
-  p.shootCD=.44; if(p.onGround)p.atkT=.2;
+// K: a punch with a shockwave (1 damage); every punch that lands on a foe gives mana back
+function punch(){
+  const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
+  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE,hit:p.punchHit});
+}
+// once per punch (the punch and its shockwave share one set of hits): +mana for the first foe it hits
+function punchMana(set){if(!set.mana){set.mana=true;gainMana(MANA_HIT)}}
+// L: throw mushrooms - one, two or three of them (shop upgrades), paid with mana
+function throwShroom(){
+  const p=P,n=shotLvl,cost=SHOT_COST[n];
+  if(p.mana<cost){p.shootCD=.25;sfx('deny');floater(p.x+p.w/2,p.y-20,T('fNoMana'));return}
+  p.mana-=cost;p.shootCD=.44; if(p.onGround)p.atkT=.2;
   const x=p.x+p.w/2+p.face*16, y=p.y+20;
-  const dmg=DMG_SHROOM*(p.power>=3?TRIPLE_PENALTY:1);
-  const mk=vy=>shots.push({x,y,vx:p.face*580+p.vx*.35,vy,r:p.power>1?10:9,life:1.6,b:0,dmg,red:p.power>1,gold:p.power>=3,rot:0});
-  if(p.power>=3){mk(-60);mk(-320);mk(-580)} else if(p.power===2){mk(-140);mk(-460)} else mk(-80);
+  const dmg=DMG_SHROOM*(n>=3?TRIPLE_PENALTY:1);
+  const mk=vy=>shots.push({x,y,vx:p.face*580+p.vx*.35,vy,r:n>1?10:9,life:1.6,b:0,dmg,red:n>1,gold:n>=3,rot:0});
+  if(n>=3){mk(-60);mk(-320);mk(-580)} else if(n===2){mk(-140);mk(-460)} else mk(-80);
   sfx('shoot');
 }
 function hurt(srcX){
   const p=P; if(p.inv>0||p.dead||p.entering||p.dashT>0) return;
-  if(p.power){p.power--;stars(p.x+p.w/2,p.y,10);floater(p.x+p.w/2,p.y-20,T('fPowerLost'))}
-  else p.hp--;
+  p.hp--;
   p.inv=1.4;p.hurtT=.35;p.vx=(p.x+p.w/2<srcX?-1:1)*280;p.vy=-400;p.onGround=false;p.ride=null;p.heavyT=0;
   shake(.25,7);sfx('hurt');hitstop=.06;
   if(p.hp<=0) kill(false);
 }
 function kill(fell){
   const p=P; if(p.dead) return;
-  p.dead=true;p.deadT=0;p.fell=fell;p.hp=0;p.vx=0;p.power=0;
+  p.dead=true;p.deadT=0;p.fell=fell;p.hp=0;p.vx=0;
   if(!fell) p.vy=-300;
   shake(.3,8);sfx('hurt');
 }
 function respawn(){
-  const keepMax=P.maxhp;
-  P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.inv=1.2;
+  const keepMax=P.maxhp, keepMana=P.mana;
+  P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.mana=keepMana; P.inv=1.2;
   eshots=[];pwaves=[];
   // every foe comes back as it was at the start of the level: the killed ones return, the wounded ones heal.
   // Breakable boxes and huts stay as they are; whatever a foe spawned (slime kids, hut lizards) goes away.
@@ -1291,9 +1307,9 @@ function punchHits(){
   const fx=p.x+p.w/2+p.face*40, fy=p.y+p.h/2;
   for(const e of enemies){ if(e.dead||p.punchHit.has(e)) continue;
     if(enemyHurtBoxes(e).some(b=>overlap(box,b))){p.punchHit.add(e);
-      if(attackEnemy(e,DMG_PUNCH,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
+      if(attackEnemy(e,DMG_PUNCH,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.prop)punchMana(p.punchHit);if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
       else {p.vx=-p.face*180}}}
-  if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG_PUNCH*m,fx,fy);shake(.06,3)}}
+  if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG_PUNCH*m,fx,fy);punchMana(p.punchHit);shake(.06,3)}}
   for(const b of eshots) if(b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect)) if(!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
 }
 function updateWaves(dt){
@@ -1307,8 +1323,8 @@ function updateWaves(dt){
     const box={x:w.x-16,y:w.y-24,w:32,h:48};
     for(const e of enemies){ if(e.dead||w.hit.has(e)) continue;
       if(enemyHurtBoxes(e).some(b=>overlap(box,b))){w.hit.add(e);
-        if(attackEnemy(e,DMG_PUNCH,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
-    if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(DMG_PUNCH*m,w.x,w.y)}}
+        if(attackEnemy(e,DMG_PUNCH,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
+    if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(DMG_PUNCH*m,w.x,w.y);punchMana(w.hit)}}
     for(const b of eshots) if((b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect))&&!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
   }
   pwaves=pwaves.filter(w=>w.life>0);
@@ -1412,8 +1428,9 @@ function updatePlayer(dt){
   p.glide=hasUmbrella&&ctl&&inp.j&&!p.onGround&&!p.inWater&&!p.inSand&&p.dashT<=0&&p.vy>0&&!(p.springT>0);
   if(p.glide&&p.vy>GLIDE_V) p.vy=approach(p.vy,GLIDE_V,3000*dt);
   if(p.inSand&&p.vy>SAND_SINK) p.vy=SAND_SINK;
-  if(ctl&&(shootEdge||inp.s)&&p.shootCD<=0) shoot();
-  shootEdge=false;
+  if(ctl&&(shootEdge||inp.s)&&p.shootCD<=0) punch();
+  else if(ctl&&(throwEdge||inp.m)&&p.shootCD<=0) throwShroom();
+  shootEdge=false;throwEdge=false;
   if(p.onGround||p.dashT>0||p.inWater||p.inSand||p.glide) p.peakY=p.y; else p.peakY=Math.min(p.peakY,p.y);
   const was=p.onGround, preVy=p.vy;
   p.prevBottom=p.y+p.h;
@@ -1583,13 +1600,14 @@ function doStomp(e,ct){
     e.helmet=false;e.state='stun';e.t=.55;e.vx=0;e.flash=.1;clang(P.x+P.w/2,P.y+P.h);shake(.12,4);
     parts.push({x:e.x+e.w/2,y:e.y-6,vx:-e.face*170+rand(-40,40),vy:-460,g:1300,c:'',s:1,life:1.3,max:0,t:'helm',rot:0});
     floater(e.x+e.w/2,e.y-40,T('fHelm'))}
-  else{damageEnemy(e,ct.dmg,P.x+P.w/2);
+  else{damageEnemy(e,e.prop?ct.dmg:DMG_STOMP,P.x+P.w/2);   // a stomp does 1 damage to any foe (boxes still break)
     if(!e.dead&&ENEMY_HOOKS[e.type]&&ENEMY_HOOKS[e.type].onStomp) ENEMY_HOOKS[e.type].onStomp(e);
     // two stomps on the bare head: the commander raises an arm over it (a ledge to stand on, but no more head stomps)
     if(ct.chief&&!e.dead){e.hs=(e.hs||0)+1;if(e.hs>=2){e.hs=0;e.guard=CHIEF_GUARD;chiefArm(e);floater(e.x+e.w/2,e.y-40,T('fGuard'))}}}
   // holding (or pressing right after) jump springs off the monster's head much higher
+  if(!e.prop) gainMana(MANA_HIT);
   const high=inp.j||P.buffer>0;
-  P.vy=high?-HIGH_BOUNCE:-480;P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;
+  P.vy=high?-HIGH_BOUNCE:-STOMP_BOUNCE;P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;
   P.onGround=false;P.airDash=airDashMax();dust(P.x+P.w/2,P.y+P.h,4);
   if(high){sfx('jump');stars(P.x+P.w/2,P.y+P.h,5)}
 }
@@ -2982,7 +3000,8 @@ function dragonHoverTarget(){
 function dragonChoose(){
   const p2=B.phase===2;
   const opts=[['breath',3],['volley',3],['dive',2.5]];
-  if(p2){opts.push(['meteor',2]);opts.push(['gust',2.2]);if(B.infCD<=0)opts.push(['inferno',1.8])}
+  // never a gust close to her: at least half a screen away
+  if(p2){opts.push(['meteor',2]);if(Math.abs(dcx()-(P.x+P.w/2))>=VW/2)opts.push(['gust',2.2]);if(B.infCD<=0)opts.push(['inferno',1.8])}
   for(const o of opts) if(o[0]===B.last) o[1]*=B.repeat>=1?.1:.5;
   let r=Math.random()*opts.reduce((a,o)=>a+o[1],0), pk=opts[0][0];
   for(const o of opts){r-=o[1];if(r<=0){pk=o[0];break}}
@@ -2993,7 +3012,8 @@ function dragonChoose(){
   else if(pk==='dive'){B.state='diveWind';B.t=.75;B.ty=70}
   else if(pk==='meteor'){B.state='meteorUp';sfx('screech')}
   else if(pk==='inferno') startInferno();
-  else {B.state='gust';B.t=2.4;B.gustSeed=Math.floor(Math.random()*4);B.tx=dcx()<(ARENA_L+ARENA_R)/2?ARENA_L+180:ARENA_R-180;B.ty=200;B.emitT=.3}
+  // the gust blows from its own side of the arena, away from her
+  else {B.state='gust';B.t=2.4;B.gustSeed=Math.floor(Math.random()*4);B.tx=dcx()<P.x+P.w/2?ARENA_L+180:ARENA_R-180;B.ty=200;B.emitT=.3}
 }
 // when the dragon slams into the ground it lobs burning boulders to both sides:
 // phase 1 - two boulders, phase 2 - three: one to each side, and a third on a high, slow arc far out
@@ -3638,8 +3658,8 @@ function updateItems(dt){
       if(it.k==='spore'){spores++;sporesGot++;sfx('coin');burst(it.x,it.y,6,'#ffcf6b',120,300,[2,4])}
       else if(it.k==='gold'){spores+=5;sporesGot+=5;sfx('power');stars(it.x,it.y,10);floater(it.x,it.y-30,'+5')}
       else if(it.k==='heart'){if(P.hp<P.maxhp)P.hp++;else{spores+=2;floater(it.x,it.y-30,T('fHeartFull'))}sfx('coin');burst(it.x,it.y,10,'#ff6b7a',160)}
-      else if(it.k==='power'){const was=P.power;P.power=Math.min(powerCap(),P.power+1);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);
-        floater(it.x,it.y-40,T(P.power>was?['','fPower1','fPower2','fPower3'][P.power]:'fPowerMax'))}
+      else if(it.k==='power'){const was=P.mana;gainMana(MANA_PICK);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);   // the big mushroom: +100 mana
+        floater(it.x,it.y-40,'+'+Math.round(P.mana-was)+' '+T('manaL'))}
     }
   }
   items=items.filter(i=>!i.taken);
@@ -3750,17 +3770,17 @@ function startLevel(level,seed){
   hitstop=0;shakeT=0;shakeM=0;arenaLocked=false;arenaIn=false;bossDead=false;skyHeat=0;secretsFound=0;
   const y=(LV().startY?LV().startY():topY(3))-58;
   P=newPlayer(3*TS,y);
-  if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.power=carry.power} // a new level starts at full health
+  if(carry){P.maxhp=carry.maxhp;P.hp=carry.maxhp;P.mana=Math.min(maxMana(),carry.mana)} // a new level starts at full health
   cp={x:P.x,y:P.y};camX=0;poisonLvl=0;camZ=1;camY=camTargetY();
   enemySnap=structuredClone(enemies.filter(e=>!e.prop));magnetT=0;
   playSong('level');
 }
 function newGame(){
-  time=0;runTime=0;spores=0;sporesGot=0;hasBag=false;hasCloak=false;hasUmbrella=false;carry=null;
+  time=0;runTime=0;spores=0;sporesGot=0;manaUps=0;shotLvl=1;hasCloak=false;hasUmbrella=false;carry=null;
   startLevel(1,(Math.random()*1e9)|0);
 }
 function finishLevel(){
-  if(LEVEL<levelNums().length){carry={hp:P.hp,maxhp:P.maxhp,power:P.power};state='next';showScreen('next')}
+  if(LEVEL<levelNums().length){carry={hp:P.hp,maxhp:P.maxhp,mana:P.mana};state='next';showScreen('next')}
   else {state='win';showScreen('win')}
 }
 // ==== render/world.js ====
@@ -4106,8 +4126,7 @@ function drawPlayer(){
   else if(p.atkT>0){n='attack';i=p.atkT>.1?0:1}
   else if(p.turnT>0){n='turn';i=0}
   else if(Math.abs(p.vx)>25){n='run';i=Math.floor(p.runPh)%4}
-  else {n=p.power>1?'special':'idle';i=0;sy=1+Math.sin(time*4)*.018}
-  if(p.power>1&&!p.dead&&Math.random()<.15) parts.push({x:cx+rand(-20,20),y:p.y+rand(0,20),vx:0,vy:-30,g:0,c:p.power>=3?'#ffd84a':'#ff5a4a',s:rand(4,6),life:.5,max:0,t:'star',rot:0});
+  else {n='idle';i=0;sy=1+Math.sin(time*4)*.018}
   for(const g of ghosts){ctx.save();ctx.filter=g.cape?'sepia(1) saturate(4) hue-rotate(220deg) brightness(1.1)':'sepia(1) saturate(4) hue-rotate(-20deg) brightness(1.2)';drawFrame('run',1,g.x,g.y,g.face,g.life/.22*.45);ctx.restore()}
   if(p.glide&&!p.dead){n='jump';i=2}
   p._fr=[n,i,cx,by,p.face,alpha,sy];
@@ -4328,13 +4347,20 @@ function drawParts(){
 }
 // ==== render/hud.js ====
 function drawHUD(){
-  const W=cv.width/K;
+  const W=cv.width/K;ctx.lineJoin='round';   // no spikes on the outlined numbers
   for(let i=0;i<P.maxhp;i++) heart(30+i*34,32,1.6,'#ff5b6e',i>=P.hp);
   sporeIcon(32,72,1.25);
   ctx.font='26px '+FONT;ctx.textAlign='left';ctx.fillStyle='#fff';ctx.strokeStyle=INK;ctx.lineWidth=5;
   const t=`${spores}`;ctx.strokeText(t,50,80);ctx.fillText(t,50,80);
-  if(P.power){mushroom(34,112,12,Math.sin(time*3)*.15,P.power>1,P.power>=3);const t2='×'+P.power;ctx.strokeText(t2,52,118);ctx.fillText(t2,52,118)}
-  {let gx=24;const gy=P.power?150:116;
+  // mana: a blue bar as long as the mana pool, with the mushrooms per throw next to it
+  {const mm=maxMana(),bw=mm*1.3,bx=50,by=101,cost=SHOT_COST[shotLvl];
+   mushroom(30,114,11,Math.sin(time*3)*.12,shotLvl>1,shotLvl>=3);
+   ctx.fillStyle='rgba(43,26,18,.75)';ctx.beginPath();ctx.roundRect(bx-3,by-3,bw+6,20,10);ctx.fill();
+   ctx.fillStyle=P.mana>=cost?'#3b7fe0':'#7a8aa6';ctx.beginPath();ctx.roundRect(bx,by,Math.max(0,bw*P.mana/mm),14,7);ctx.fill();
+   ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(bx+4,by+2,Math.max(0,bw*P.mana/mm-8),3);
+   ctx.font='15px '+FONT;ctx.lineWidth=3;ctx.fillStyle='#fff';const mt=`${Math.floor(P.mana)}/${mm}`+(shotLvl>1?`  ×${shotLvl}`:'');
+   ctx.strokeText(mt,bx+bw+10,by+13);ctx.fillText(mt,bx+bw+10,by+13)}
+  {let gx=24;const gy=150;
    if(hasCloak){ctx.save();ctx.translate(gx+8,gy);ctx.fillStyle='#7a4ab8';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-5,-12);ctx.lineTo(5,-12);ctx.lineTo(12,12);ctx.quadraticCurveTo(0,8,-12,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();gx+=34}
    if(hasUmbrella){ctx.save();ctx.translate(gx+8,gy+2);ctx.scale(.42,.42);ctx.fillStyle='#e33b2e';ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.ellipse(0,0,30,21,0,Math.PI,0);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,22);ctx.quadraticCurveTo(0,29,-7,27);ctx.stroke();ctx.restore()}}
   ctx.font='18px '+FONT;ctx.textAlign='right';ctx.lineWidth=4;const lt=T('levelName')(LEVEL);ctx.strokeText(lt,W-(isTouch?74:18),30);ctx.fillText(lt,W-(isTouch?74:18),30);
@@ -4598,17 +4624,17 @@ const I18N={
   winTitle:'Победа!',winText:'Злой снеговик растаял, и в пещере наступила тишина. Грибочек прошла все четыре уровня и может возвращаться домой.',again:'Сыграть ещё',rotate:'Поверни телефон горизонтально.',
   nextTitle:'Уровень 2: пустыня',nextText:'Дверь пенька ведёт в пески, к руинам древнего восточного города. Здесь живут скорпионы, попугаи-хулиганы, песчаные черви, кактусы-стрелки, мумии и жуки-скарабеи, а в конце ждёт огненный дракон.',nextTip:'Берегись зыбучих песков: в них нельзя стоять, выбирайся короткими прыжками. Дракон уязвим для удара рукой, когда устаёт после пикирования и опускает голову. Голова получает на 40% больше урона. Когда земля вспыхивает — прыгай на платформу.',next:'Дальше',next3Title:'Уровень 3: болото',next3Text:'За дверью — топкое болото, и чем дальше, тем выше деревья. Здесь хозяйничают люди-ящеры: мечники, маги и закованный в броню командир, а на длинных ветвях стоят их хижины. В кустах сидят гоблины в тотемных масках, по веткам скачут жабы-языкачи, под ветками ждут пауки, над водой вьются комары, в широких заводях плавают пираньи, а в ядовитой заводи живёт трёхголовая гидра.',next3Tip:'Горящие глаза в кустах — там засел гоблин с духовой трубкой; удар по кусту выгонит его. Бочки и ящики разбиваются ударом или рывком. Хижина ящеров выпускает воинов, пока её не сломаешь. Комар перед броском показывает красный пунктир — отойди с линии, а промахнувшись, он застревает. Плоты и лифты на лианах возят над болотом. Трухлявые ветки обваливаются, если на них постоять, но упасть в болото не страшно: доплыви до ближайшего дерева и залезь обратно. Командира не пробить, пока не собьёшь с него шлем прыжком, — потом бей по голове. После двух прыжков по голове он прикрывает её рукой: на руке можно стоять, но прыгать по голове бесполезно — бей рукой. Прыжок по голове гидры ранит её, но после трёх прыжков подряд голова звереет — у неё загораются глаза. Отруби все три головы — они отрастут, а яд в заводи поднимется. Зелёный пунктир — это прицел лазера: уходи с линии.',
   levelName:n=>T('lvlName'+n),lvlName1:'Уровень 1: лес',lvlName2:'Уровень 2: пустыня',lvlName3:'Уровень 3: болото',
-  keys:[['← →','бег (A, D)'],['Пробел','прыжок, держи для высоты; с зонтиком — парение; в воде — гребок (W, ↑)'],['K','удар рукой с ударной волной; с грибом-силой бросок гриба (X)'],['Левый Shift','рывок, в воздухе тоже'],['↓ + прыжок','спрыгнуть с доски'],['E или ↓','лавка у продавца'],['Прыжок на врага','держи прыжок — высокий отскок от головы'],['Esc','настройки и пауза (P)']],
-  touchKeys:[['◀ ▶','бег'],['прыг','прыжок; в воде — гребок'],['удар','удар или бросок гриба'],['рывок','рывок, в воздухе тоже'],['лавка','появляется рядом с продавцом'],['❚❚','настройки и пауза']],
-  tJump:'прыг',tShoot:'удар',tDash:'рывок',tShop:'лавка',
+  keys:[['← →','бег (A, D)'],['Пробел','прыжок, держи для высоты; с зонтиком — парение; в воде — гребок (W, ↑)'],['K','удар рукой с ударной волной (X); удары по врагам восполняют ману'],['L','бросок гриба, тратит ману (C)'],['Левый Shift','рывок, в воздухе тоже'],['↓ + прыжок','спрыгнуть с доски'],['E или ↓','лавка у продавца'],['Прыжок на врага','держи прыжок — высокий отскок от головы'],['Esc','настройки и пауза (P)']],
+  touchKeys:[['◀ ▶','бег'],['прыг','прыжок; в воде — гребок'],['удар','удар рукой с ударной волной'],['гриб','бросок гриба, тратит ману'],['рывок','рывок, в воздухе тоже'],['лавка','появляется рядом с продавцом'],['❚❚','настройки и пауза']],
+  tJump:'прыг',tShoot:'удар',tThrow:'гриб',fNoMana:'мало маны',manaL:'маны',boughtL:'куплено',tDash:'рывок',tShop:'лавка',
   boss:'Болотный крокодил',boss2:'Огненный дракон',boss3:'Болотная гидра',fHelm:'шлем слетел!',fGuard:'прикрыл голову!',fRage:'голова в ярости!',fPhase2h:'гидра в ярости!',fTide:'яд поднимается!',fStage:n=>`стадия ${n}: головы отросли!`,fPowerLost:'сила пропала',fSaved:'сохранено',fDoor:'дверь открыта',fHeartFull:'+2 споры',
   fPower1:'бросок гриба!',fPower2:'двойной гриб!',fPower3:'тройной гриб!',fPowerMax:'сила на максимуме',fSecret:'тайник!',secretsL:(a,b)=>`Тайники: ${a} из ${b}`,fPhase2:'дракон в ярости!',fPhase2c:'крокодил в ярости!',musicL:'Музыка',on:'вкл',off:'выкл',sound:'Звук',musicVol:'Громкость музыки',sfxVol:'Громкость эффектов',pressKey:'Enter, Пробел или K — продолжить',chooseLevel:'Выбор уровня',quit:'Выйти',menuHint:'Стрелки — выбор, Enter — подтвердить, Esc — назад',lvl1Desc:'Болотный лес · босс: крокодил',lvl2Desc:'Пустыня · босс: огненный дракон',lvl3Desc:'Высокое болото · босс: гидра',bossRow:'Сразу к боссу',bossRowDesc:'6 сердец, 200 спор, старт у последней лавки перед боссом.',bossShort:n=>T('bossShort'+n),bossShort1:'Крокодил',bossShort2:'Дракон',bossShort3:'Гидра',byeTitle:'Спасибо за игру!',byeText:'Браузер не разрешает странице закрыть вкладку самой. Просто закройте её, когда захотите.',toMenu:'В главное меню',mainMenu:'Главное меню',shopSign:'ЛАВКА',
   shopTitle:'Лавка крота-старьёвщика',sellerLine:'«Всё своё ношу с собой! Споры беру, сдачу не даю.»',wallet:n=>`Твои споры: ${n}`,leave:'Уйти',thanks:'«Приятно иметь дело.»',
-  shopHint:'Стрелки — выбор, Enter или K — купить, 1–6 — быстро купить, Esc — уйти',
+  shopHint:'Стрелки — выбор, Enter или K — купить, 1–7 — быстро купить, Esc — уйти',
   healName:'Лечебный отвар',healDesc:'восстанавливает 1 сердце',maxhpName:'Сердце-жёлудь',maxhpDesc:'+1 к максимуму сердец (до 7), с каждым дороже на 5',heartsSold:(a,b)=>`Продано: ${a} из ${b}`,
   cloakName:'Плащ',cloakDesc:'второй рывок в воздухе',umbrellaName:'Зонтик',umbrellaDesc:'держи прыжок в падении — плавно паришь',
-  powerName:'Красный гриб',powerDesc:'+1 уровень силы: бросок гриба, затем двойной (с сумкой — тройной)',bagName:'Грибная сумка',bagDesc:'позволяет собрать третий гриб-силу и бросать по три гриба',
-  noMoney:'не хватает спор',fullHp:'здоровье и так полное',maxHp:'больше сердец не унести',maxPower:'сила уже на максимуме',owned:'уже куплено',
+  mushName:'Красный гриб',mushDesc:'+100 маны',manaUpName:'Звёздная пыльца',manaUpDesc:'+25 к запасу маны (до 4 раз)',shotsName:'Грибная связка',shotsDesc:'по 2 гриба за бросок (8 маны), потом по 3 (10)',
+  noMoney:'не хватает спор',fullHp:'здоровье и так полное',maxHp:'больше сердец не унести',fullMana:'мана и так полная',owned:'уже куплено',
   shopPrompt:'E — лавка',buyLabel:(n,p)=>`Купить «${n}» за ${p} спор`},
  en:{name:'English',docTitle:'Mushroom Girl',title:'Mushroom Girl',
   intro:'Four levels, freshly generated every run: a swamp forest with a crocodile, a desert with a dragon, a tall swamp with a hydra and an ice cave with a snowman. Every level hides up to two well-disguised secrets.',
@@ -4617,17 +4643,17 @@ const I18N={
   winTitle:'Victory!',winText:'The grumpy snowman has melted and the cave is quiet at last. Mushroom Girl has made it through all four levels and can head home.',again:'Play again',rotate:'Turn your phone sideways.',
   nextTitle:'Level 2: Desert',nextText:'The stump door leads into the sands and the ruins of an old eastern city. Scorpions, rowdy parrots, sandworms, cactus shooters, mummies and scarab beetles live here, and a fire dragon waits at the end.',nextTip:'Watch out for quicksand: don’t stand still in it, hop your way out. The dragon is open to punches when it gets tired after a dive and lowers its head. The head takes 40% more damage. When the ground ignites, jump onto a platform.',next:'Continue',next3Title:'Level 3: Swamp',next3Text:'Beyond the door lies a deep swamp, and the further you go, the taller the trees. Lizardmen rule here: swordsmen, mages and an armoured commander, with huts on the long boughs. Goblins in totem masks hide in the bushes, tongue toads hop along the branches, spiders wait under them, mosquitoes hover over the water, piranhas swim in the wide pools, and a three-headed hydra lurks in the poisoned pool.',next3Tip:'Burning eyes in a bush mean a goblin with a blowgun; hit the bush to flush him out. Barrels and crates break with a punch or a dash. A lizardman hut keeps sending out warriors until you wreck it. A mosquito shows a red dashed line before it dives: step aside, and if it misses it gets stuck. Rafts and vine lifts carry you over the bog. Rotten branches give way if you stand on them, but falling into the bog is fine: swim to the nearest tree and climb back up. The commander can’t be hurt until you stomp his helmet off; then aim for his head. After two stomps he covers his head with an arm: you can stand on it, but stomps won’t work, so punch. Stomping a hydra head hurts it, but three quick stomps drive it berserk: watch for burning eyes. Take down all three heads and they grow back while the poison rises. A dashed green outline is the laser’s aim: get out of the line.',
   levelName:n=>T('lvlName'+n),lvlName1:'Level 1: Forest',lvlName2:'Level 2: Desert',lvlName3:'Level 3: Swamp',
-  keys:[['← →','run (A, D)'],['Space','jump, hold to go higher; glide with the umbrella; swim stroke in water (W, ↑)'],['K','punch with a shockwave; with a mushroom power-up, throw mushrooms (X)'],['Left Shift','dash, works in the air too'],['↓ + jump','drop through a plank'],['E or ↓','shop at the merchant'],['Jump on a foe','hold jump for a high bounce off its head'],['Esc','settings and pause (P)']],
-  touchKeys:[['◀ ▶','run'],['jump','jump; swim stroke in water'],['attack','punch or throw a mushroom'],['dash','dash, works in the air too'],['shop','appears next to the merchant'],['❚❚','settings and pause']],
-  tJump:'jump',tShoot:'attack',tDash:'dash',tShop:'shop',
+  keys:[['← →','run (A, D)'],['Space','jump, hold to go higher; glide with the umbrella; swim stroke in water (W, ↑)'],['K','punch with a shockwave (X); hits on foes restore mana'],['L','throw a mushroom, costs mana (C)'],['Left Shift','dash, works in the air too'],['↓ + jump','drop through a plank'],['E or ↓','shop at the merchant'],['Jump on a foe','hold jump for a high bounce off its head'],['Esc','settings and pause (P)']],
+  touchKeys:[['◀ ▶','run'],['jump','jump; swim stroke in water'],['attack','punch with a shockwave'],['shroom','throw a mushroom, costs mana'],['dash','dash, works in the air too'],['shop','appears next to the merchant'],['❚❚','settings and pause']],
+  tJump:'jump',tShoot:'attack',tThrow:'shroom',fNoMana:'not enough mana',manaL:'mana',boughtL:'bought',tDash:'dash',tShop:'shop',
   boss:'Swamp Crocodile',boss2:'Fire Dragon',boss3:'Swamp Hydra',fHelm:'helmet off!',fGuard:'head covered!',fRage:'the head is furious!',fPhase2h:'the hydra is enraged!',fTide:'the poison is rising!',fStage:n=>`stage ${n}: the heads grow back!`,fPowerLost:'power lost',fSaved:'saved',fDoor:'the door is open',fHeartFull:'+2 spores',
   fPower1:'mushroom throw!',fPower2:'double mushroom!',fPower3:'triple mushroom!',fPowerMax:'power maxed out',fSecret:'secret stash!',secretsL:(a,b)=>`Secrets: ${a} of ${b}`,fPhase2:'the dragon is enraged!',fPhase2c:'the crocodile is enraged!',musicL:'Music',on:'on',off:'off',sound:'Sound',musicVol:'Music volume',sfxVol:'Effects volume',pressKey:'Enter, Space or K to continue',chooseLevel:'Choose level',quit:'Quit',menuHint:'Arrows to select, Enter to confirm, Esc to go back',lvl1Desc:'Swamp forest · boss: crocodile',lvl2Desc:'Desert · boss: fire dragon',lvl3Desc:'Tall swamp · boss: hydra',bossRow:'Straight to the boss',bossRowDesc:'6 hearts, 200 spores, start at the last shop before the boss.',bossShort:n=>T('bossShort'+n),bossShort1:'Crocodile',bossShort2:'Dragon',bossShort3:'Hydra',byeTitle:'Thanks for playing!',byeText:'Browsers don’t let a page close its own tab. Just close it whenever you like.',toMenu:'Main menu',mainMenu:'Main menu',shopSign:'SHOP',
   shopTitle:'The Old Mole’s Stall',sellerLine:'“I carry my whole shop on my back! Spores only, no change.”',wallet:n=>`Your spores: ${n}`,leave:'Leave',thanks:'“A pleasure doing business.”',
-  shopHint:'Arrows to select, Enter or K to buy, 1–6 quick buy, Esc to leave',
+  shopHint:'Arrows to select, Enter or K to buy, 1–7 quick buy, Esc to leave',
   healName:'Healing brew',healDesc:'restores 1 heart',maxhpName:'Acorn heart',maxhpDesc:'+1 max heart (up to 7), each costs 5 more',heartsSold:(a,b)=>`Sold: ${a} of ${b}`,
   cloakName:'Cloak',cloakDesc:'a second dash in the air',umbrellaName:'Umbrella',umbrellaDesc:'hold jump while falling to glide',
-  powerName:'Red mushroom',powerDesc:'+1 power level: mushroom throw, then double (triple with the satchel)',bagName:'Mushroom satchel',bagDesc:'lets you hold a third power-up and throw three mushrooms at once',
-  noMoney:'not enough spores',fullHp:'health is already full',maxHp:'can’t carry more hearts',maxPower:'power is already maxed out',owned:'already owned',
+  mushName:'Red mushroom',mushDesc:'+100 mana',manaUpName:'Star pollen',manaUpDesc:'+25 max mana (up to 4 times)',shotsName:'Shroom bunch',shotsDesc:'2 mushrooms a throw (8 mana), then 3 (10)',
+  noMoney:'not enough spores',fullHp:'health is already full',maxHp:'can’t carry more hearts',fullMana:'mana is already full',owned:'already owned',
   shopPrompt:'E: shop',buyLabel:(n,p)=>`Buy ${n} for ${p} spores`}
 };
 let lang='en';
@@ -4637,6 +4663,7 @@ function applyLang(){
   document.documentElement.lang=lang; document.title=T('docTitle');
   document.getElementById('bj').textContent=T('tJump');
   document.getElementById('bs').textContent=T('tShoot');
+  document.getElementById('bm').textContent=T('tThrow');
   document.getElementById('bd').textContent=T('tDash');
   document.getElementById('bshop').textContent=T('tShop');
 }
@@ -4647,23 +4674,37 @@ applyLang();
 const LOGO_SVG='<svg width="84" height="84" viewBox="0 0 40 40"><rect x="15" y="20" width="10" height="14" rx="3" fill="#f5ecd8" stroke="#2b1a12" stroke-width="2"/><path d="M4 22 A16 16 0 0 1 36 22 Z" fill="#e0782a" stroke="#2b1a12" stroke-width="2.5"/><circle cx="12" cy="15" r="2.8" fill="#fff"/><circle cx="22" cy="10" r="2.4" fill="#fff"/><circle cx="29" cy="17" r="2" fill="#fff"/></svg>';
 const SPORE_SVG='<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="#ffd36b" stroke="#2b1a12" stroke-width="2"/><circle cx="14" cy="13" r="1.6" fill="#e0922e"/><circle cx="8" cy="14" r="1.6" fill="#e0922e"/><circle cx="8" cy="8" r="2" fill="#fff"/></svg>';
 const HEART_PATH='M20 33 C4 22 6 8 20 15 C34 8 36 22 20 33Z';
+// shop icons: a five-pointed star (mana) and a small mushroom; filled with colour, or black outlines for 'not yet'
+function starPath(cx,cy,r,fill,stroke='#2b1a12'){let d='';for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;d+=(i?'L':'M')+(cx+Math.cos(a)*rr).toFixed(1)+' '+(cy+Math.sin(a)*rr).toFixed(1)}
+  return `<path d="${d}Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>`}
+function mushSil(x,y,s,fill){const st=fill?'#f5ecd8':'none';return `<g transform="translate(${x} ${y}) scale(${s})"><rect x="15" y="20" width="10" height="14" rx="3" fill="${st}" stroke="#2b1a12" stroke-width="2.5"/><path d="M5 22 A15 15 0 0 1 35 22 Z" fill="${fill||'none'}" stroke="#2b1a12" stroke-width="3"/></g>`}
 const SHOP=[
  {id:'heal',price:5,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="${HEART_PATH}" fill="#ff5b6e" stroke="#2b1a12" stroke-width="2.5"/></svg>`},
  {id:'maxhp',price:20,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="${HEART_PATH}" fill="#ff5b6e" stroke="#2b1a12" stroke-width="2.5"/><circle cx="31" cy="10" r="8" fill="#fff" stroke="#2b1a12" stroke-width="2"/><path d="M31 6v8M27 10h8" stroke="#2b1a12" stroke-width="2.5"/></svg>`},
- {id:'power',price:10,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><rect x="15" y="20" width="10" height="14" rx="3" fill="#f5ecd8" stroke="#2b1a12" stroke-width="2"/><path d="M5 22 A15 15 0 0 1 35 22 Z" fill="#e33b2e" stroke="#2b1a12" stroke-width="2.5"/><circle cx="13" cy="15" r="2.6" fill="#fff"/><circle cx="23" cy="11" r="2.2" fill="#fff"/><circle cx="28" cy="18" r="1.8" fill="#fff"/></svg>`},
- {id:'bag',price:40,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M8 16 Q20 8 32 16 L30 34 Q20 38 10 34Z" fill="#b8834f" stroke="#2b1a12" stroke-width="2.5"/><path d="M14 16 Q20 4 26 16" fill="none" stroke="#2b1a12" stroke-width="2.5"/><path d="M13 26 A7 7 0 0 1 27 26 Z" fill="#f2b830" stroke="#2b1a12" stroke-width="2"/></svg>`},
+ {id:'mush',price:15,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><rect x="15" y="20" width="10" height="14" rx="3" fill="#f5ecd8" stroke="#2b1a12" stroke-width="2"/><path d="M5 22 A15 15 0 0 1 35 22 Z" fill="#e33b2e" stroke="#2b1a12" stroke-width="2.5"/><circle cx="13" cy="15" r="2.6" fill="#fff"/><circle cx="23" cy="11" r="2.2" fill="#fff"/><circle cx="28" cy="18" r="1.8" fill="#fff"/></svg>`},
+ {id:'manaUp',price:25,icon:`<svg width="40" height="40" viewBox="0 0 40 40">${starPath(20,21,15,'#3b7fe0')}<circle cx="31" cy="10" r="8" fill="#fff" stroke="#2b1a12" stroke-width="2"/><path d="M31 6v8M27 10h8" stroke="#2b1a12" stroke-width="2.5"/></svg>`},
+ {id:'shots',price:30,icon:`<svg width="40" height="40" viewBox="0 0 40 40">${mushSil(0,6,.55,'#e33b2e')}${mushSil(16,0,.55,'#e33b2e')}${mushSil(10,14,.55,'#f2b830')}</svg>`},
  {id:'cloak',price:50,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M14 6 H26 L35 34 Q28 30 20 35 Q12 30 5 34Z" fill="#7a4ab8" stroke="#2b1a12" stroke-width="2.5" stroke-linejoin="round"/><path d="M14 6 Q20 13 26 6" fill="#5a3290" stroke="#2b1a12" stroke-width="2"/><circle cx="20" cy="11" r="2.6" fill="#f2b830" stroke="#2b1a12" stroke-width="1.5"/><path d="M15 20 L12 31 M25 20 L28 31" stroke="#5a3290" stroke-width="2"/></svg>`},
  {id:'umbrella',price:60,icon:`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M3 20 A17 12 0 0 1 37 20 Q32 17 28.5 20 Q24 17 20 20 Q16 17 11.5 20 Q8 17 3 20Z" fill="#e33b2e" stroke="#2b1a12" stroke-width="2.5" stroke-linejoin="round"/><path d="M20 8 Q14 12 11.5 20 M20 8 Q26 12 28.5 20" fill="none" stroke="#fff3e0" stroke-width="2.5"/><path d="M20 20 V29 Q20 33 16 32" fill="none" stroke="#2b1a12" stroke-width="2.5" stroke-linecap="round"/></svg>`}];
 const heartsSold=()=>Math.max(0,P.maxhp-HP_BASE), heartsMax=MAXHP_CAP-HP_BASE;
-// acorn hearts get dearer with every one sold: 20, 25, 30, 35
-const itemPrice=it=>it.id==='maxhp'?20+5*heartsSold():it.price;
-function soldOut(it){return (it.id==='maxhp'&&P.maxhp>=MAXHP_CAP)||(it.id==='bag'&&hasBag)||(it.id==='cloak'&&hasCloak)||(it.id==='umbrella'&&hasUmbrella)}
+// acorn hearts get dearer with every one sold: 20, 25, 30, 35; the second mushroom upgrade (three at once) costs 60
+const itemPrice=it=>it.id==='maxhp'?20+5*heartsSold():it.id==='shots'?(shotLvl>=2?60:30):it.price;
+function soldOut(it){return (it.id==='maxhp'&&P.maxhp>=MAXHP_CAP)||(it.id==='manaUp'&&manaUps>=MANA_UPS)||(it.id==='shots'&&shotLvl>=3)||(it.id==='cloak'&&hasCloak)||(it.id==='umbrella'&&hasUmbrella)}
 function shopBlock(it){
   if(it.id==='heal'&&P.hp>=P.maxhp) return 'fullHp';
   if(it.id==='maxhp'&&P.maxhp>=MAXHP_CAP) return 'maxHp';
-  if(it.id==='power'&&P.power>=powerCap()) return 'maxPower';
+  if(it.id==='mush'&&P.mana>=maxMana()) return 'fullMana';
   if(soldOut(it)) return 'owned';
   if(spores<itemPrice(it)) return 'noMoney';
+  return '';
+}
+// how many of an upgrade are bought, shown on its card: empty hearts / black stars / mushroom outlines fill in
+function shopProgress(it){
+  const sp=(on,svg)=>`<span class="pip${on?' on':''}">${svg}</span>`;
+  if(it.id==='maxhp') return Array.from({length:heartsMax},(_,i)=>sp(i<heartsSold(),`<svg width="22" height="22" viewBox="0 0 40 40"><path d="${HEART_PATH}" fill="${i<heartsSold()?'#ff5b6e':'none'}" stroke="#2b1a12" stroke-width="3.5"/></svg>`)).join('');
+  if(it.id==='manaUp') return Array.from({length:MANA_UPS},(_,i)=>sp(i<manaUps,`<svg width="22" height="22" viewBox="0 0 40 40">${starPath(20,21,16,i<manaUps?'#3b7fe0':'#2b1a12')}</svg>`)).join('');
+  if(it.id==='shots') return [2,3].map(n=>{const on=shotLvl>=n,f=on?(n===3?'#f2b830':'#e33b2e'):null;
+    return sp(on,`<svg width="${n===2?34:46}" height="24" viewBox="0 0 ${n===2?34:46} 24">${n===2?mushSil(0,2,.55,f)+mushSil(16,2,.55,f):mushSil(0,2,.55,f)+mushSil(14,2,.55,f)+mushSil(28,2,.55,f)}</svg>`)}).join('');
   return '';
 }
 let shopSel=0;
@@ -4673,11 +4714,12 @@ function buy(id){
   spores-=itemPrice(it);
   if(id==='heal') P.hp=Math.min(P.maxhp,P.hp+1);
   if(id==='maxhp'){P.maxhp=Math.min(MAXHP_CAP,P.maxhp+1);P.hp++}
-  if(id==='power') P.power=Math.min(powerCap(),P.power+1);
-  if(id==='bag') hasBag=true;
+  if(id==='mush') P.mana=Math.min(maxMana(),P.mana+MANA_PICK);
+  if(id==='manaUp'){manaUps++;P.mana+=MANA_UP}
+  if(id==='shots') shotLvl=Math.min(3,shotLvl+1);
   if(id==='cloak') hasCloak=true;
   if(id==='umbrella') hasUmbrella=true;
-  sfx(id==='power'||id==='bag'||id==='cloak'||id==='umbrella'?'power':'coin'); shopMsg=T('thanks');
+  sfx(id==='mush'||id==='manaUp'||id==='shots'||id==='cloak'||id==='umbrella'?'power':'coin'); shopMsg=T('thanks');
   showScreen('shop');
 }
 function shopFocus(){
@@ -4690,7 +4732,7 @@ function shopKey(e){
   const n=SHOP.length+1;
   // the grid has 3, 2 or 1 columns depending on the window, so arrows move by the actual layout
   const d=NAV_DIRS[e.code]; if(d){e.preventDefault();menuNav(d[0],d[1]);return}
-  if(/^Digit[1-6]$/.test(e.code)&&!e.repeat){e.preventDefault();const i=+e.code.slice(5)-1;shopSel=i;buy(SHOP[i].id);return}
+  if(/^Digit[1-7]$/.test(e.code)&&!e.repeat){e.preventDefault();const i=+e.code.slice(5)-1;shopSel=i;buy(SHOP[i].id);return}
   if((e.code==='Enter'||e.code==='Space'||e.code==='KeyK'||e.code==='KeyE')&&!e.repeat){e.preventDefault();
     if(shopSel>=SHOP.length) screenAction(); else buy(SHOP[shopSel].id)}
 }
@@ -4742,9 +4784,10 @@ function showScreen(kind){
     card.innerHTML=`<h1 class="sm">${T('shopTitle')}</h1><p class="seller">${T('sellerLine')}</p>
     <div class="wallet">${SPORE_SVG}<span>${T('wallet')(spores)}</span></div>
     <div class="shop-list">${SHOP.map((it,i)=>{const sold=soldOut(it),why=sold?'':shopBlock(it),nm=T(it.id+'Name'),pr=itemPrice(it);
-      const extra=it.id==='maxhp'?`<br><small class="sold-n">${T('heartsSold')(heartsSold(),heartsMax)}</small>`:'';
-      return `<div class="shop-row${sold?' sold':''}"><span class="shop-ico" aria-hidden="true">${it.icon}</span><span><b class="nm">${i+1}. ${nm}</b><br><small>${T(it.id+'Desc')}</small>${extra}${why?`<br><small class="why">${T(why)}</small>`:''}</span>
-      ${sold?`<span class="stamp" aria-hidden="true">Sold Out</span>`:''}<button class="buy" data-id="${it.id}" data-i="${i}" aria-disabled="${!!(why||sold)}" aria-label="${esc(sold?nm+': Sold Out':T('buyLabel')(nm,pr))}">${sold?'—':SPORE_SVG+pr}</button></div>`}).join('')}</div>
+      const pr2=shopProgress(it),pips=`<span class="pips"${pr2?` aria-label="${esc(T('boughtL'))}"`:''}>${pr2}</span>`;
+      // the bought-marks and the price button share the bottom line of the card
+      return `<div class="shop-row${sold?' sold':''}"><span class="shop-ico" aria-hidden="true">${it.icon}</span><span><b class="nm">${i+1}. ${nm}</b><br><small>${T(it.id+'Desc')}</small>${why?`<br><small class="why">${T(why)}</small>`:''}</span>
+      ${sold?`<span class="stamp" aria-hidden="true">Sold Out</span>`:''}<div class="foot">${pips}<button class="buy" data-id="${it.id}" data-i="${i}" aria-disabled="${!!(why||sold)}" aria-label="${esc(sold?nm+': Sold Out':T('buyLabel')(nm,pr))}">${sold?'—':SPORE_SVG+pr}</button></div></div>`}).join('')}</div>
     <p class="shop-msg" aria-live="polite">${shopMsg}</p>
     <div class="actions"><button class="cap-btn" id="go">${T('leave')}</button></div>${isTouch?'':`<p class="shop-hint">${T('shopHint')}</p>`}`;
     card.querySelectorAll('.buy').forEach(b=>{b.addEventListener('click',()=>{shopSel=+b.dataset.i;buy(b.dataset.id)});b.addEventListener('focus',()=>{shopSel=+b.dataset.i;card.querySelectorAll('.shop-row').forEach((r,i)=>r.classList.toggle('sel',i===shopSel))})});
@@ -4772,12 +4815,12 @@ function showScreen(kind){
   if(kind==='shop') setTimeout(shopFocus,20);
   else setTimeout(()=>{const b=card.querySelector(focusSel);if(b&&!card.contains(document.activeElement))b.focus()},30);
 }
-function closeScreen(){for(const k in inp) inp[k]=0; jumpEdge=shootEdge=dashEdge=shopEdge=false; screen.classList.add('hidden'); last=performance.now()}
+function closeScreen(){for(const k in inp) inp[k]=0; jumpEdge=shootEdge=throwEdge=dashEdge=shopEdge=false; screen.classList.add('hidden'); last=performance.now()}
 function openSettings(){settingsFrom=state==='play'?'play':'title';state='pause';showScreen('settings')}
-function snapshotLevel(){levelSnap={hp:P.hp,maxhp:P.maxhp,power:P.power,spores,sporesGot,hasBag,hasCloak,hasUmbrella}}
+function snapshotLevel(){levelSnap={hp:P.hp,maxhp:P.maxhp,mana:P.mana,spores,sporesGot,manaUps,shotLvl,hasCloak,hasUmbrella}}
 function beginLevel(level,seed){startLevel(level,seed);snapshotLevel()}
 function restartLevel(seed){
-  const s=levelSnap; spores=s.spores;sporesGot=s.sporesGot;hasBag=s.hasBag;hasCloak=s.hasCloak;hasUmbrella=s.hasUmbrella;carry={hp:s.hp,maxhp:s.maxhp,power:s.power};
+  const s=levelSnap; spores=s.spores;sporesGot=s.sporesGot;manaUps=s.manaUps;shotLvl=s.shotLvl;hasCloak=s.hasCloak;hasUmbrella=s.hasUmbrella;carry={hp:s.hp,maxhp:s.maxhp,mana:s.mana};
   startLevel(LEVEL,seed);if(s.boss)bossPrep();snapshotLevel();if(s.boss)levelSnap.boss=true;state='play';closeScreen();
 }
 const nextKey=()=>LEVEL===1?'next':'next'+(LEVEL+1);
@@ -5908,8 +5951,8 @@ function updateSnowman(dt){
   const cx=smCX(),bs=smBalls(),head=bs[2],headTop=head.y-head.r-24;
   // stomping on the bucket hurts it
   if(!P.dead&&P.vy>0&&B.stompCD<=0&&Math.abs(pcx-head.x)<head.r+14&&P.prevBottom<=headTop+14&&P.y+P.h>=headTop&&bossHittable()&&B.state!=='intro'){
-    hitBoss(1.6,head.x,headTop);B.sqv[2]+=6;B.stompCD=.25;clang(head.x,headTop);
-    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-560;P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
+    hitBoss(DMG_STOMP,head.x,headTop);gainMana(MANA_HIT);B.sqv[2]+=6;B.stompCD=.25;clang(head.x,headTop);
+    const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*Math.sqrt(1.3));P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
     P.vx+=(pcx<head.x?-1:1)*120;
     if(B.state==='dying')return}
   const above=!P.dead&&Math.abs(pcx-cx)<100&&P.y+P.h<headTop+10;
@@ -6205,7 +6248,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
     get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
-    croc:()=>crocChoose(),bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
+    croc:()=>crocChoose(),dragon:()=>dragonChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
 // ==== main.js ====
 /* ---------- main loop (render capped at 60 fps, fixed 120 Hz physics) ---------- */
 newGame();
