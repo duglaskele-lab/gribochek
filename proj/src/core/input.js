@@ -7,7 +7,6 @@ let state='title', screenShownAt=0;
 addEventListener('keydown',e=>{
   document.body.classList.add('kbd');
   if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();togglePause();return}
-  if(e.code==='KeyM'&&!e.repeat){toggleMusic();return}
   if(state==='shop'){shopKey(e);return}
   if(state==='next'||state==='win'){ // dialog after a boss: any confirm key continues
     if(['Enter','Space','KeyK','KeyE','KeyZ','KeyX'].indexOf(e.code)>=0&&!e.repeat){e.preventDefault();if(performance.now()-screenShownAt>350){const g=document.getElementById('go');g&&g.click()}}

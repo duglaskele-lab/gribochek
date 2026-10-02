@@ -327,4 +327,4 @@ function drawHydraHead(h,sleep){
   ctx.restore();
   if(h.dead&&Math.random()<.05) parts.push({x:h.x,y:h.y-20,vx:0,vy:-30,g:0,c:'rgba(255,255,255,.6)',s:4,life:.6,max:0,t:'puff'});
 }
-registerBoss('hydra',{make:makeHydra,update:updateHydra,draw:drawHydra,burst:'#4f8a5a',nameKey:'boss3',introT:2});
+registerBoss('hydra',{spriteBox:()=>({x:B.x-330,y:B.y-320,w:B.w+660,h:B.h+320}),make:makeHydra,update:updateHydra,draw:drawHydra,burst:'#4f8a5a',nameKey:'boss3',introT:2});

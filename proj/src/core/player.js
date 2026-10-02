@@ -224,7 +224,7 @@ function updatePlayer(dt){
   if(LV().onPlayerMove) LV().onPlayerMove(p,dir);
   if(p.x<0){p.x=0;p.vx=0}
   // invisible wall: once the boss fight starts there is no way back to the ledge
-  if(arenaLocked&&!bossDead&&p.x<ARENA_L){p.x=ARENA_L;if(p.vx<0)p.vx=0;if(p.dashT>0)p.dashT=0}
+  if(arenaLocked&&!bossDead&&arenaIn&&p.x<ARENA_L){p.x=ARENA_L;if(p.vx<0)p.vx=0;if(p.dashT>0)p.dashT=0}
   // thorns
   {const r=Math.floor((p.y+p.h-4)/TS), c0=Math.floor((p.x+4)/TS), c1=Math.floor((p.x+p.w-4)/TS);
    for(let c=c0;c<=c1;c++) if(tile(c,r)===T_THORN&&p.y+p.h>r*TS+16){hurt(p.x+p.w/2-p.face);if(!P.dead){p.vy=-620;p.onGround=false}break}}

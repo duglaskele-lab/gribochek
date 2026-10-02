@@ -1,13 +1,16 @@
 /* ---------- dragon ---------- */
 // big animated wind swooshes blowing away from the dragon during the gust attack
+// the gust reaches from the floor up to the level of the high platforms (the second ones)
+const GUST_TOP=()=>FLOOR-6*TS-40;
 function drawGust(){
   const dir=Math.sign(P.x+P.w/2-dcx())||1, fade=Math.min(1,(2.4-B.t)/.3,B.t/.3);
-  const L=ARENA_L, W=ARENA_R-ARENA_L;
+  const L=ARENA_L, W=ARENA_R-ARENA_L, H=FLOOR-14-GUST_TOP();
   ctx.save();ctx.lineCap='round';
-  for(let k=0;k<22;k++){
-    const y=FLOOR-14-hash(k,3)*280, len=110+hash(k,5)*140, sp=650+hash(k,7)*450;
+  for(let k=0;k<34;k++){
+    // spread evenly from the floor to the top
+    const y=FLOOR-14-((k+hash(k,3))/34)*H, len=150+hash(k,5)*190, sp=650+hash(k,7)*450;
     let x=((time*sp+hash(k,9)*W)%W); x=dir>0?L+x:ARENA_R-x;
-    const wob=Math.sin(time*6+k)*9, a=fade*(.55+.4*hash(k,11)), lw=3+hash(k,13)*3;
+    const wob=Math.sin(time*6+k)*9, a=fade*(.55+.4*hash(k,11)), lw=4+hash(k,13)*4;
     const path=()=>{ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x-dir*len*.33,y-12+wob,x-dir*len*.66,y+12-wob,x-dir*len,y);
       if(k%3===0){ctx.moveTo(x,y);ctx.arc(x,y-11,11,Math.PI/2,Math.PI/2+dir*Math.PI*1.4,dir<0)}};
     path();ctx.strokeStyle=`rgba(90,60,40,${.35*a})`;ctx.lineWidth=lw+3;ctx.stroke();
@@ -41,8 +44,9 @@ function drawInferno(){
 function makeDragon(){return{kind:'dragon',x:ARENA_L+27*TS,y:FLOOR-84,w:180,h:84,hp:89,max:89,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flap:0,mouth:0,glow:0,
   last:'',repeat:0,tx:0,ty:0,side:1,infCD:0,emitT:0,burnT:0,shots:0,landed:true,sweep0:0,sweep1:0,targetX:0,flash:0}}
 const dcx=()=>B.x+B.w/2, dcy=()=>B.y+B.h/2;
-// the inferno that opens phase 2 is armoured: 75% less damage until its breath ends (later infernos are not)
-const dragonArmored=()=>B.infArmor&&(B.state==='infernoWind'||B.state==='inferno');
+// every inferno is armoured, from the moment it starts getting ready until its breath ends: 75% less damage,
+// and the heat shield shows the player that the inferno is coming
+const dragonArmored=()=>B.state==='infernoWind'||B.state==='inferno';
 function dragonBody(){return{x:B.x+12,y:B.y+14,w:B.w-24,h:B.h-20}}
 function dragonHeadPos(){return B.state==='tired'?{x:dcx()+B.face*128,y:FLOOR-26}:{x:dcx()+B.face*118,y:dcy()-26}}
 function dragonHeadBox(){const h=dragonHeadPos();return{x:h.x-30,y:h.y-22,w:60,h:44}}
@@ -71,16 +75,17 @@ function dragonChoose(){
   else if(pk==='dive'){B.state='diveWind';B.t=.75;B.ty=70}
   else if(pk==='meteor'){B.state='meteorUp';sfx('screech')}
   else if(pk==='inferno') startInferno();
-  else {B.state='gust';B.t=2.4;B.tx=dcx()<(ARENA_L+ARENA_R)/2?ARENA_L+180:ARENA_R-180;B.ty=200;B.emitT=.3}
+  else {B.state='gust';B.t=2.4;B.gustSeed=Math.floor(Math.random()*4);B.tx=dcx()<(ARENA_L+ARENA_R)/2?ARENA_L+180:ARENA_R-180;B.ty=200;B.emitT=.3}
 }
 // when the dragon slams into the ground it lobs burning boulders to both sides:
-// phase 1 - two boulders, phase 2 - four boulders with a wider spread (none of them aimed at the player)
+// phase 1 - two boulders, phase 2 - three: one to each side, and a third on a high, slow arc far out
+// (none of them aimed at the player)
 function dragonBoulders(){
-  const sx=dcx(), sy=B.y-6, g=1300, Tf=.95, p2=B.phase===2;
+  const sx=dcx(), sy=B.y-6, g=1300, p2=B.phase===2;
   const s0=Math.random()<.5?1:-1;
-  const ds=p2?[s0*rand(150,280),-s0*rand(150,280),s0*rand(380,580),-s0*rand(380,580)]
-             :[s0*rand(150,330),-s0*rand(150,330)];
-  for(const d of ds){const tx=clamp(sx+d,ARENA_L+30,ARENA_R-30);
+  const ds=p2?[[s0*rand(150,280),.95],[-s0*rand(150,280),.95],[(Math.random()<.5?1:-1)*rand(380,580),1.5]]
+             :[[s0*rand(150,330),.95],[-s0*rand(150,330),.95]];
+  for(const [d,Tf] of ds){const tx=clamp(sx+d,ARENA_L+30,ARENA_R-30);
     eshots.push({k:'meteor',lob:true,x:sx,y:sy,vx:(tx-sx)/Tf,vy:((FLOOR-16)-sy-.5*g*Tf*Tf)/Tf,g,r:16})}
   sfx('fire');embers(sx,sy,10);
 }
@@ -135,7 +140,7 @@ function updateDragon(dt){
     case 'enrage':
       flyTo((ARENA_L+ARENA_R)/2,140,dt,260);B.t-=dt;B.mouth=.8+.2*Math.sin(time*20);
       skyHeat=approach(skyHeat,1,dt);
-      if(B.t<=0){B.phase=2;floater((ARENA_L+ARENA_R)/2,120,T('fPhase2'));startInferno();B.infArmor=true}break;   // only this first inferno is armoured
+      if(B.t<=0){B.phase=2;floater((ARENA_L+ARENA_R)/2,120,T('fPhase2'));startInferno()}break;
     case 'infernoWind':
       flyTo((ARENA_L+ARENA_R)/2,140,dt,360);B.t-=dt;B.mouth=approach(B.mouth,1,dt*1.5);B.glow=1;
       if(Math.random()<.9){const x=rand(ARENA_L,ARENA_R);parts.push({x,y:FLOOR-2,vx:rand(-20,20),vy:rand(-90,-40),g:-20,c:Math.random()<.5?'rgba(90,60,50,.55)':'rgba(255,140,40,.8)',s:rand(4,8),life:rand(.4,.8),max:0,t:'puff'})}
@@ -151,7 +156,7 @@ function updateDragon(dt){
       if(Math.random()<.9) embers(rand(ARENA_L,ARENA_R),FLOOR-rand(4,50),2);
       const inArena=P.x+P.w>ARENA_L&&P.x<ARENA_R;
       if(!P.dead&&inArena&&P.y+P.h>FLOOR-INFERNO_H) hurt(P.x+P.w/2+rand(-1,1));
-      if(B.t<=0){B.state='hover';B.t=.9;B.infCD=9;B.infArmor=false;dragonHoverTarget()}
+      if(B.t<=0){B.state='hover';B.t=.9;B.infCD=9;dragonHoverTarget()}
     }break;
     case 'meteorUp': B.y-=520*dt;if(B.y<-320){B.state='meteor';B.t=2.2;B.emitT=0}break;
     case 'meteor':
@@ -168,8 +173,10 @@ function updateDragon(dt){
       if(Math.random()<.5){const x=rand(ARENA_L,ARENA_R);parts.push({x,y:FLOOR-rand(2,12),vx:dir*rand(260,420),vy:rand(-60,-10),g:120,c:'rgba(232,200,140,.9)',s:rand(3,6),life:rand(.4,.8),max:0,t:'puff'})}
       if(Math.random()<.6) parts.push({x:dcx()+dir*rand(60,300),y:rand(FLOOR-200,FLOOR-10),vx:dir*rand(380,520),vy:0,g:0,c:'rgba(255,245,220,.7)',s:rand(2,4),life:.35,max:0,t:'dot'});
       B.emitT-=dt;
-      if(B.emitT<=0){B.emitT=.55;B.shots=(B.shots||0)+1;const m=dragonMouth(),low=B.shots%2===0;
-        eshots.push({k:'fireball',x:m.x,y:m.y,vx:0,vy:0,g:0,r:12,life:3,aim:{x:m.x+dir*200,y:low?FLOOR-22:FLOOR-84},sp:400,dir,ghost:true});B.mouth=1;sfx('fire')}
+      if(B.emitT<=0){B.emitT=.55;B.shots=(B.shots||0)+1;const m=dragonMouth();
+        // the fireballs ride the wind at four heights, from the floor up to the high platforms
+        const ys=[FLOOR-22,FLOOR-84,FLOOR-3*TS-30,GUST_TOP()+18],y=ys[(B.shots*3+(B.gustSeed||0))%4];
+        eshots.push({k:'fireball',x:m.x,y:m.y,vx:0,vy:0,g:0,r:12,life:3,aim:{x:m.x+dir*200,y},sp:400,dir,ghost:true});B.mouth=1;sfx('fire')}
       if(B.t<=0){B.state='hover';B.t=.8;dragonHoverTarget()}
     }break;
     case 'dying':
@@ -239,5 +246,5 @@ function drawDragon(){
   if(B.state==='breath'&&Math.random()<.5) embers(dragonMouth().x,dragonMouth().y,2);
 }
 
-registerBoss('dragon',{make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
+registerBoss('dragon',{spriteBox:()=>({x:B.x-80,y:B.y-90,w:B.w+160,h:B.h+110}),make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
   dmgMult:()=>dragonArmored()?.25:1});
