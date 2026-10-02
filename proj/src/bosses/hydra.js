@@ -40,7 +40,7 @@ const HYDRA_GAP_K=[1,.8,.85*.6,.7*.4];
 function hydraHit(dmg,x,y){const h=B.lastHead;if(h)hydraDamage(h,dmg,x,y)}
 function hydraDamage(h,dmg,x,y){
   if(!h||h.dead||B.state!=='fight') return;
-  h.hp-=dmg;h.flash=.1;burst(x,y,6,'#fff',150);sfx('hit');h.x+=Math.sign(h.x-h.rx||1)*12;
+  h.hp-=dmg;h.flash=.1;burst(x,y,6,'#fff',150);sfx('hit');h.x+=(Math.sign(h.x-(P.x+P.w/2))||1)*14;h.y-=4;
   if(h.hp<=EPS){h.hp=0;h.dead=true;h.st='dead';h.angry=0;h.trail.length=0;sfx('roar');shake(.4,8);burst(h.x,h.y,24,'#6fae6a',260);stars(h.x,h.y,8);
     B.atkCD=Math.max(B.atkCD,1.2)}
   B.hp=hydraHP();

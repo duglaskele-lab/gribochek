@@ -19,4 +19,4 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
     get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
-    croc:()=>crocChoose(),dragon:()=>dragonChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
+    croc:()=>crocChoose(),dragon:()=>dragonChoose(),snowman:()=>smChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now

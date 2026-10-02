@@ -429,6 +429,50 @@ def snow_fill(c):
     assert r[0]>30 and r[1]>250, r
     return f'{r[0]} flakes over {r[1]:.0f} px at once'
 
+@test('boss_knockback','boss')
+def boss_knockback(c):
+    # player hits push the crocodile (phase 1 only) and the flying dragon back a little; hydra heads are pushed away
+    out={}
+    c.js('g.startBoss(1);g.freeze();');c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    out['croc']=c.js("""const B=g.B,P=g.P;B.state='idle';B.t=9;B.x=(g.arena[0]+g.arena[1])/2-B.w/2;P.x=B.x-100;let x=B.x;g.hitBoss(1,B.x,B.y+40);const d1=B.x-x;
+      B.phase=2;x=B.x;g.hitBoss(1,B.x,B.y+40);return [d1,B.x-x]""")
+    c.js('g.startBoss(2);g.freeze();');c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    out['dragon']=c.js("""const B=g.B,P=g.P;B.state='hover';B.t=9;B.x=(g.arena[0]+g.arena[1])/2;B.y=120;P.x=B.x+B.w+200;let x=B.x;g.hitBoss(1,B.x,B.y+40);const d1=B.x-x;
+      B.state='tired';B.t=9;B.y=g.B.y;x=B.x;g.hitBoss(1,B.x,B.y+40);return [d1,B.x-x]""")
+    c.js('g.startBoss(3);g.freeze();');c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(3,()=>{P.inv=1e9})")
+    out['hydra']=c.js("""const B=g.B,P=g.P;g.sim(3,()=>{P.inv=1e9;if(B.state==='fight')return false});const h=B.heads[0];P.x=h.x-200;const x=h.x;g.hit(0,.5);return h.x-x""")
+    assert out['croc'][0]>3 and out['croc'][1]==0, out   # she is on its left: it is pushed right
+    assert out['dragon'][0]<-3 and out['dragon'][1]==0, out
+    assert out['hydra']>5, out
+    return 'croc (phase 1), flying dragon and hydra heads are pushed back'
+
+@test('snowman_phase3','boss4','ice')
+def snowman_phase3(c):
+    c.js('g.startBoss(4);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P,mid=(g.arena[0]+g.arena[1])/2,out={};
+      // far away: never the clap or the frost breath
+      B.phase=2;let bad=0;for(let i=0;i<300;i++){B.state='idle';B.t=0;B.last='';B.x=g.arena[0]+30;P.x=g.arena[1]-100;g.snowman();if(B.state==='clapWind'||B.state==='frostWind')bad++}
+      out.farBad=bad;
+      // phase 3 at a third of its health, then hops make 30% of its moves
+      B.state='idle';B.t=9;B.x=mid-B.w/2;B.hp=B.max/3-.1;g.sim(.05,()=>{P.inv=1e9});out.phase=B.phase;
+      let hops=0,n=0;for(let i=0;i<1000;i++){B.state='idle';B.t=0;B.last='';B.splitCD=0;B.throwCD=0;B.x=mid-B.w/2;P.x=mid+300;g.snowman();n++;if(B.state==='hopWind')hops++}
+      out.hopShare=hops/n;return out""")
+    assert r['farBad']==0 and r['phase']==3 and .24<r['hopShare']<.36, r
+    return f"no clap/frost from afar; phase 3, hops {r['hopShare']:.0%}"
+
+@test('sand_idle','player')
+def sand_idle(c):
+    # sinking in quicksand she shows the standing sprite, not a jump
+    for seed in range(1,15):
+        c.start(2,seed)
+        pos=c.js("""const G=g.grid;for(let x=10;x<G[0].length-2;x++)for(let r=2;r<G.length-1;r++)if(G[r][x]===6&&G[r-1][x]===0&&G[r][x+1]===6)return [x,r];return null""")
+        if pos: break
+    x,r=pos
+    fr=c.js(f"const P=g.P;P.inv=1e9;P.x={x}*40+5;P.y={r}*40-50;P.vx=0;P.vy=0;g.sim(.4,()=>{{P.inv=1e9}});g.render();return [P.inSand,P._fr[0]]")
+    assert fr[0] and fr[1]=='idle', fr
+    return 'idle sprite in quicksand'
+
 @test('frog_warn','enemies')
 def frog_warn(c):
     # the frog shows a warning before every tongue lash
@@ -481,6 +525,11 @@ def ui(c):
     n=c.page.evaluate("document.querySelectorAll('.boss-btn').length")
     assert n==c.js('return Object.keys(g.levels).length'), n
     k.press('Escape');c.page.wait_for_timeout(100)
+    # in-game Esc menu: 'Main menu' is the last item
+    c.js('g.start(1,1)');c.page.wait_for_timeout(50);c.page.keyboard.press('Escape');c.page.wait_for_timeout(150)
+    last=c.page.evaluate("()=>{const b=[...document.querySelectorAll('#card .menu button')];return b.length?b[b.length-1].id:null}")
+    assert last=='tomenu', last
+    c.page.keyboard.press('Escape');c.page.wait_for_timeout(100)
     for w,h,cols in [(1280,720,4),(800,600,3),(1366,560,4)]:
         c.resize(w,h); c.js('g.start(1,5);g.setSpores(50);g.openShop()'); c.page.wait_for_timeout(150)
         r=c.page.evaluate("()=>{const c=document.getElementById('card');return [c.scrollHeight<=c.clientHeight+2,getComputedStyle(document.querySelector('.shop-list')).gridTemplateColumns.split(' ').length]}")

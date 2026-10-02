@@ -33,7 +33,7 @@ function showScreen(kind){
     <div class="menu"><button class="cap-btn" id="go">${inGame?T('resume'):T('back')}</button>
     <button class="ghost-btn" id="ctrl">${T('controls')}</button><button class="ghost-btn" id="sound">${T('sound')}</button>
     <button class="ghost-btn" id="langb">${T('language')}: ${I18N[lang].name}</button>
-    ${inGame?`<button class="ghost-btn" id="tomenu">${T('mainMenu')}</button><button class="ghost-btn" id="restart">${T('restart')}</button><button class="ghost-btn" id="newmap">${T('newMap')}</button>`:''}</div>`;
+    ${inGame?`<button class="ghost-btn" id="restart">${T('restart')}</button><button class="ghost-btn" id="newmap">${T('newMap')}</button><button class="ghost-btn" id="tomenu">${T('mainMenu')}</button>`:''}</div>`;
     document.getElementById('langb').addEventListener('click',()=>setLang(nextLang));
     document.getElementById('ctrl').addEventListener('click',()=>showScreen('controls'));
   }

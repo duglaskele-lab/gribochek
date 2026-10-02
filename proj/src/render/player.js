@@ -17,6 +17,7 @@ function drawPlayer(){
   else if(p.dashT>0){n='run';i=1}
   else if(p.punchT>0){n='attack';i=p.punchT>PUNCH_ACTIVE[0]?0:1}
   else if(p.hurtT>0){n='hurt';i=Math.floor(time*8)%2}
+  else if(p.inSand&&p.vy>=0){if(Math.abs(p.vx)>25){n='run';i=Math.floor(time*6)%4}else{n='idle';i=0}}   // sinking in quicksand: she stands (or wades)
   else if(!p.onGround){
     if(p.inWater){n='run';i=Math.floor(time*6)%4}
     else if(p.jumpT<.07){n='jump';i=0}

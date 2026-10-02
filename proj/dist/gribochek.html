@@ -2935,7 +2935,10 @@ function drawCroc(){
   if(B.state==='stun') for(let k=0;k<3;k++){const a=time*5+k*2.1;drawStar(cx+f*60+Math.cos(a)*40,B.y-10+Math.sin(a)*10,7,time*4)}
 }
 
-registerBoss('croc',{spriteBox:()=>({x:B.x+B.w/2-220,y:B.y-10,w:440,h:B.h+10}),make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
+// in phase 1 a hit pushes it back a few pixels (like the snowman); in phase 2 it stands firm
+function crocOnHit(){if(B.phase!==1||B.state==='dying'||B.state==='sleep')return;const d=Math.sign(B.x+B.w/2-(P.x+P.w/2))||-B.face;
+  B.x=clamp(B.x+d*4,ARENA_L,ARENA_R-B.w)}
+registerBoss('croc',{onHit:crocOnHit,spriteBox:()=>({x:B.x+B.w/2-220,y:B.y-10,w:440,h:B.h+10}),make:makeCroc,update:updateCroc,draw:drawCroc,burst:'#4f7d3c',nameKey:'boss',introT:1.6,
   dmgMult:()=>B.state==='enrage'?.75:1});   // while it changes into phase 2 it takes only 75% of the damage
 // ==== bosses/dragon.js ====
 /* ---------- dragon ---------- */
@@ -3188,7 +3191,10 @@ function drawDragon(){
   if(B.state==='breath'&&Math.random()<.5) embers(dragonMouth().x,dragonMouth().y,2);
 }
 
-registerBoss('dragon',{spriteBox:()=>({x:B.x-80,y:B.y-90,w:B.w+160,h:B.h+110}),make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
+// while it flies, a hit pushes it back a little; on the ground it does not budge
+function dragonOnHit(){if(['tired','sleep','dying','dead'].indexOf(B.state)>=0||B.y+B.h>=FLOOR-2)return;
+  const d=Math.sign(dcx()-(P.x+P.w/2))||-B.face;B.x=clamp(B.x+d*4,ARENA_L+20,ARENA_R-B.w-20)}
+registerBoss('dragon',{onHit:dragonOnHit,spriteBox:()=>({x:B.x-80,y:B.y-90,w:B.w+160,h:B.h+110}),make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
   dmgMult:()=>dragonArmored()?.25:1});
 // ==== bosses/hydra.js ====
 /* ---------- hydra ---------- */
@@ -3233,7 +3239,7 @@ const HYDRA_GAP_K=[1,.8,.85*.6,.7*.4];
 function hydraHit(dmg,x,y){const h=B.lastHead;if(h)hydraDamage(h,dmg,x,y)}
 function hydraDamage(h,dmg,x,y){
   if(!h||h.dead||B.state!=='fight') return;
-  h.hp-=dmg;h.flash=.1;burst(x,y,6,'#fff',150);sfx('hit');h.x+=Math.sign(h.x-h.rx||1)*12;
+  h.hp-=dmg;h.flash=.1;burst(x,y,6,'#fff',150);sfx('hit');h.x+=(Math.sign(h.x-(P.x+P.w/2))||1)*14;h.y-=4;
   if(h.hp<=EPS){h.hp=0;h.dead=true;h.st='dead';h.angry=0;h.trail.length=0;sfx('roar');shake(.4,8);burst(h.x,h.y,24,'#6fae6a',260);stars(h.x,h.y,8);
     B.atkCD=Math.max(B.atkCD,1.2)}
   B.hp=hydraHP();
@@ -4120,6 +4126,7 @@ function drawPlayer(){
   else if(p.dashT>0){n='run';i=1}
   else if(p.punchT>0){n='attack';i=p.punchT>PUNCH_ACTIVE[0]?0:1}
   else if(p.hurtT>0){n='hurt';i=Math.floor(time*8)%2}
+  else if(p.inSand&&p.vy>=0){if(Math.abs(p.vx)>25){n='run';i=Math.floor(time*6)%4}else{n='idle';i=0}}   // sinking in quicksand: she stands (or wades)
   else if(!p.onGround){
     if(p.inWater){n='run';i=Math.floor(time*6)%4}
     else if(p.jumpT<.07){n='jump';i=0}
@@ -4786,7 +4793,7 @@ function showScreen(kind){
     <div class="menu"><button class="cap-btn" id="go">${inGame?T('resume'):T('back')}</button>
     <button class="ghost-btn" id="ctrl">${T('controls')}</button><button class="ghost-btn" id="sound">${T('sound')}</button>
     <button class="ghost-btn" id="langb">${T('language')}: ${I18N[lang].name}</button>
-    ${inGame?`<button class="ghost-btn" id="tomenu">${T('mainMenu')}</button><button class="ghost-btn" id="restart">${T('restart')}</button><button class="ghost-btn" id="newmap">${T('newMap')}</button>`:''}</div>`;
+    ${inGame?`<button class="ghost-btn" id="restart">${T('restart')}</button><button class="ghost-btn" id="newmap">${T('newMap')}</button><button class="ghost-btn" id="tomenu">${T('mainMenu')}</button>`:''}</div>`;
     document.getElementById('langb').addEventListener('click',()=>setLang(nextLang));
     document.getElementById('ctrl').addEventListener('click',()=>showScreen('controls'));
   }
@@ -5863,7 +5870,8 @@ function drawIceShot(b){
 // Attacks: overhead slam, long diagonal punch, a volley of snowballs spat from the head, a big hop that brings icicles
 // down, the split (the balls roll at you one by one and stack up again at the far end), the head throw (the head
 // bounces like a ball to the wall of the arena and back onto the body), the clap high over its head and,
-// in phase 2, a beam of frost breath. A hit pushes it back a few pixels.
+// in phase 2, a beam of frost breath. Phase 3 (the last third of its health) hops more and attacks more often.
+// A hit pushes it back a few pixels.
 const SM_R=[62,46,36];
 function makeSnowman(){return{kind:'snowman',x:ARENA_L+18*TS,y:FLOOR-262,w:124,h:262,hp:76,max:76,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
   sq:[0,0,0],sqv:[0,0,0],last:'',splitCD:6,pieces:null,shots:0,mouth:0,lean:0,aboveT:0,aim:null,hf:null,hb:null,hitDone:false,melt:0,wob:0,stompCD:0,throwCD:4}}
@@ -5876,21 +5884,24 @@ function smBalls(){
 const smBox=b=>({x:b.x-b.r*.85,y:b.y-b.r*.85,w:b.r*1.7,h:b.r*1.7});
 function smKick(k){for(let i=0;i<3;i++)B.sqv[i]+=k*(1-i*.15)}
 function smShoulders(){const b=smBalls()[1],f=B.face;return{fx:b.x+f*b.r*.82,fy:b.y-6,bx:b.x-f*b.r*.82,by:b.y-6}}
-function smMult(){return B.phase===2?.72:1}
+function smMult(){return B.phase>=2?.72:1}
 function smChoose(){
-  const cx=smCX(),pcx=P.x+P.w/2,d=Math.abs(pcx-cx),p2=B.phase===2;
+  const cx=smCX(),pcx=P.x+P.w/2,d=Math.abs(pcx-cx),p2=B.phase>=2;
   B.face=pcx>cx?1:-1;
   const room=B.face>0?ARENA_R-90-cx:cx-(ARENA_L+90);
   const o=[];
   if(d<270)o.push(['slam',3]);
   if(d>190&&d<640)o.push(['punch',2.4]);
   if(B.throwCD<=0&&d>200)o.push(['throw',p2?2.4:1.8]);
-  o.push(['clap',d<480?2.4:1]);
-  if(p2&&d>140)o.push(['frost',2.2]);
+  // the clap and the frost breath only when she is within half a screen
+  if(d<=VW/2)o.push(['clap',d<480?2.4:1]);
+  if(p2&&d>140&&d<=VW/2)o.push(['frost',2.2]);
   if(d>230)o.push(['volley',2]);
   o.push(['hop',d>380?2.6:1.1]);
   if(B.splitCD<=0&&d>150&&room>420)o.push(['split',p2?2.6:1.6]);
   const f=o.filter(q=>q[0]!==B.last),L=f.length?f:o;
+  // phase 3: the hop is 30% of all its attacks
+  if(B.phase===3){const hp=L.find(q=>q[0]==='hop');if(hp){const rest=L.reduce((a,q)=>a+(q===hp?0:q[1]),0);hp[1]=rest*.3/.7}}
   let s=0;for(const q of L)s+=q[1];let r=Math.random()*s,k=L[L.length-1][0];for(const q of L){r-=q[1];if(r<=0){k=q[0];break}}
   B.last=k;const m=smMult();B.hitDone=false;
   switch(k){
@@ -5919,19 +5930,19 @@ function smSnowball(i,n){
 }
 function smLand(){
   B.vx=0;shake(.45,10);sfx('boom');smKick(6);const cx=smCX();snowPuff(cx-50,FLOOR-6,8);snowPuff(cx+50,FLOOR-6,8);
-  const p2=B.phase===2,n=p2?5:3;
+  const p2=B.phase>=2,n=p2?5:3;
   for(let i=0;i<n;i++)eshots.push({k:'icicle',x:rand(ARENA_L+60,ARENA_R-60),y:iceCeil+6,st:'warn',t:.6+i*.15,vy:0,r:11});
   eshots.push({k:'icicle',x:clamp(P.x+P.w/2,ARENA_L+40,ARENA_R-40),y:iceCeil+6,st:'warn',t:.75,vy:0,r:11});
   if(p2)for(const s of [-1,1])eshots.push({k:'iwave',x:cx+s*80,y:FLOOR,vx:s*360,life:3,h:0});
 }
 function smSplitStart(){
-  const bs=smBalls(),dir=B.face,p2=B.phase===2;
+  const bs=smBalls(),dir=B.face,p2=B.phase>=2;
   B.tx=dir>0?ARENA_R-90:ARENA_L+90;B.splitDir=dir;
   B.pieces=bs.map((b,i)=>({i,x:b.x,y:b.y,r:b.r,vx:0,vy:0,delay:i*(p2?.45:.55),st:'wait',rot:0,k:0}));
   B.state='split';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];sfx('roar');shake(.3,6);
 }
 function smSplitUpdate(dt){
-  const dir=B.splitDir,tx=B.tx,stackY=[FLOOR-62,FLOOR-156,FLOOR-228],p2=B.phase===2;
+  const dir=B.splitDir,tx=B.tx,stackY=[FLOOR-62,FLOOR-156,FLOOR-228],p2=B.phase>=2;
   let support=FLOOR;B.t+=dt;
   for(const p of B.pieces){
     if(p.st==='wait'){ // the rest of the stack drops when the ball under it rolls away
@@ -5966,7 +5977,7 @@ function smFrostAim(k){const f=B.face,h=smBalls()[2],mx=h.x+f*h.r*.6,my=h.y+10,n
    the arena and back, and drops onto the body again. The body waits headless. */
 const smStackY=i=>FLOOR-[62,156,228][i];   // centres of the balls when stacked
 function smThrowStart(){
-  const bs=smBalls(),f=B.face,p2=B.phase===2;
+  const bs=smBalls(),f=B.face,p2=B.phase>=2;
   B.pieces=bs.map((b,i)=>({i,x:bs[0].x,y:smStackY(i),r:b.r,vx:0,vy:0,st:'done',rot:0,k:0}));   // the body stays put
   const hd=B.pieces[2];hd.x=bs[2].x;hd.y=bs[2].y;hd.st='ball';hd.vx=f*(p2?470:420);hd.vy=-560;
   B.sx=bs[0].x;B.splitDir=f;B.state='headThrow';B.t=0;B.lean=0;B.sq=[0,0,0];B.sqv=[0,0,0];B.throwCD=p2?7:9;
@@ -5992,7 +6003,7 @@ function smThrowUpdate(dt){
   }
 }
 function updateSnowman(dt){
-  const p2=B.phase===2,m=smMult(),pcx=P.x+P.w/2;
+  const p2=B.phase>=2,m=smMult(),pcx=P.x+P.w/2;
   // springy balls
   for(let i=0;i<3;i++){const a=-220*B.sq[i]-14*B.sqv[i];B.sqv[i]+=a*dt;B.sq[i]=clamp(B.sq[i]+B.sqv[i]*dt,-.25,.35)}
   if(B.splitCD>0)B.splitCD-=dt;if(B.stompCD>0)B.stompCD-=dt;if(B.throwCD>0)B.throwCD-=dt;
@@ -6025,10 +6036,12 @@ function updateSnowman(dt){
     case 'intro': B.t-=dt;B.mouth=.6;tf=[sh.fx+f*40,sh.fy-80+Math.sin(time*14)*20];tb=[sh.bx-f*40,sh.by-80+Math.sin(time*14+2)*20];
       if(Math.random()<.08)smKick(2);if(B.t<=0){B.state='idle';B.t=.6}break;
     case 'idle':{
-      B.t-=dt;const d=Math.abs(pcx-cx);if(d>12)B.face=pcx>cx?1:-1;
+      // phase 3 is 15% more aggressive: the pause between attacks runs out sooner
+      B.t-=dt*(B.phase===3?1.15:1);const d=Math.abs(pcx-cx);if(d>12)B.face=pcx>cx?1:-1;
       B.vx=approach(B.vx,d>420?B.face*85:0,400*dt);
       if(Math.abs(B.vx)>20){B.wob-=dt;if(B.wob<=0){B.wob=.32;smKick(2.2);snowPuff(cx,FLOOR-4,2)}}
       if(B.phase===1&&B.hp<=B.max/2){B.state='enrage';B.t=1.3;B.vx=0;sfx('roar');shake(1,7);break}
+      if(B.phase===2&&B.hp<=B.max/3) B.phase=3;   // the last third: phase 3, without a show
       if(B.aboveT>.5){B.state='hopWind';B.t=.4*m;B.vx=0;B.aboveT=0;B.last='hop';break}   // she hangs above it: it jumps
       if(B.t<=0){B.vx=0;smChoose()}
       break}
@@ -6308,7 +6321,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     attack:(e,dmg,srcX)=>attackEnemy(e,dmg,srcX,e.x+e.w/2,e.y+e.h/2,null),   // a punch / mushroom hit coming from srcX
     get levels(){return LEVELS},get bosses(){return BOSSES},get level(){return LEVEL},get parts(){return parts},
     get arenaLocked(){return arenaLocked},get spores(){return spores},get ruins(){return ruins},get door(){return door},
-    croc:()=>crocChoose(),dragon:()=>dragonChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
+    croc:()=>crocChoose(),dragon:()=>dragonChoose(),snowman:()=>smChoose(),get vw(){return VW},punch:()=>punch(),throwShroom:()=>throwShroom(),maxMana:()=>maxMana(),get shotLvl(){return shotLvl},get shots(){return shots},get skylights(){return LEVEL===4?skylights:[]},bossSeen:m=>bossSeen(m)}};   // the crocodile picks its next move now
 // ==== main.js ====
 /* ---------- main loop (render capped at 60 fps, fixed 120 Hz physics) ---------- */
 newGame();

@@ -248,5 +248,8 @@ function drawDragon(){
   if(B.state==='breath'&&Math.random()<.5) embers(dragonMouth().x,dragonMouth().y,2);
 }
 
-registerBoss('dragon',{spriteBox:()=>({x:B.x-80,y:B.y-90,w:B.w+160,h:B.h+110}),make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
+// while it flies, a hit pushes it back a little; on the ground it does not budge
+function dragonOnHit(){if(['tired','sleep','dying','dead'].indexOf(B.state)>=0||B.y+B.h>=FLOOR-2)return;
+  const d=Math.sign(dcx()-(P.x+P.w/2))||-B.face;B.x=clamp(B.x+d*4,ARENA_L+20,ARENA_R-B.w-20)}
+registerBoss('dragon',{onHit:dragonOnHit,spriteBox:()=>({x:B.x-80,y:B.y-90,w:B.w+160,h:B.h+110}),make:makeDragon,update:updateDragon,draw:drawDragon,burst:'#c8432b',nameKey:'boss2',introT:1.8,
   dmgMult:()=>dragonArmored()?.25:1});
