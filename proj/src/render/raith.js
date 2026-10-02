@@ -1,8 +1,9 @@
 /* ---------- Raithwyn: drawing ---------- */
-// Frames come from assets/raith.webp (see tools/raith_atlas.py). She is drawn twice as tall as the mushroom girl.
+// Frames come from assets/raith.webp (see tools/raith_atlas.py). She is drawn 1.4 times as tall as the mushroom girl
+// (standing frame against standing frame).
 // No death frames: she laughs while a cloud of purple fog swallows her, then the fog shrinks to a point.
 const raithSheet=new Image(); raithSheet.src=RAITH_SRC;
-const RAITH_SC=.88, RAITH_DEATH=1.6;
+const RAITH_TALL=1.4, RAITH_SC=RAITH_TALL*FRAMES.idle[0][3]*SC*(ANIM_SCALE.idle||1)/RAITH_FRAMES.idle[0][3], RAITH_DEATH=1.6;
 function drawRaithFrame(n,i,cx,by,face,alpha=1){
   const f=RAITH_FRAMES[n]&&RAITH_FRAMES[n][i]; if(!f||!raithSheet.complete) return;
   const [fx,fy,fw,fh,ax]=f, s=RAITH_SC;
@@ -38,7 +39,7 @@ function drawRaith(p){
   const [n,i]=raithAnim(p);
   p._fr=[n,i,cx,by,p.face,alpha,1,raithSheet,RAITH_FRAMES[n][i],RAITH_SC];
   if(p.dead){ // laughing, she sinks into purple fog; then the fog shrinks to a point
-    const t=p.deadT, grow=clamp(t/.7,0,1), shrink=clamp((t-.85)/(RAITH_DEATH-.85),0,1), R=95*grow*(1-shrink), fy=by-80*(1-shrink*.7);
+    const t=p.deadT, grow=clamp(t/.7,0,1), shrink=clamp((t-.85)/(RAITH_DEATH-.85),0,1), R=70*grow*(1-shrink), fy=by-58*(1-shrink*.7);
     drawRaithFrame(n,i,cx,by,p.face,clamp(1-(t-.35)/.4,0,1));
     if(R>1){for(let k=0;k<7;k++){const a=time*1.6+k*0.9,rr=R*(.55+.25*Math.sin(time*3+k)),ox=Math.cos(a)*R*.35,oy=Math.sin(a*1.3)*R*.3;
         const g=ctx.createRadialGradient(cx+ox,fy+oy,0,cx+ox,fy+oy,rr);g.addColorStop(0,'rgba(120,60,190,.85)');g.addColorStop(.6,'rgba(150,90,220,.55)');g.addColorStop(1,'rgba(150,90,220,0)');
