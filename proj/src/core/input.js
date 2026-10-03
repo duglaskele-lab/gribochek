@@ -17,7 +17,6 @@ addEventListener('keydown',e=>{
     if(['Enter','Space','KeyK','KeyE','KeyZ','KeyX'].indexOf(e.code)>=0&&!e.repeat){e.preventDefault();if(performance.now()-screenShownAt>350){const g=document.getElementById('go');g&&g.click()}}
     return }
   if(state!=='play'){menuKey(e);return}
-  if(e.code==='KeyI'&&!e.repeat){toggleRaithOutline();return}   // Raithwyn's purple outline on/off
   const a=KEYMAP[e.code]; if(!a) return; e.preventDefault();
   if(e.repeat) return;
   if(a==='j'&&!inp.j) jumpEdge=true;

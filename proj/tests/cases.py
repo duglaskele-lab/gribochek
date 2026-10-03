@@ -507,8 +507,8 @@ def raith(c):
            g.P.shootCD=0;g.punch();g.sim(.1,()=>{P.inv=1e9});out.waveCol=g.pwaves[0]&&g.pwaves[0].col&&g.pwaves[0].col[0]}
           // the power mushroom: no stop for a pickup animation
           {const Q=g.P;g.items.push({k:'power',x:Q.x+Q.w/2,y:Q.y+Q.h/2,ph:0});g.sim(.05,()=>{Q.inv=1e9});out.pickLock=Q.lockT>0||Q.pickT>=0}
-          // I: the purple outline on and off; it draws
-          {const o0=g.outline;g.toggleOutline();g.render();out.outline=[o0,g.outline,g.outlined];g.toggleOutline()}
+          // the purple outline: the outlined copy of her sheet is ready
+          {g.render();out.outline=g.outlined}
           // not enough mana: no cast
           P.mana=3;P.shootCD=0;g.cast('sphere');out.denied=!(P.castT>0);P.mana=50;
           // a stomp
@@ -526,7 +526,7 @@ def raith(c):
         r['gribDash']=gd
         assert r['punch']==1.5 and r['anims']==['punch','punch2'] and r['stomp']==2, r
         assert r['castFr']=='hadoken' and r['hadoken']==[5,35] and r['sphereFr']=='sphere' and r['sphereMana']==45 and r['sphere']==5 and r['sway']>200 and r['denied'], r
-        assert r['dashFr']==['run',2] and r['waveCol']=='#b77ee0' and not r['pickLock'] and r['outline'][0]!=r['outline'][1] and r['outline'][2], r
+        assert r['dashFr']==['run',2] and r['waveCol']=='#b77ee0' and not r['pickLock'] and r['outline'], r
         assert r['deathFr']=='death' and r['castV']<=140 and 50<r['hadokenUp']<70 and r['fall'][1]<r['fall'][0]*.6, r
         assert r['heavy']==0 and r['shop']==['heal','maxhp','mush','manaUp'] and r['stillDead'] and r['back'], r
         assert abs(r['dash']/r['gribDash']-1.15)<.06 and r['wave'], r
