@@ -1,7 +1,7 @@
 /* ---------- level flow ---------- */
 function startLevel(level,seed){
   genLevel(level,seed);tidyItems();sporeTotal=items.filter(i=>i.k==='spore').length;
-  shots=[];eshots=[];parts=[];floaters=[];ghosts=[];pwaves=[];dynPlats=plats.slice();
+  shots=[];eshots=[];parts=[];floaters=[];ghosts=[];pwaves=[];spells=[];dynPlats=plats.slice();
   hitstop=0;shakeT=0;shakeM=0;arenaLocked=false;arenaIn=false;bossDead=false;skyHeat=0;secretsFound=0;
   const y=(LV().startY?LV().startY():topY(3))-HERO().h;
   P=newPlayer(3*TS,y);

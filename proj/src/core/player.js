@@ -7,19 +7,29 @@ function gainMana(n){if(P.dead)return;P.mana=Math.min(maxMana(),P.mana+n)}
 const airDashMax=()=>hasCloak?2:1;
 // K: a punch with a shockwave (1 damage); every punch that lands on a foe gives mana back
 function punch(){
-  const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();p.strong=false;sfx('punch');
+  const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
+  p.punchAnim=Math.random()<.5?'punch':'punch2';   // Raithwyn has two punch animations, picked at random
   const wv=HERO().wave;
   pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE*wv.len,hit:p.punchHit,dmg:HERO().punch,tall:wv.tall});
 }
-// Raithwyn's L: a strong punch for mana that sends a big shockwave over a medium distance
-function strongPunch(){
-  const p=P,st=HERO().strong;
-  if(p.mana<st.cost){p.shootCD=.25;sfx('deny');return}
-  p.mana-=st.cost;p.shootCD=st.t+.12;p.punchT=st.t;p.strong=true;p.punchHit=new Set();sfx('punch');sfx('dash');
-  pwaves.push({delay:st.t*.45,face:p.face,x:0,y:0,vx:0,life:st.life,hit:p.punchHit,dmg:st.dmg,big:true,noMana:true});
+// Raithwyn's spells (L: hadoken, I: small sphere): a cast animation, then the shot leaves her hand (see updateSpells).
+// Mana is checked when the cast starts and paid when the shot flies out; getting hurt or dashing breaks the cast.
+function castSpell(k){
+  const p=P,sp=HERO()[k];
+  if(p.mana<sp.cost){p.shootCD=.25;sfx('deny');return}
+  p.cast=k;p.castT=sp.t;p.castFired=false;p.shootCD=sp.t+.06;p.punchT=0;sfx('dash');
+}
+function castFire(){
+  const p=P,k=p.cast,sp=HERO()[k]; p.castFired=true;
+  if(p.mana<sp.cost){sfx('deny');return}
+  p.mana-=sp.cost;
+  const x=p.x+p.w/2+p.face*(k==='hadoken'?62:44), y=p.y+(k==='hadoken'?30:26);
+  spells.push({k,x,y,y0:y,t:0,face:p.face,vx:p.face*sp.speed,life:sp.life,r:sp.r,dmg:sp.dmg,amp:sp.amp||0,per:sp.per||1,hit:new Set()});
+  sfx(k==='hadoken'?'power':'shoot');
+  if(k==='hadoken'){shake(.12,4);dust(p.x+p.w/2-p.face*10,p.y+p.h,6,-p.face)}
 }
 // once per punch (the punch and its shockwave share one set of hits): +mana for the first foe it hits
-function punchMana(set){if(!set.mana&&!set.noMana){set.mana=true;gainMana(MANA_HIT)}}
+function punchMana(set){if(!set.mana){set.mana=true;gainMana(MANA_HIT)}}
 // L: throw mushrooms - one, two or three of them (shop upgrades), paid with mana
 function throwShroom(){
   const p=P,n=shotLvl,cost=SHOT_COST[n];
@@ -33,7 +43,7 @@ function throwShroom(){
 }
 function hurt(srcX){
   const p=P; if(p.inv>0||p.dead||p.entering||p.dashT>0) return;
-  p.hp--;
+  p.hp--;p.castT=0;
   p.inv=1.4;p.hurtT=.35;p.vx=(p.x+p.w/2<srcX?-1:1)*280;p.vy=-400;p.onGround=false;p.ride=null;p.heavyT=0;
   shake(.25,7);sfx('hurt');hitstop=.06;
   if(p.hp<=0) kill(false);
@@ -41,13 +51,13 @@ function hurt(srcX){
 function kill(fell){
   const p=P; if(p.dead) return;
   p.dead=true;p.deadT=0;p.fell=fell;p.hp=0;p.vx=0;
-  if(!fell) p.vy=-300;
+  if(!fell&&hero!=='raith') p.vy=-300;   // Raithwyn plays her fall-down frames on the spot instead
   shake(.3,8);sfx('hurt');
 }
 function respawn(){
   const keepMax=P.maxhp, keepMana=P.mana;
   P=newPlayer(cp.x,cp.y); P.maxhp=keepMax; P.hp=keepMax; P.mana=keepMana; P.inv=1.2;
-  eshots=[];pwaves=[];
+  eshots=[];pwaves=[];spells=[];
   // every foe comes back as it was at the start of the level: the killed ones return, the wounded ones heal.
   // Breakable boxes and huts stay as they are; whatever a foe spawned (slime kids, hut lizards) goes away.
   for(const e of enemies) if(!e.prop) e.dead=true;
@@ -76,6 +86,8 @@ function attackEnemy(e,dmg,srcX,fx,fy,test){
   damageEnemy(e,dmg*(e.flipped?2:1),srcX); return true;
 }
 function clang(x,y){sfx('clang');for(let i=0;i<8;i++)parts.push({x,y,vx:rand(-200,200),vy:rand(-260,-40),g:900,c:'#fff3b0',s:rand(2,4),life:rand(.15,.35),max:0,t:'dot'})}
+// foes' shots a punch, a shockwave or a spell can knock down
+function canDeflect(b){return b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect)}
 function punchHits(){
   const p=P, R=HERO().reach, box={x:p.face>0?p.x+p.w/2:p.x+p.w/2-R,y:p.y+8,w:R,h:p.h-12}, DMG=HERO().punch;
   const fx=p.x+p.w/2+p.face*(R-12), fy=p.y+p.h/2;
@@ -84,23 +96,22 @@ function punchHits(){
       if(attackEnemy(e,DMG,p.x+p.w/2,fx,fy,b=>overlap(box,b))){if(!e.prop)punchMana(p.punchHit);if(!e.dead&&e.type==='slime')e.vx=p.face*220;burst(fx,fy,8,'#fff',180);shake(.06,3);hitstop=Math.max(hitstop,.03)}
       else {p.vx=-p.face*180}}}
   if(!p.punchHit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){p.punchHit.add(B);hitBoss(DMG*m,fx,fy);punchMana(p.punchHit);shake(.06,3)}}
-  for(const b of eshots) if(b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect)) if(!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
+  for(const b of eshots) if(canDeflect(b)&&!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
 }
 function updateWaves(dt){
   for(const w of pwaves){
     if(w.delay>0){ w.delay-=dt;
       if(w.delay<=0){ if(P.dead||P.punchT<=0){w.life=0;continue}
-        w.face=P.face; w.x=P.x+P.w/2+w.face*(w.big?40:34); w.y=P.y+P.h/2; w.vx=w.face*WAVE_SPEED+P.vx*.4;w.life0=w.life;
-        if(w.big){w.hit.noMana=true;shake(.15,5);dust(P.x+P.w/2+w.face*30,P.y+P.h,8,w.face)} }
+        w.face=P.face; w.x=P.x+P.w/2+w.face*34; w.y=P.y+P.h/2; w.vx=w.face*WAVE_SPEED+P.vx*.4;w.life0=w.life }
       continue }
     w.life-=dt; w.x+=w.vx*dt;
     {const wc=Math.floor((w.x+w.face*10)/TS),wr=Math.floor(w.y/TS);if(solid(wc,wr)){breakWall(wc,wr);w.life=0;burst(w.x,w.y,6,'#fff',140);continue}}
-    const th=24*(w.tall||1), box=w.big?{x:w.x-28,y:w.y-52,w:56,h:96}:{x:w.x-16,y:w.y-th,w:32,h:th*2}, WD=w.dmg||DMG_PUNCH;
+    const th=24*(w.tall||1), box={x:w.x-16,y:w.y-th,w:32,h:th*2}, WD=w.dmg||DMG_PUNCH;
     for(const e of enemies){ if(e.dead||w.hit.has(e)) continue;
       if(enemyHurtBoxes(e).some(b=>overlap(box,b))){w.hit.add(e);
         if(attackEnemy(e,WD,w.x-w.face*20,w.x,w.y,b=>overlap(box,b))){if(!e.prop)punchMana(w.hit);if(!e.dead&&e.type==='slime')e.vx=w.face*200;burst(w.x,w.y,8,'#fff',180);hitstop=Math.max(hitstop,.025)} else w.life=0}}
     if(w.life>0&&!w.hit.has(B)&&bossHittable()){const m=bossHitMult(b=>overlap(box,b));if(m){w.hit.add(B);hitBoss(WD*m,w.x,w.y);punchMana(w.hit)}}
-    for(const b of eshots) if((b.k==='banana'||b.k==='needle'||b.k==='fireball'||b.k==='arrow'||b.k==='orb'||b.k==='acid'||b.k==='dart'||(SHOTS[b.k]&&SHOTS[b.k].deflect))&&!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
+    for(const b of eshots) if(canDeflect(b)&&!b.dead&&circleBox(b.x,b.y,b.r,box)){b.dead=true;burst(b.x,b.y,8,'#ffd84a',160);sfx('hit')}
   }
   pwaves=pwaves.filter(w=>w.life>0);
 }
@@ -203,9 +214,12 @@ function updatePlayer(dt){
   p.glide=hasUmbrella&&HERO().umbrella&&ctl&&inp.j&&!p.onGround&&!p.inWater&&!p.inSand&&p.dashT<=0&&p.vy>0&&!(p.springT>0);
   if(p.glide&&p.vy>GLIDE_V) p.vy=approach(p.vy,GLIDE_V,3000*dt);
   if(p.inSand&&p.vy>SAND_SINK) p.vy=SAND_SINK;
+  if(p.castT>0&&(p.dashT>0||p.dead)) p.castT=0;
+  if(p.castT>0){p.castT-=dt; if(!p.castFired&&p.castT<=HERO()[p.cast].t-HERO()[p.cast].fire) castFire()}
   if(ctl&&(shootEdge||inp.s)&&p.shootCD<=0) punch();
-  else if(ctl&&(throwEdge||inp.m)&&p.shootCD<=0){if(HERO().strong)strongPunch();else throwShroom()}
-  shootEdge=false;throwEdge=false;
+  else if(ctl&&(throwEdge||inp.m)&&p.shootCD<=0){if(HERO().hadoken)castSpell('hadoken');else throwShroom()}
+  else if(ctl&&(magicEdge||inp.i)&&p.shootCD<=0&&HERO().sphere) castSpell('sphere');
+  shootEdge=false;throwEdge=false;magicEdge=false;
   if(p.onGround||p.dashT>0||p.inWater||p.inSand||p.glide) p.peakY=p.y; else p.peakY=Math.min(p.peakY,p.y);
   const was=p.onGround, preVy=p.vy;
   p.prevBottom=p.y+p.h;
@@ -223,7 +237,7 @@ function updatePlayer(dt){
   {const cx=p.x+p.w/2,cy=p.y+p.h/2;for(const z of secretZones) if(!z.found&&cx>z.x&&cx<z.x+z.w&&cy>z.y&&cy<z.y+z.h){
     z.found=true;secretsFound++;sfx('secret');stars(cx,cy-20,12);floater(cx,cy-50,T('fSecret'))}}
   if(hiddenPlanks) revealPlanks();
-  if(!p.strong&&p.punchT<PUNCH_ACTIVE[0]&&p.punchT>PUNCH_ACTIVE[1]) punchHits();
+  if(p.punchT<PUNCH_ACTIVE[0]&&p.punchT>PUNCH_ACTIVE[1]) punchHits();
   if(!was&&p.onGround){
     const fallH=p.y-p.peakY;
     if(fallH>HEAVY_H&&p.landTile===T_CRACK&&breakFloor(p.landC,p.landR)){p.onGround=false;p.vy=120}

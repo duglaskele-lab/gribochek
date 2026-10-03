@@ -32,6 +32,7 @@ function step(dt){
   if(LV().update) LV().update(dt);   // per-level effects: rising poison, falling snow...
   updateShots(dt);
   updateWaves(dt);
+  updateSpells(dt);
   updateItems(dt);
   updateParts(dt);
   {const n=P.dead||P.entering?null:shops.find(sh=>P.onGround&&Math.abs(P.x+P.w/2-sh.x)<60&&Math.abs(P.y+P.h-sh.y)<6)||null;

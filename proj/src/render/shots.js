@@ -43,14 +43,13 @@ function drawEShots(){
 }
 function drawWaves(){
   for(const w of pwaves){ if(w.delay>0) continue;
-    const k=w.life/(w.life0||WAVE_LIFE), r=(14+(1-k)*14)*(w.big?2.4:w.tall||1);
+    const k=w.life/(w.life0||WAVE_LIFE), r=(14+(1-k)*14)*(w.tall||1);
     ctx.save(); ctx.translate(w.x,w.y); ctx.scale(w.face,1); ctx.lineCap='round';
-    if(w.big){ctx.fillStyle=`rgba(150,90,220,${.28*k})`;ctx.beginPath();ctx.ellipse(-10,0,r*.9,r*1.25,0,0,7);ctx.fill()}
     for(let j=0;j<3;j++){
       const rr=r-j*7; if(rr<4) continue;
       ctx.globalAlpha=k*(1-j*.25);
       ctx.strokeStyle=INK; ctx.lineWidth=(6-j)*k+3; ctx.beginPath(); ctx.arc(-j*9,0,rr,-1.05,1.05); ctx.stroke();
-      ctx.strokeStyle=w.big?(j?'#e6d4ff':'#b77ee0'):(j?'#fff4c2':'#ffd84a'); ctx.lineWidth=(6-j)*k+1; ctx.stroke();
+      ctx.strokeStyle=j?'#fff4c2':'#ffd84a'; ctx.lineWidth=(6-j)*k+1; ctx.stroke();
     }
     ctx.restore();
   }
