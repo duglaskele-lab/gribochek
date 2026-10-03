@@ -4,9 +4,14 @@ let jumpEdge=false, shootEdge=false, throwEdge=false, magicEdge=false, dashEdge=
 const KEYMAP={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowDown:'d',KeyS:'d',
   Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',KeyL:'m',KeyC:'m',ShiftLeft:'dash',KeyE:'shop',KeyJ:'i'};   // m: throw a mushroom (Raithwyn: hadoken); i: Raithwyn's sphere (J)
 let state='title', screenShownAt=0;
+// F1: freeze the game where it is (no menu, the picture stays still - e.g. for a screenshot); F1 again goes on.
+// Esc while frozen opens the usual pause menu.
+let frozen=false;
 addEventListener('keydown',e=>{
   document.body.classList.add('kbd');
-  if(e.code==='Escape'||e.code==='KeyP'||e.code==='F1'){e.preventDefault();togglePause();return}
+  if(e.code==='F1'){e.preventDefault();if(state==='play'&&!e.repeat){frozen=!frozen;for(const k in inp)inp[k]=0}return}
+  if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();frozen=false;togglePause();return}
+  if(frozen&&state==='play'){e.preventDefault();return}
   if(state==='shop'){shopKey(e);return}
   if(state==='next'||state==='win'){ // dialog after a boss: any confirm key continues
     if(['Enter','Space','KeyK','KeyE','KeyZ','KeyX'].indexOf(e.code)>=0&&!e.repeat){e.preventDefault();if(performance.now()-screenShownAt>350){const g=document.getElementById('go');g&&g.click()}}
@@ -25,7 +30,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('pointerdown',()=>document.body.classList.remove('kbd'),true);
 addEventListener('keyup',e=>{const a=KEYMAP[e.code]; if(a){inp[a]=0;e.preventDefault()}});
-addEventListener('blur',()=>{for(const k in inp)inp[k]=0; if(state==='play')togglePause()});
+addEventListener('blur',()=>{for(const k in inp)inp[k]=0; if(state==='play'&&!frozen)togglePause()});   // frozen: stay as is (taking a screenshot)
 
 const isTouch=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
 if(isTouch) document.body.classList.add('touch');

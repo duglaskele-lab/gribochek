@@ -566,6 +566,17 @@ def hydra_acid(c):
     assert r[0]==4 and r[1]>2.0, r
     return f'acid burn: {r[1]:.2f} s of invulnerability'
 
+@test('freeze','ui')
+def freeze(c):
+    # F1 stops the game where it is, without the pause menu; F1 again lets it go on
+    c.js('g.start(1,1);g.freeze(false)'); c.page.wait_for_timeout(200)
+    c.page.keyboard.press('F1'); c.js('g.key("r",1)')
+    x0=c.page.evaluate('window.__grib.dbg.P.x'); c.page.wait_for_timeout(400)
+    x1=c.page.evaluate('window.__grib.dbg.P.x'); st=c.js('return g.state'); menu=c.page.evaluate("getComputedStyle(document.getElementById('overlay')||document.body).display")
+    c.page.keyboard.press('F1'); c.js('g.key("r",1)'); c.page.wait_for_timeout(400); x2=c.page.evaluate('window.__grib.dbg.P.x'); c.js('g.key("r",0)')
+    assert x1==x0 and st=='play' and x2>x1+40, (x0,x1,x2,st,menu)
+    return 'F1 freezes the game without the menu and lets it go on'
+
 @test('frog_warn','enemies')
 def frog_warn(c):
     # the frog shows a warning before every tongue lash
