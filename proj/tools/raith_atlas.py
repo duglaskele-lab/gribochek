@@ -12,8 +12,9 @@ idle 1, jump 5, run 6, walk 8, hurt 2, laugh 4, punch 5, punch2 5, hadoken (cast
 sphere), sphere (cast) 7, death 6, throw 4, door 4 (walking away, seen from the back). Specks narrower than 40px (a
 spark cut off from its frame) join the frame next to them. The sheet is drawn big, so frames are scaled by SCALE.
 Each frame is cropped tight; its anchor x is the middle of the head (the top quarter of the sprite), so the body stays
-put while the tail and arms swing. Exceptions: shots are anchored in the middle; death frames keep the back foot
-(the leftmost opaque pixel of the bottom rows) where it is in the first frame, since she falls forward.
+put while the tail and arms swing; a spell's purple glow near her head doesn't count. Exceptions: shots are anchored in the middle; death and sphere frames keep the back foot
+(the leftmost opaque pixel of the bottom rows) where it is in the first frame (death: she falls forward) or in the standing frame (sphere: she
+stands still while casting).
 """
 import sys, os, json
 from PIL import Image
@@ -37,9 +38,12 @@ def save(crops):
         f.write('// [x, y, w, h, anchor x]; the sprite stands on its bottom edge\n')
         f.write('const RAITH_FRAMES='+json.dumps(frames,separators=(',',':'))+';\n')
     print(atlas.size, {k:len(v) for k,v in frames.items()}, os.path.getsize(os.path.join(ROOT,'assets/raith.webp')))
+def magic(px):
+    """a pixel of a spell's purple glow (not of her): left out of the head anchor"""
+    r,g,b,a=px; return b>150 and b-g>60
 def head_anchor(fr):
-    fa=fr.split()[3].load(); fw,fh=fr.size; top=max(1,fh//4)
-    xs=[xx for yy in range(top) for xx in range(fw) if fa[xx,yy]>20]
+    fa=fr.load(); fw,fh=fr.size; top=max(1,fh//4)
+    xs=[xx for yy in range(top) for xx in range(fw) if fa[xx,yy][3]>20 and not magic(fa[xx,yy])]
     return sum(xs)/len(xs)
 def foot_x(fr):
     fa=fr.split()[3].load(); fw,fh=fr.size
@@ -85,8 +89,9 @@ def main(src):
             fr=im.crop((x0,y0,x1,y1)); fr=fr.crop(fr.getbbox())
             fr=fr.resize((max(1,round(fr.size[0]*SCALE)),max(1,round(fr.size[1]*SCALE))),Image.LANCZOS); frs.append(fr)
         if name=='shots': axs=[fr.size[0]/2 for fr in frs]
-        elif name=='death':
-            d=head_anchor(frs[0])-foot_x(frs[0]); axs=[foot_x(fr)+d for fr in frs]
+        elif name in('death','sphere'):
+            ref=frs[0] if name=='death' else crops[0][1]   # the sphere cast keeps her feet where they are when she stands
+            d=head_anchor(ref)-foot_x(ref); axs=[foot_x(fr)+d for fr in frs]
         else: axs=[head_anchor(fr) for fr in frs]
         crops+=[(name,fr,ax) for fr,ax in zip(frs,axs)]
     save(crops)

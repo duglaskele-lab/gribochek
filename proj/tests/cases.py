@@ -499,6 +499,9 @@ def raith(c):
           // casting slows her down by half; the shot starts where the ball is in her cast frames (above her hand)
           {g.spells.length=0;P.mana=50;P.shootCD=0;P.vx=0;g.cast('hadoken');let v=0;g.sim(.3,()=>{P.inv=1e9;g.key('r',1);v=Math.max(v,Math.abs(P.vx))});g.key('r',0);
            out.castV=v;g.sim(.1,()=>{P.inv=1e9});const s=g.spells[0];out.hadokenUp=s&&P.y+P.h-s.y;g.sim(1,()=>{P.inv=1e9})}
+          // casting the hadoken in the air: she falls half as fast
+          {const fall=c=>{g.spells.length=0;P.mana=50;P.shootCD=0;P.y-=300;P.vy=0;P.onGround=false;if(c)g.cast('hadoken');let y0=P.y;g.sim(.3,()=>{P.inv=1e9});const d=P.y-y0;g.sim(1.5,()=>{P.inv=1e9});return d};
+           out.fall=[fall(false),fall(true)]}
           // not enough mana: no cast
           P.mana=3;P.shootCD=0;g.cast('sphere');out.denied=!(P.castT>0);P.mana=50;
           // a stomp
@@ -516,8 +519,8 @@ def raith(c):
         r['gribDash']=gd
         assert r['punch']==1.5 and r['anims']==['punch','punch2'] and r['stomp']==2, r
         assert r['castFr']=='hadoken' and r['hadoken']==[5,35] and r['sphereFr']=='sphere' and r['sphereMana']==45 and r['sphere']==5 and r['sway']>200 and r['denied'], r
-        assert r['deathFr']=='death' and r['castV']<=140 and 50<r['hadokenUp']<70, r
-        assert r['heavy']==0 and r['shop']==['heal','maxhp','manaUp'] and r['stillDead'] and r['back'], r
+        assert r['deathFr']=='death' and r['castV']<=140 and 50<r['hadokenUp']<70 and r['fall'][1]<r['fall'][0]*.6, r
+        assert r['heavy']==0 and r['shop']==['heal','maxhp','mush','manaUp'] and r['stillDead'] and r['back'], r
         assert abs(r['dash']/r['gribDash']-1.15)<.06 and r['wave'], r
         return 'all levels run; punch 1.5 + short tall wave, dash x1.15, hadoken 5 for 15 mana, sine sphere 5 for 5, stomp 2; shop: hearts + mana; death frames + fog'
     finally:
