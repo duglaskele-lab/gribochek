@@ -210,7 +210,10 @@ function updatePlayer(dt){
     else if(Math.abs(p.vy)<150&&inp.j) g*=.55;
     else if(p.vy>0) g*=1.2;
   }
-  if(p.dashT>0) p.vy=0; else p.vy=Math.min(p.vy+g*dt,p.inWater?170:1000);
+  // casting the hadoken in the air: she falls half as fast
+  const castFall=p.castT>0&&p.cast==='hadoken'&&p.vy>0&&!p.inWater;
+  if(castFall) g*=.5;
+  if(p.dashT>0) p.vy=0; else p.vy=Math.min(p.vy+g*dt,p.inWater?170:castFall?500:1000);
   // umbrella: holding jump while falling turns the fall into a slow glide
   p.glide=hasUmbrella&&HERO().umbrella&&ctl&&inp.j&&!p.onGround&&!p.inWater&&!p.inSand&&p.dashT<=0&&p.vy>0&&!(p.springT>0);
   if(p.glide&&p.vy>GLIDE_V) p.vy=approach(p.vy,GLIDE_V,3000*dt);
