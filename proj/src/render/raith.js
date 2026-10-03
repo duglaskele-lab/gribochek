@@ -58,8 +58,8 @@ function drawSpells(){
     ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,s.r*2.2,0,7);ctx.fill();
     if(!raithSheet.complete) continue;
     ctx.save();ctx.translate(s.x,s.y);ctx.scale(s.face,1);
-    // the hadoken's ball sits at the front of its sprite, the flame trails behind
-    const ox=s.k==='hadoken'?-fw*sc+s.r*1.3:-fw*sc/2;
-    ctx.drawImage(raithSheet,fx,fy,fw,fh,ox,-fh*sc/2,fw*sc,fh*sc);ctx.restore();
+    // the ball's bright core (in sheet pixels) sits on the shot's point; the hadoken's flame trails behind it
+    const [kx,ky]=s.k==='hadoken'?[45,31]:[32,30];
+    ctx.drawImage(raithSheet,fx,fy,fw,fh,-kx*sc,-ky*sc,fw*sc,fh*sc);ctx.restore();
   }
 }
