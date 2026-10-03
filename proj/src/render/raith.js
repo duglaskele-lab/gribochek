@@ -4,10 +4,9 @@
 // Death: she falls down (the death frames), a cloud of purple fog swallows her, then the fog shrinks to a point.
 // Spells (L: hadoken, I: sphere) play their cast frames; the flying shots use the 'shots' frames (0: hadoken, 1: sphere).
 const raithSheet=new Image(); raithSheet.src=RAITH_SRC;
-// I turns a thin purple outline around her on and off (remembered). The outlined copy of the sheet is made once, when
-// the sheet has loaded: her silhouette in purple, stamped in a ring around each pixel, softened, the sheet on top.
-let raithOutline=false, raithOutlined=null;
-try{raithOutline=localStorage.getItem('grib-raith-outline')==='1'}catch(e){}
+// She is drawn with a thin purple outline. The outlined copy of the sheet is made once, when the sheet has loaded:
+// her silhouette in purple, stamped in a ring around each pixel, softened, the sheet on top.
+let raithOutlined=null;
 const RAITH_OUTLINE_R=2.3, RAITH_OUTLINE_COL='#5a2d8a';   // radius in sheet pixels (about 1.4 px on screen)
 function makeRaithOutlined(){
   const W=raithSheet.width,H=raithSheet.height, mk=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;return c};
@@ -18,16 +17,12 @@ function makeRaithOutlined(){
   raithOutlined=out;
 }
 if(raithSheet.complete&&raithSheet.width) makeRaithOutlined(); else raithSheet.addEventListener('load',makeRaithOutlined);
-function toggleRaithOutline(){
-  raithOutline=!raithOutline; try{localStorage.setItem('grib-raith-outline',raithOutline?'1':'0')}catch(e){}
-  if(hero==='raith'&&P) floater(P.x+P.w/2,P.y-30,T(raithOutline?'fOutlineOn':'fOutlineOff'));
-}
 const RAITH_TALL=1.4, RAITH_SC=RAITH_TALL*FRAMES.idle[0][3]*SC*(ANIM_SCALE.idle||1)/RAITH_FRAMES.idle[0][3], RAITH_DEATH=2.1;
 function drawRaithFrame(n,i,cx,by,face,alpha=1){
   const f=RAITH_FRAMES[n]&&RAITH_FRAMES[n][i]; if(!f||!raithSheet.complete) return;
   const [fx,fy,fw,fh,ax]=f, s=RAITH_SC, d=RAITH_PAD;
   ctx.save(); ctx.globalAlpha=alpha; ctx.translate(cx,by); ctx.scale(face,1);
-  if(raithOutline&&raithOutlined) ctx.drawImage(raithOutlined,fx-d,fy-d,fw+2*d,fh+2*d,(-ax-d)*s,(-fh-d)*s,(fw+2*d)*s,(fh+2*d)*s);
+  if(raithOutlined) ctx.drawImage(raithOutlined,fx-d,fy-d,fw+2*d,fh+2*d,(-ax-d)*s,(-fh-d)*s,(fw+2*d)*s,(fh+2*d)*s);
   else ctx.drawImage(raithSheet,fx,fy,fw,fh,-ax*s,-fh*s,fw*s,fh*s);
   ctx.restore();
 }
