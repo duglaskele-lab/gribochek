@@ -122,12 +122,14 @@ function updateShots(dt){
   eshots=eshots.filter(b=>!b.dead);
 }
 // Raithwyn's spells (cast in core/player.js): the hadoken flies straight and breaks cracked walls, the sphere sways along
-// a wide sine wave. Each bursts on the first foe or boss it hurts, on a wall or in water; both knock down foes' shots.
+// a wide sine wave (through floors and ceilings). Each bursts on the first foe or boss it hurts, on a wall or in water; both knock down foes' shots.
 function updateSpells(dt){
   for(const s of spells){
     s.life-=dt; s.t+=dt; s.x+=s.vx*dt;
     if(s.amp) s.y=s.y0-Math.sin(s.t/s.per*Math.PI*2)*s.amp;
-    const c=Math.floor((s.x+s.face*s.r*.6)/TS),r=Math.floor(s.y/TS);
+    // the sphere's wave is tall (it dips to the floor and rises above her head), so floors and ceilings don't stop it:
+    // only a wall at the height it was cast from does
+    const c=Math.floor((s.x+s.face*s.r*.6)/TS),r=Math.floor((s.amp?s.y0:s.y)/TS);
     if(solid(c,r)){if(s.k==='hadoken')breakWall(c,r);s.life=0;burst(s.x,s.y,10,'#c79bff',180);continue}
     if(waterAt(s.x,s.y)){s.life=0;splash(s.x,s.y);continue}
     if(s.x<camX-80||s.x>camX+VW+80) s.life=0;

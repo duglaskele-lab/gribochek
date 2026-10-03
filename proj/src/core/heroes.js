@@ -9,9 +9,10 @@ const HEROES={
   grib:{w:30,h:58,punch:DMG_PUNCH,stomp:DMG_STOMP,reach:52,wave:{len:1,tall:1},dash:1,heavyLand:true,umbrella:true,shop:null},
   raith:{w:32,h:76,punch:1.5,stomp:2,reach:66,wave:{len:.7,tall:1.3},dash:1.15,heavyLand:false,umbrella:false,shop:['heal','maxhp','manaUp'],
     // spells: cost (mana, paid when the spell leaves her hand), dmg, t: the whole cast, fire: when in it the shot flies out,
-    // speed (px/s), life (s), r: hit radius; the sphere also sways up and down: amp (px), per: one full sway (s)
-    hadoken:{cost:15,dmg:5,t:.54,fire:.36,speed:640,life:1.3,r:22},
-    sphere:{cost:5,dmg:5,t:.5,fire:.43,speed:360,life:2.4,r:12,amp:38,per:1.1}},
+    // speed (px/s), life (s), r: hit radius; spot: where the ball is in her cast frames, in sheet pixels from the frame's
+    // anchor (forward, up), so the shot starts right there; the sphere also sways up and down: amp (px), per: one full sway (s)
+    hadoken:{cost:15,dmg:5,t:.54,fire:.36,speed:640,life:1.3,r:22,spot:[70,104]},
+    sphere:{cost:5,dmg:5,t:.5,fire:.43,speed:360,life:2.4,r:12,amp:114,per:1.1,spot:[15,159]}},
 };
 let hero='grib';
 try{const v=localStorage.getItem('grib-hero');if(v&&HEROES[v])hero=v}catch(e){}

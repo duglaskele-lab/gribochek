@@ -23,7 +23,7 @@ function castFire(){
   const p=P,k=p.cast,sp=HERO()[k]; p.castFired=true;
   if(p.mana<sp.cost){sfx('deny');return}
   p.mana-=sp.cost;
-  const x=p.x+p.w/2+p.face*(k==='hadoken'?62:44), y=p.y+(k==='hadoken'?30:26);
+  const x=p.x+p.w/2+p.face*sp.spot[0]*RAITH_SC, y=p.y+p.h+2-sp.spot[1]*RAITH_SC;   // where the ball is in her cast frames
   spells.push({k,x,y,y0:y,t:0,face:p.face,vx:p.face*sp.speed,life:sp.life,r:sp.r,dmg:sp.dmg,amp:sp.amp||0,per:sp.per||1,hit:new Set()});
   sfx(k==='hadoken'?'power':'shoot');
   if(k==='hadoken'){shake(.12,4);dust(p.x+p.w/2-p.face*10,p.y+p.h,6,-p.face)}
@@ -173,6 +173,7 @@ function updatePlayer(dt){
   // the level may change grip underfoot (level def: floorControl(p) -> {acc, dec, maxv} or null), e.g. slippery ice
   const fc=p.onGround&&!p.inWater&&LV().floorControl?LV().floorControl(p):null;
   if(fc){acc=fc.acc;dec=fc.dec;maxv*=fc.maxv||1}
+  if(p.castT>0) maxv*=.5;   // casting a spell slows her down by half
   if(p.onGround) p.airDash=airDashMax();
   if(dashEdge&&ctl&&p.dashCD<=0&&p.dashT<=0&&(p.onGround||p.airDash)){
     p.dashDir=dir||p.face; p.face=p.dashDir; p.dashT=DASH_T*HERO().dash; p.dashCD=.45; p.ghostT=0; p.vy=0; p.turnT=0;
