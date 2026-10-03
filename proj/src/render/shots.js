@@ -49,7 +49,7 @@ function drawWaves(){
       const rr=r-j*7; if(rr<4) continue;
       ctx.globalAlpha=k*(1-j*.25);
       ctx.strokeStyle=INK; ctx.lineWidth=(6-j)*k+3; ctx.beginPath(); ctx.arc(-j*9,0,rr,-1.05,1.05); ctx.stroke();
-      ctx.strokeStyle=j?'#fff4c2':'#ffd84a'; ctx.lineWidth=(6-j)*k+1; ctx.stroke();
+      ctx.strokeStyle=w.col?w.col[j?1:0]:j?'#fff4c2':'#ffd84a'; ctx.lineWidth=(6-j)*k+1; ctx.stroke();
     }
     ctx.restore();
   }

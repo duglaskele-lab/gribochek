@@ -204,7 +204,8 @@ function updatePoison(dt){
   if(Math.random()<.25) parts.push({x:rand(Math.max(ARENA_L,camX),Math.min(ARENA_R,camX+VW)),y:top+6,vx:0,vy:rand(-40,-15),g:-10,c:'rgba(190,240,110,.7)',s:rand(3,6),life:rand(.5,1),max:0,t:'puff'});
   const line=hydraTide()>0?top+10:FLOOR-4;
   if(!harmless&&P.x+P.w>ARENA_L&&P.x<ARENA_R&&P.y+P.h>=line){const pc=P.x+P.w/2,mid=(ARENA_L+ARENA_R)/2;
-    hurt(pc+(pc<mid?40:-40));burst(pc,top+4,8,'#9be04a',160)}
+    // a burn from the pool gives 50% more invulnerability, so there is time to get out of it
+    const hp0=P.hp;hurt(pc+(pc<mid?40:-40));if(P.hp<hp0&&!P.dead)P.inv*=1.5;burst(pc,top+4,8,'#9be04a',160)}
 }
 function drawPoison(){
   if(poisonLvl<=.01||!ARENA_R) return;

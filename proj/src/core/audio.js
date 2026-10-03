@@ -12,6 +12,15 @@ function tone(f1,f2,dur,type='square',vol=.05,delay=0){
   g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g).connect(SFX_BUS); o.start(t); o.stop(t+dur+.02);
 }
+// a burst of noise through a band-pass filter sweeping f1 -> f2 (whooshes, hisses)
+function noise(f1,f2,dur,vol=.05,delay=0,q=1.2){
+  if(!AC) return; const t=AC.currentTime+delay, n=Math.ceil(AC.sampleRate*dur);
+  const buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  const s=AC.createBufferSource(), f=AC.createBiquadFilter(), g=AC.createGain(); s.buffer=buf;
+  f.type='bandpass'; f.Q.value=q; f.frequency.setValueAtTime(f1,t); f.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+dur*.25); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  s.connect(f).connect(g).connect(SFX_BUS); s.start(t); s.stop(t+dur+.02);
+}
 const SFX={
   jump:()=>tone(380,720,.11,'square',.035),
   shoot:()=>tone(820,300,.08,'triangle',.06),
@@ -40,6 +49,9 @@ const SFX={
   lick:()=>{tone(700,250,.12,'triangle',.05);tone(300,520,.08,'sine',.04,.1)},
   rustle:()=>{tone(1800,900,.12,'sawtooth',.02);tone(1200,700,.15,'square',.015,.05)},
   buzz:()=>{tone(190,240,.4,'sawtooth',.025);tone(380,330,.4,'square',.012)},
+  // Raithwyn's hadoken: a ball of dark energy let go - a hollow low thump, a falling growl and a dark whoosh flying off
+  darkball:()=>{tone(90,32,.5,'sine',.12);tone(180,40,.55,'sawtooth',.045,.01);tone(55,28,.7,'square',.03,.03);
+    noise(1400,180,.6,.16,.0,1.5);noise(300,90,.8,.1,.05,2.5)},
   squawk:()=>{tone(1100,1700,.08,'square',.03);tone(1500,900,.12,'square',.03,.08);tone(1200,1800,.07,'square',.025,.2)},
 };
 const sfx=n=>SFX[n]&&SFX[n]();
