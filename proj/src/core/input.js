@@ -2,16 +2,17 @@
 const inp={l:0,r:0,j:0,s:0,m:0,i:0,d:0,dash:0,shop:0};
 let jumpEdge=false, shootEdge=false, throwEdge=false, magicEdge=false, dashEdge=false, shopEdge=false;
 const KEYMAP={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowDown:'d',KeyS:'d',
-  Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',KeyL:'m',KeyC:'m',ShiftLeft:'dash',KeyE:'shop',KeyI:'i'};   // m: throw a mushroom (Raithwyn: hadoken); i: Raithwyn's sphere
+  Space:'j',KeyZ:'j',ArrowUp:'j',KeyW:'j',KeyK:'s',KeyX:'s',KeyL:'m',KeyC:'m',ShiftLeft:'dash',KeyE:'shop',KeyJ:'i'};   // m: throw a mushroom (Raithwyn: hadoken); i: Raithwyn's sphere (J)
 let state='title', screenShownAt=0;
 addEventListener('keydown',e=>{
   document.body.classList.add('kbd');
-  if(e.code==='Escape'||e.code==='KeyP'){e.preventDefault();togglePause();return}
+  if(e.code==='Escape'||e.code==='KeyP'||e.code==='F1'){e.preventDefault();togglePause();return}
   if(state==='shop'){shopKey(e);return}
   if(state==='next'||state==='win'){ // dialog after a boss: any confirm key continues
     if(['Enter','Space','KeyK','KeyE','KeyZ','KeyX'].indexOf(e.code)>=0&&!e.repeat){e.preventDefault();if(performance.now()-screenShownAt>350){const g=document.getElementById('go');g&&g.click()}}
     return }
   if(state!=='play'){menuKey(e);return}
+  if(e.code==='KeyI'&&!e.repeat){toggleRaithOutline();return}   // Raithwyn's purple outline on/off
   const a=KEYMAP[e.code]; if(!a) return; e.preventDefault();
   if(e.repeat) return;
   if(a==='j'&&!inp.j) jumpEdge=true;

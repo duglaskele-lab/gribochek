@@ -4,19 +4,38 @@
 // Death: she falls down (the death frames), a cloud of purple fog swallows her, then the fog shrinks to a point.
 // Spells (L: hadoken, I: sphere) play their cast frames; the flying shots use the 'shots' frames (0: hadoken, 1: sphere).
 const raithSheet=new Image(); raithSheet.src=RAITH_SRC;
+// I turns a thin purple outline around her on and off (remembered). The outlined copy of the sheet is made once, when
+// the sheet has loaded: her silhouette in purple, stamped in a ring around each pixel, softened, the sheet on top.
+let raithOutline=false, raithOutlined=null;
+try{raithOutline=localStorage.getItem('grib-raith-outline')==='1'}catch(e){}
+const RAITH_OUTLINE_R=2.3, RAITH_OUTLINE_COL='#5a2d8a';   // radius in sheet pixels (about 1.4 px on screen)
+function makeRaithOutlined(){
+  const W=raithSheet.width,H=raithSheet.height, mk=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;return c};
+  const sil=mk(),sx=sil.getContext('2d'); sx.drawImage(raithSheet,0,0); sx.globalCompositeOperation='source-in'; sx.fillStyle=RAITH_OUTLINE_COL; sx.fillRect(0,0,W,H);
+  const ring=mk(),rx=ring.getContext('2d');
+  for(const [r,n] of [[RAITH_OUTLINE_R,16],[RAITH_OUTLINE_R*.5,8]]) for(let k=0;k<n;k++){const a=k/n*Math.PI*2;rx.drawImage(sil,Math.cos(a)*r,Math.sin(a)*r)}
+  const out=mk(),ox=out.getContext('2d'); ox.filter='blur(.6px)'; ox.drawImage(ring,0,0); ox.drawImage(ring,0,0); ox.filter='none'; ox.drawImage(raithSheet,0,0);
+  raithOutlined=out;
+}
+if(raithSheet.complete&&raithSheet.width) makeRaithOutlined(); else raithSheet.addEventListener('load',makeRaithOutlined);
+function toggleRaithOutline(){
+  raithOutline=!raithOutline; try{localStorage.setItem('grib-raith-outline',raithOutline?'1':'0')}catch(e){}
+  if(hero==='raith'&&P) floater(P.x+P.w/2,P.y-30,T(raithOutline?'fOutlineOn':'fOutlineOff'));
+}
 const RAITH_TALL=1.4, RAITH_SC=RAITH_TALL*FRAMES.idle[0][3]*SC*(ANIM_SCALE.idle||1)/RAITH_FRAMES.idle[0][3], RAITH_DEATH=2.1;
 function drawRaithFrame(n,i,cx,by,face,alpha=1){
   const f=RAITH_FRAMES[n]&&RAITH_FRAMES[n][i]; if(!f||!raithSheet.complete) return;
-  const [fx,fy,fw,fh,ax]=f, s=RAITH_SC;
+  const [fx,fy,fw,fh,ax]=f, s=RAITH_SC, d=RAITH_PAD;
   ctx.save(); ctx.globalAlpha=alpha; ctx.translate(cx,by); ctx.scale(face,1);
-  ctx.drawImage(raithSheet,fx,fy,fw,fh,-ax*s,-fh*s,fw*s,fh*s); ctx.restore();
+  if(raithOutline&&raithOutlined) ctx.drawImage(raithOutlined,fx-d,fy-d,fw+2*d,fh+2*d,(-ax-d)*s,(-fh-d)*s,(fw+2*d)*s,(fh+2*d)*s);
+  else ctx.drawImage(raithSheet,fx,fy,fw,fh,-ax*s,-fh*s,fw*s,fh*s);
+  ctx.restore();
 }
 // which frame she shows now
 function raithAnim(p){
   if(p.dead) return['death',Math.min(5,Math.floor(p.deadT*7.5))];
   if(p.entering) return['door',Math.floor(p.enterT*7)%4];   // walking into the door, seen from the back
-  if(p.pickT>=0) return['laugh',Math.floor(p.pickT*10)%4];
-  if(p.dashT>0) return['run',Math.floor(time*26)%6];   // the dash: run frames played fast, with afterimages
+  if(p.dashT>0) return['run',2];   // the dash: one run frame (the third), with afterimages
   if(p.castT>0){const n=RAITH_FRAMES[p.cast].length;return[p.cast,Math.floor(clamp(1-p.castT/HERO()[p.cast].t,0,.999)*n)]}
   if(p.punchT>0) return[p.punchAnim||'punch',Math.floor(clamp(1-p.punchT/PUNCH_T,0,.999)*5)];
   if(p.hurtT>0) return['hurt',Math.floor(time*8)%2];

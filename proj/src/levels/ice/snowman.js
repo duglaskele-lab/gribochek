@@ -3,7 +3,7 @@
 // Attacks: overhead slam, long diagonal punch, a volley of snowballs spat from the head, a big hop that brings icicles
 // down, the split (the balls roll at you one by one and stack up again at the far end), the head throw (the head
 // bounces like a ball to the wall of the arena and back onto the body), the clap high over its head and,
-// in phase 2, a beam of frost breath. Phase 3 (the last third of its health) hops more and attacks more often.
+// in phase 2 (from 60% of its health), a beam of frost breath. Phase 3 (the last third of its health) hops more and attacks more often.
 // A hit pushes it back a few pixels.
 const SM_R=[62,46,36];
 function makeSnowman(){return{kind:'snowman',x:ARENA_L+18*TS,y:FLOOR-262,w:124,h:262,hp:76,max:76,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
@@ -173,7 +173,7 @@ function updateSnowman(dt){
       B.t-=dt*(B.phase===3?1.15:1);const d=Math.abs(pcx-cx);if(d>12)B.face=pcx>cx?1:-1;
       B.vx=approach(B.vx,d>420?B.face*85:0,400*dt);
       if(Math.abs(B.vx)>20){B.wob-=dt;if(B.wob<=0){B.wob=.32;smKick(2.2);snowPuff(cx,FLOOR-4,2)}}
-      if(B.phase===1&&B.hp<=B.max/2){B.state='enrage';B.t=1.3;B.vx=0;sfx('roar');shake(1,7);break}
+      if(B.phase===1&&B.hp<=B.max*.6){B.state='enrage';B.t=1.3;B.vx=0;sfx('roar');shake(1,7);break}
       if(B.phase===2&&B.hp<=B.max/3) B.phase=3;   // the last third: phase 3, without a show
       if(B.aboveT>.5){B.state='hopWind';B.t=.4*m;B.vx=0;B.aboveT=0;B.last='hop';break}   // she hangs above it: it jumps
       if(B.t<=0){B.vx=0;smChoose()}

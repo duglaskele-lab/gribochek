@@ -55,6 +55,8 @@ function damageEnemy(e,dmg,srcX){
     if(e.type==='caterpillar'){for(const s of e.segs) burst(s.x,e.gy-17,6,col,160);for(const r of e.riders||[]) r.rider=null}
     dropLoot(e);
     const H=ENEMY_HOOKS[e.type]; if(H&&H.onDeath) H.onDeath(e);
+    // a level's mini-boss stays dead: the player's death doesn't bring it back
+    if(e.type===LV().miniboss) enemySnap=enemySnap.filter(q=>q.type!==e.type);
   }else sfx('hit');
 }
 function shrink(e,a=4){return{x:e.x+a,y:e.y+a,w:e.w-a*2,h:e.h-a}}

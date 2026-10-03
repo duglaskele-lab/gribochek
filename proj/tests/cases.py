@@ -502,6 +502,13 @@ def raith(c):
           // casting the hadoken in the air: she falls half as fast
           {const fall=c=>{g.spells.length=0;P.mana=50;P.shootCD=0;P.y-=300;P.vy=0;P.onGround=false;if(c)g.cast('hadoken');let y0=P.y;g.sim(.3,()=>{P.inv=1e9});const d=P.y-y0;g.sim(1.5,()=>{P.inv=1e9});return d};
            out.fall=[fall(false),fall(true)]}
+          // the dash shows one run frame (the third); her punch wave is purple
+          {g.P.shootCD=0;g.dash();g.sim(.03,()=>{P.inv=1e9});g.render();out.dashFr=g.P._fr.slice(0,2);g.sim(.4,()=>{P.inv=1e9});
+           g.P.shootCD=0;g.punch();g.sim(.1,()=>{P.inv=1e9});out.waveCol=g.pwaves[0]&&g.pwaves[0].col&&g.pwaves[0].col[0]}
+          // the power mushroom: no stop for a pickup animation
+          {const Q=g.P;g.items.push({k:'power',x:Q.x+Q.w/2,y:Q.y+Q.h/2,ph:0});g.sim(.05,()=>{Q.inv=1e9});out.pickLock=Q.lockT>0||Q.pickT>=0}
+          // I: the purple outline on and off; it draws
+          {const o0=g.outline;g.toggleOutline();g.render();out.outline=[o0,g.outline,g.outlined];g.toggleOutline()}
           // not enough mana: no cast
           P.mana=3;P.shootCD=0;g.cast('sphere');out.denied=!(P.castT>0);P.mana=50;
           // a stomp
@@ -519,12 +526,45 @@ def raith(c):
         r['gribDash']=gd
         assert r['punch']==1.5 and r['anims']==['punch','punch2'] and r['stomp']==2, r
         assert r['castFr']=='hadoken' and r['hadoken']==[5,35] and r['sphereFr']=='sphere' and r['sphereMana']==45 and r['sphere']==5 and r['sway']>200 and r['denied'], r
+        assert r['dashFr']==['run',2] and r['waveCol']=='#b77ee0' and not r['pickLock'] and r['outline'][0]!=r['outline'][1] and r['outline'][2], r
         assert r['deathFr']=='death' and r['castV']<=140 and 50<r['hadokenUp']<70 and r['fall'][1]<r['fall'][0]*.6, r
         assert r['heavy']==0 and r['shop']==['heal','maxhp','mush','manaUp'] and r['stillDead'] and r['back'], r
         assert abs(r['dash']/r['gribDash']-1.15)<.06 and r['wave'], r
         return 'all levels run; punch 1.5 + short tall wave, dash x1.15, hadoken 5 for 15 mana, sine sphere 5 for 5, stomp 2; shop: hearts + mana; death frames + fog'
     finally:
         c.js("g.setHero('grib')")
+
+@test('miniboss_stays','enemies','respawn')
+def miniboss_stays(c):
+    # a killed mini-boss doesn't come back when the player dies (other foes do)
+    c.start(1,4)
+    r=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='bigSlime');P.inv=1e9;
+      for(let i=0;i<80&&!e.dead;i++){g.attack(e,1.25,e.x-10);g.sim(.05,()=>{P.inv=1e9})}const gone=e.dead;
+      P.inv=0;P.hp=0;P.dead=true;P.deadT=0;P.fell=true;g.sim(2);
+      return [gone,g.enemies.filter(e=>e.type==='bigSlime').length,g.enemies.filter(e=>!e.prop).length]""")
+    assert r[0] and r[1]==0 and r[2]>5, r
+    return 'the giant slime stays dead after the player dies'
+
+@test('snowman_phase2','boss4')
+def snowman_phase2(c):
+    # the snowman's phase 2 starts at 60% of its health
+    c.js('g.startBoss(4);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P,out=[];
+      for(const k of [.62,.58]){B.phase=1;B.state='idle';B.t=9;B.hp=B.max*k;g.sim(.02,()=>{P.inv=1e9});out.push(B.state)}
+      return out""")
+    assert r[0]!='enrage' and r[1]=='enrage', r
+    return 'phase 2 begins at 60% health'
+
+@test('hydra_acid','boss3')
+def hydra_acid(c):
+    # a burn from the hydra's acid pool gives 1.5x the usual invulnerability
+    c.js('g.startBoss(3);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+300;g.lock();g.sim(2,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P;B.state='fight';B.poisonOn=true;B.poisonSafe=0;B.stage=2;g.setPoison(1);P.hp=5;P.maxhp=5;P.inv=0;P.y=g.FLOOR-P.h;P.vy=0;
+      g.sim(1/120);return [P.hp,P.inv]""")
+    assert r[0]==4 and r[1]>2.0, r
+    return f'acid burn: {r[1]:.2f} s of invulnerability'
 
 @test('frog_warn','enemies')
 def frog_warn(c):

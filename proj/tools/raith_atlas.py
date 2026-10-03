@@ -21,21 +21,24 @@ from PIL import Image
 ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAMES=['idle','jump','run','walk','hurt','laugh','punch','punch2','hadoken','shots','sphere','death','throw','door']
 SCALE=.52
+PAD=4
 def opaque(a,x,y): return a[x,y]>20
 def save(crops):
     """pack (name, image, anchor x) frames into assets/raith.webp and write src/sprites/raith.js"""
+    # every frame keeps PAD empty pixels around it: room for the outline the game can draw (render/raith.js)
     AW=2048; cx=cy=sh=0; place=[]; frames={}
     for name,fr,ax in crops:
-        fw,fh=fr.size
-        if cx+fw>AW: cx=0; cy+=sh+2; sh=0
-        place.append((name,fr,ax,cx,cy)); cx+=fw+2; sh=max(sh,fh)
+        fw,fh=fr.size[0]+2*PAD,fr.size[1]+2*PAD
+        if cx+fw>AW: cx=0; cy+=sh; sh=0
+        place.append((name,fr,ax,cx+PAD,cy+PAD)); cx+=fw; sh=max(sh,fh)
     atlas=Image.new('RGBA',(AW,cy+sh))
     for name,fr,ax,x,y in place:
         atlas.paste(fr,(x,y)); frames.setdefault(name,[]).append([x,y,fr.size[0],fr.size[1],round(ax,1)])
     atlas.save(os.path.join(ROOT,'assets/raith.webp'),'WEBP',quality=90,method=6)
     with open(os.path.join(ROOT,'src/sprites/raith.js'),'w') as f:
         f.write('/* ---------- Raithwyn: frames of assets/raith.webp (made by tools/raith_atlas.py) ---------- */\n')
-        f.write('// [x, y, w, h, anchor x]; the sprite stands on its bottom edge\n')
+        f.write('// [x, y, w, h, anchor x]; the sprite stands on its bottom edge; every frame has RAITH_PAD empty pixels around it\n')
+        f.write('const RAITH_PAD=%d;\n'%PAD)
         f.write('const RAITH_FRAMES='+json.dumps(frames,separators=(',',':'))+';\n')
     print(atlas.size, {k:len(v) for k,v in frames.items()}, os.path.getsize(os.path.join(ROOT,'assets/raith.webp')))
 def magic(px):

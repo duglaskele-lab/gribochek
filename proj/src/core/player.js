@@ -10,7 +10,7 @@ function punch(){
   const p=P;p.shootCD=.34;p.punchT=PUNCH_T;p.punchHit=new Set();sfx('punch');
   p.punchAnim=Math.random()<.5?'punch':'punch2';   // Raithwyn has two punch animations, picked at random
   const wv=HERO().wave;
-  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE*wv.len,hit:p.punchHit,dmg:HERO().punch,tall:wv.tall});
+  pwaves.push({delay:PUNCH_T-PUNCH_ACTIVE[0],face:p.face,x:0,y:0,vx:0,life:WAVE_LIFE*wv.len,hit:p.punchHit,dmg:HERO().punch,tall:wv.tall,col:wv.col});
 }
 // Raithwyn's spells (L: hadoken, I: small sphere): a cast animation, then the shot leaves her hand (see updateSpells).
 // Mana is checked when the cast starts and paid when the shot flies out; getting hurt or dashing breaks the cast.
@@ -25,7 +25,7 @@ function castFire(){
   p.mana-=sp.cost;
   const x=p.x+p.w/2+p.face*sp.spot[0]*RAITH_SC, y=p.y+p.h+2-sp.spot[1]*RAITH_SC;   // where the ball is in her cast frames
   spells.push({k,x,y,y0:y,t:0,face:p.face,vx:p.face*sp.speed,life:sp.life,r:sp.r,dmg:sp.dmg,amp:sp.amp||0,per:sp.per||1,hit:new Set()});
-  sfx(k==='hadoken'?'power':'shoot');
+  sfx(k==='hadoken'?'darkball':'shoot');
   if(k==='hadoken'){shake(.12,4);dust(p.x+p.w/2-p.face*10,p.y+p.h,6,-p.face)}
 }
 // once per punch (the punch and its shockwave share one set of hits): +mana for the first foe it hits
