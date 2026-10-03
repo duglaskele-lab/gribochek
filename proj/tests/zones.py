@@ -18,7 +18,7 @@ ZONES=[
   ('src/bosses/*',              {'boss1','boss2','boss3','boss4','magnet','croc_rules','boss_start','boss_knockback'}),
   ('src/enemies/*',             {'enemies','ice_foes','bigslime','frog_warn','caterpillar_bite'}),
   ('src/core/player.js',        {'player','ice_physics','ice_foes','respawn','pickup','mana','raith'}),
-  ('src/core/projectiles.js',   {'enemies','ice_foes','boss1','boss2','boss3','boss4','magnet','pickup'}),
+  ('src/core/projectiles.js',   {'enemies','ice_foes','boss1','boss2','boss3','boss4','magnet','pickup','raith'}),
   ('src/core/step.js',          {'player','boss1','boss2','boss3','boss4'}),
   ('src/core/*',                {'player','enemies','respawn','magnet'}),
   ('src/render/water.js',       {'render','water'}),

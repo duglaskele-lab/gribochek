@@ -121,6 +121,26 @@ function updateShots(dt){
   }
   eshots=eshots.filter(b=>!b.dead);
 }
+// Raithwyn's spells (cast in core/player.js): the hadoken flies straight and breaks cracked walls, the sphere sways along
+// a wide sine wave. Each bursts on the first foe or boss it hurts, on a wall or in water; both knock down foes' shots.
+function updateSpells(dt){
+  for(const s of spells){
+    s.life-=dt; s.t+=dt; s.x+=s.vx*dt;
+    if(s.amp) s.y=s.y0-Math.sin(s.t/s.per*Math.PI*2)*s.amp;
+    const c=Math.floor((s.x+s.face*s.r*.6)/TS),r=Math.floor(s.y/TS);
+    if(solid(c,r)){if(s.k==='hadoken')breakWall(c,r);s.life=0;burst(s.x,s.y,10,'#c79bff',180);continue}
+    if(waterAt(s.x,s.y)){s.life=0;splash(s.x,s.y);continue}
+    if(s.x<camX-80||s.x>camX+VW+80) s.life=0;
+    const hit=b=>circleBox(s.x,s.y,s.r,b);
+    for(const e of enemies){ if(e.dead||s.life<=0||s.hit.has(e)) continue;
+      if(enemyHurtBoxes(e).some(hit)){s.hit.add(e);attackEnemy(e,s.dmg,s.x-s.face*40,s.x,s.y,hit);s.life=0}}
+    if(s.life>0&&bossHittable()){const m=bossHitMult(hit);if(m){s.life=0;hitBoss(s.dmg*m,s.x,s.y)}}
+    for(const b of eshots) if(canDeflect(b)&&!b.dead&&Math.hypot(b.x-s.x,b.y-s.y)<(b.r||8)+s.r){b.dead=true;burst(b.x,b.y,8,'#e6d4ff',160);sfx('hit')}
+    if(s.life<=0) burst(s.x,s.y,12,'#c79bff',200);
+    else if(Math.random()<(s.k==='hadoken'?.7:.3)) parts.push({x:s.x-s.face*s.r*.8,y:s.y+rand(-s.r,s.r)*.5,vx:-s.face*rand(40,120),vy:rand(-40,40),g:0,c:'rgba(200,150,255,.85)',s:rand(2,4),life:.3,max:0,t:'dot'});
+  }
+  spells=spells.filter(s=>s.life>0);
+}
 function updateItems(dt){
   const cx=P.x+P.w/2, cy=P.y+P.h/2;
   for(const it of items){
@@ -138,7 +158,7 @@ function updateItems(dt){
       if(it.k==='spore'){spores++;sporesGot++;sfx('coin');burst(it.x,it.y,6,'#ffcf6b',120,300,[2,4])}
       else if(it.k==='gold'){spores+=5;sporesGot+=5;sfx('power');stars(it.x,it.y,10);floater(it.x,it.y-30,'+5')}
       else if(it.k==='heart'){if(P.hp<P.maxhp)P.hp++;else{spores+=2;floater(it.x,it.y-30,T('fHeartFull'))}sfx('coin');burst(it.x,it.y,10,'#ff6b7a',160)}
-      else if(it.k==='power'){const was=P.mana;gainMana(MANA_PICK);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;sfx('power');stars(it.x,it.y,14);   // the big mushroom: +100 mana
+      else if(it.k==='power'){const was=P.mana;gainMana(MANA_PICK);P.lockT=.55;P.pickT=0;P.vx=0;P.punchT=0;P.castT=0;sfx('power');stars(it.x,it.y,14);   // the big mushroom: +100 mana
         floater(it.x,it.y-40,'+'+Math.round(P.mana-was)+' '+T('manaL'))}
     }
   }

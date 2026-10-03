@@ -118,6 +118,8 @@ body.touch #touch{display:block}
 #bs{right:calc(max(18px,env(safe-area-inset-right,0px)) + 104px);bottom:34px;width:74px;height:74px}
 #bd{right:calc(max(18px,env(safe-area-inset-right,0px)) + 14px);bottom:124px;width:66px;height:66px;font-size:18px}
 #bm{right:calc(max(18px,env(safe-area-inset-right,0px)) + 100px);bottom:122px;width:62px;height:62px;font-size:17px}
+#bi{display:none;right:calc(max(18px,env(safe-area-inset-right,0px)) + 186px);bottom:118px;width:58px;height:58px;font-size:16px}
+body.raith #bi{display:flex}
 #bshop{display:none;left:50%;transform:translateX(-50%);bottom:24px;width:auto;height:54px;border-radius:27px;padding:0 22px;font-size:20px}
 body.touch.near-shop #bshop{display:flex}
 #bp{right:max(14px,env(safe-area-inset-right,0px));top:12px;width:48px;height:48px;font-size:18px}

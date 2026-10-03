@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """Cuts Raithwyn's sprite sheet into frames and packs them into assets/raith.webp + src/sprites/raith.js.
 
-  python3 tools/raith_atlas.py path/to/sheet.webp
+  python3 tools/raith_atlas.py "assets/Raithwyn/character_sheet (draft 2).png"
   python3 tools/raith_atlas.py --edited path/to/edited_atlas.webp
 
 The second form takes an edited copy of assets/raith.webp itself (possibly resized, e.g. by an image upload):
 the frames are found where the current src/sprites/raith.js puts them, scaled to the new image size.
 
 The sheet has one animation per row on a transparent background, frames separated by empty columns:
-idle 1, jump 5, run 6, walk 8, hurt 2, laugh 4, punch 5, punch2 5. Each frame is cropped tight; its anchor x is the
-middle of the head (the top quarter of the sprite), so the body stays put while the tail and arms swing.
+idle 1, jump 5, run 6, walk 8, hurt 2, laugh 4, punch 5, punch2 5, hadoken (cast) 6, shots 2 (the hadoken ball, the small
+sphere), sphere (cast) 7, death 6, throw 4, door 4 (walking away, seen from the back). Specks narrower than 40px (a
+spark cut off from its frame) join the frame next to them. The sheet is drawn big, so frames are scaled by SCALE.
+Each frame is cropped tight; its anchor x is the middle of the head (the top quarter of the sprite), so the body stays
+put while the tail and arms swing. Exceptions: shots are anchored in the middle; death frames keep the back foot
+(the leftmost opaque pixel of the bottom rows) where it is in the first frame, since she falls forward.
 """
 import sys, os, json
 from PIL import Image
 ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NAMES=['idle','jump','run','walk','hurt','laugh','punch','punch2']
+NAMES=['idle','jump','run','walk','hurt','laugh','punch','punch2','hadoken','shots','sphere','death','throw','door']
+SCALE=.52
 def opaque(a,x,y): return a[x,y]>20
 def save(crops):
     """pack (name, image, anchor x) frames into assets/raith.webp and write src/sprites/raith.js"""
@@ -36,6 +41,9 @@ def head_anchor(fr):
     fa=fr.split()[3].load(); fw,fh=fr.size; top=max(1,fh//4)
     xs=[xx for yy in range(top) for xx in range(fw) if fa[xx,yy]>20]
     return sum(xs)/len(xs)
+def foot_x(fr):
+    fa=fr.split()[3].load(); fw,fh=fr.size
+    return min(xx for yy in range(fh-max(2,fh//12),fh) for xx in range(fw) if fa[xx,yy]>20)
 def from_edited(src):
     import re,math
     old=json.loads(re.search(r'RAITH_FRAMES=(\{.*\});',open(os.path.join(ROOT,'src/sprites/raith.js')).read()).group(1))
@@ -61,14 +69,26 @@ def main(src):
     crops=[]
     for name,(y0,y1) in zip(NAMES,bands):
         cols=[any(opaque(a,x,y) for y in range(y0,y1)) for x in range(W)]
-        x=0
+        segs=[];x=0
         while x<W:
             if cols[x]:
                 x0=x
                 while x<W and cols[x]: x+=1
-                box=im.crop((x0,y0,x,y1)).getbbox(); fr=im.crop((x0,y0,x,y1)).crop(box)
-                crops.append((name,fr,head_anchor(fr)))
+                segs.append([x0,x])
             x+=1
+        merged=[]
+        for sg in segs:   # a speck joins the nearer neighbour
+            if merged and (sg[1]-sg[0]<40 or merged[-1][1]-merged[-1][0]<40) and len(segs)>2: merged[-1][1]=sg[1]
+            else: merged.append(sg)
+        frs=[]
+        for x0,x1 in merged:
+            fr=im.crop((x0,y0,x1,y1)); fr=fr.crop(fr.getbbox())
+            fr=fr.resize((max(1,round(fr.size[0]*SCALE)),max(1,round(fr.size[1]*SCALE))),Image.LANCZOS); frs.append(fr)
+        if name=='shots': axs=[fr.size[0]/2 for fr in frs]
+        elif name=='death':
+            d=head_anchor(frs[0])-foot_x(frs[0]); axs=[foot_x(fr)+d for fr in frs]
+        else: axs=[head_anchor(fr) for fr in frs]
+        crops+=[(name,fr,ax) for fr,ax in zip(frs,axs)]
     save(crops)
 if __name__=='__main__':
     if sys.argv[1]=='--edited': from_edited(sys.argv[2])

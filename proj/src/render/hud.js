@@ -49,7 +49,7 @@ function render(){
   if(BIOME==='swamp') drawPoison();
   drawPlayer();
   for(const s of shots) mushroom(s.x,s.y+s.r*.3,s.r,s.rot,s.red,s.gold);
-  drawWaves(); drawEShots(); drawFakes(); drawCovers(); drawWater(); drawParts();
+  drawWaves(); drawSpells(); drawEShots(); drawFakes(); drawCovers(); drawWater(); drawParts();
   }finally{ctx.restore();VW=VW0;VHZ=VH}
   ctx.setTransform(K,0,0,K,0,0);
   if(state!=='title') drawHUD();

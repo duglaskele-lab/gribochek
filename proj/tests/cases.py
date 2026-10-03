@@ -475,8 +475,8 @@ def sand_idle(c):
 
 @test('raith','player','enemies')
 def raith(c):
-    # Raithwyn: taller, 1.5 punches, 2 stomps, L = strong punch (10 mana) with a 5-damage shockwave, hearts-only shop,
-    # no heavy-landing lock, a fog death; every level starts and runs with her
+    # Raithwyn: taller, 1.5 punches, 2 stomps, L = hadoken (15 mana, 5 damage), I = a sphere on a sine wave (5 mana, 5
+    # damage), hearts-only shop, no heavy-landing lock, a death animation in fog; every level starts and runs with her
     try:
         c.js("g.setHero('raith')")
         for l in (1,2,3,4):
@@ -486,10 +486,18 @@ def raith(c):
         gd=c.js("const R=g.P;R.inv=1e9;g.sim(.3,()=>{R.inv=1e9});const x0=R.x;g.dash();g.sim(.3,()=>{R.inv=1e9;R.vy=0});return R.x-x0")
         c.js("g.setHero('raith')");c.start(1,2)
         r=c.js("""const P=g.P,out={};P.inv=1e9;g.enemies.length=0;
-          let e=g.spawn('orc',P.x+70,P.y+P.h);e.hp=20;e.face=1;P.face=1;g.punch();g.sim(.4,()=>{P.inv=1e9});out.punch=20-e.hp;g.enemies.length=0;
-          // the strong punch: a wave that reaches a foe ~200 px away
-          P.mana=50;e=g.spawn('slime',P.x+P.w/2+200,P.y+P.h);e.hp=20;P.face=1;P.shootCD=0;g.strongPunch();g.sim(.7,()=>{P.inv=1e9});
-          out.strong=[20-e.hp,P.mana];g.enemies.length=0;
+          let e=g.spawn('orc',P.x+70,P.y+P.h);e.hp=20;e.face=1;P.face=1;g.punch();out.punchAnim=P.punchAnim;g.sim(.4,()=>{P.inv=1e9});out.punch=20-e.hp;g.enemies.length=0;
+          // both punch animations come up
+          const anims=new Set();for(let i=0;i<40;i++){P.shootCD=0;g.punch();anims.add(P.punchAnim)}P.punchT=0;out.anims=[...anims].sort();
+          // the hadoken: the cast frames, then a fireball that hits a small foe 300 px away
+          P.mana=50;e=g.spawn('slime',P.x+P.w/2+300,P.y+P.h);e.hp=20;P.face=1;P.shootCD=0;g.cast('hadoken');g.sim(.1,()=>{P.inv=1e9});g.render();out.castFr=P._fr[0];
+          g.sim(1,()=>{P.inv=1e9});out.hadoken=[20-e.hp,P.mana];g.enemies.length=0;
+          // the sphere: sways up and down by a wide sine wave, 5 damage for 5 mana
+          P.mana=50;P.shootCD=0;g.cast('sphere');g.sim(.1,()=>{P.inv=1e9});g.render();out.sphereFr=P._fr[0];
+          let lo=1e9,hi=-1e9;g.sim(1.6,()=>{P.inv=1e9;for(const s of g.spells){lo=Math.min(lo,s.y);hi=Math.max(hi,s.y)}});out.sway=hi-lo;out.sphereMana=P.mana;g.spells.length=0;
+          e=g.spawn('slime',P.x+P.w/2+220,P.y+P.h);e.hp=20;P.shootCD=0;g.cast('sphere');g.sim(1.5,()=>{P.inv=1e9});out.sphere=20-e.hp;g.enemies.length=0;
+          // not enough mana: no cast
+          P.mana=3;P.shootCD=0;g.cast('sphere');out.denied=!(P.castT>0);P.mana=50;
           // a stomp
           e=g.spawn('orc',P.x+P.w/2,P.y+P.h);e.hp=20;P.x=e.x+e.w/2-P.w/2;P.y=e.y-P.h-2;P.vy=300;P.onGround=false;P.inv=0;g.sim(.1);out.stomp=20-e.hp;g.enemies.length=0;
           // a long fall: no heavy-landing lock
@@ -500,13 +508,15 @@ def raith(c):
           out.dash=dashLen();
           {const R=g.P;R.shootCD=0;g.punch();g.sim(.1,()=>{R.inv=1e9});const w=g.pwaves[0];out.wave=!!w&&w.tall>1.2&&w.life0<.11}
           // dying: the fog, then back at the checkpoint
-          Q.inv=0;Q.hp=0;Q.dead=true;Q.deadT=0;Q.fell=false;g.sim(1.5);out.stillDead=g.P===Q;g.sim(.5);out.back=g.P!==Q;
+          Q.inv=0;Q.hp=0;Q.dead=true;Q.deadT=0;Q.fell=false;g.sim(.5);g.render();out.deathFr=Q._fr[0];g.sim(1.5);out.stillDead=g.P===Q;g.sim(.6);out.back=g.P!==Q;
           return out""")
         r['gribDash']=gd
-        assert r['punch']==1.5 and r['strong'][0]==5 and r['strong'][1]==35 and r['stomp']==2, r
+        assert r['punch']==1.5 and r['anims']==['punch','punch2'] and r['stomp']==2, r
+        assert r['castFr']=='hadoken' and r['hadoken']==[5,35] and r['sphereFr']=='sphere' and r['sphereMana']==45 and r['sphere']==5 and r['sway']>60 and r['denied'], r
+        assert r['deathFr']=='death', r
         assert r['heavy']==0 and r['shop']==['heal','maxhp','manaUp'] and r['stillDead'] and r['back'], r
         assert abs(r['dash']/r['gribDash']-1.15)<.06 and r['wave'], r
-        return 'all levels run; punch 1.5 + short tall wave, dash x1.15, strong punch 5 for 15 mana, stomp 2; shop: hearts + mana; fog death'
+        return 'all levels run; punch 1.5 + short tall wave, dash x1.15, hadoken 5 for 15 mana, sine sphere 5 for 5, stomp 2; shop: hearts + mana; death frames + fog'
     finally:
         c.js("g.setHero('grib')")
 
