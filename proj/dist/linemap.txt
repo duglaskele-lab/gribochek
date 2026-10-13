@@ -53,8 +53,8 @@
 6772-6967	levels/city/draw.js
 6969-7266	levels/city/foes.js
 7268-7359	levels/city/ratking.js
-7361-7626	levels/city/tank.js
-7628-7661	levels/city/music.js
-7663-7734	levels/city/level.js
-7736-7758	debug.js
-7760-7775	main.js
+7361-7631	levels/city/tank.js
+7633-7666	levels/city/music.js
+7668-7739	levels/city/level.js
+7741-7763	debug.js
+7765-7780	main.js

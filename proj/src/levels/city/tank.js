@@ -134,7 +134,7 @@ function updateMutank(dt){
       if((s<0&&B.x<=ARENA_L+4)||(s>0&&B.x+B.w>=ARENA_R-4)){B.x=s<0?ARENA_L+4:ARENA_R-4-B.w;B.vx=0;B.state='grab';B.t=0;sfx('slosh')}break}
     case 'grab':{B.t+=dt;const k=Math.min(1,B.t/.45),s=B.side;
       B.rot=-s*Math.PI/2*k;   // the tracks turn onto the wall
-      if(k>=1){B.mode='wall';B.w=MT_H;B.h=MT_W;B.x=s<0?ARENA_L:ARENA_R-MT_H;B.y=FLOOR-MT_W;B.state='climb';B.goal=B.ceil?MT_GIRDER_Y+MT_H:FLOOR-MT_W-230}break}
+      if(k>=1){B.mode='wall';B.w=MT_H;B.h=MT_W;B.x=s<0?ARENA_L:ARENA_R-MT_H;B.y=FLOOR-MT_W;B.state='climb';B.goal=B.ceil?MT_GIRDER_Y:FLOOR-MT_W-170}break}
     case 'climb': B.y=approach(B.y,B.goal,dt*250);B.tread+=dt*6;
       if(B.y<=B.goal+.5){if(B.ceil){B.state='turn';B.t=0;sfx('slosh')}else{B.state='wallFire';B.shots=3;B.t=.5}}break;
     case 'wallFire': B.t-=dt;B.wiggle+=dt;if(B.t<=0){if(B.shots>0){mtMortar();B.shots--;B.t=.6*m}else{B.state='release';B.vy=0;B.t=0;sfx('creak')}}break;
@@ -215,7 +215,12 @@ function drawMutank(){
   if(st==='dangle'||st==='crawl'){const k=st==='dangle'?1-B.t/(.75*mtSpeed()):0;ctx.fillStyle=`rgba(40,20,50,${.15+.25*k})`;ctx.beginPath();ctx.ellipse(mtCX(),FLOOR-2,MT_W*(.3+.3*k),8,0,0,7);ctx.fill()}
   if(B.mode==='ground'&&st!=='leap')shadow(mtCX(),FLOOR,MT_W*.48);
   // where to draw: the centre of its box, the rotation of its tracks
-  const cx=B.x+B.w/2,cy=B.y+B.h/2;
+  let cx=B.x+B.w/2,cy=B.y+B.h/2;
+  // turning onto the wall (or from the wall onto the girder) the hull swings round the corner: its centre moves from
+  // where it was to where it will be while the tracks turn
+  if(st==='grab'||st==='turn'){const k=Math.min(1,B.t/.45),s=B.side,wx=s<0?ARENA_L+MT_H/2:ARENA_R-MT_H/2;
+    const [tx,ty]=st==='grab'?[wx,FLOOR-MT_W/2]:[s<0?ARENA_L+6+MT_W/2:ARENA_R-6-MT_W/2,MT_GIRDER_Y+MT_H/2];
+    cx+=(tx-cx)*k;cy+=(ty-cy)*k}
   ctx.save();ctx.translate(cx,cy);ctx.rotate(B.rot);
   if(st==='rev'||st==='mutate')ctx.translate(rand(-2,2),rand(-1,1));
   const ground=B.mode==='ground'||B.mode==='air';
