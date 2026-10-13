@@ -73,6 +73,16 @@ def gen2(c): return gen(c,2,20)
 def gen3(c): return gen(c,3,20)
 @test('gen4','gen')
 def gen4(c): return gen(c,4,40)
+@test('gen5','gen','city')
+def gen5(c):
+    r=gen(c,5,40)
+    # every kind of mutant and the mini-boss turn up; the first meeting with each one is on its own
+    seen=set()
+    for seed in range(1,11):
+        c.js(f'g.start(5,{seed})')
+        seen|=set(c.js("return g.enemies.map(e=>e.type)"))
+    assert {'mutRat','acidSpitter','mutCrow','brute','tentacle','ratKing'}<=seen, seen
+    return r+', all mutants placed'
 
 # ------------------------------------------------------------------ bosses
 def boss_fight(c,level,expect_states=(),secs=45):
@@ -104,7 +114,112 @@ def boss3(c): return boss_fight(c,3)
 @test('boss4','boss','ice')
 def boss4(c):
     return boss_fight(c,4,['idle','slamWind','slam','punchWind','punch','throwWind','headThrow','volleyWind','volley',
-                           'hopWind','hop','splitWind','split','reform','enrage','clapWind','clapOut','clap','frostWind','frost'],secs=150)
+                           'hopWind','hop','splitWind','split','reform','enrage','clapWind','clapOut','clap','frostWind','frost'],secs=240)
+
+@test('boss5','boss','city')
+def boss5(c):
+    return boss_fight(c,5,['intro','idle','aim','rev','ram','crash','tentCall','mutate','crouch','leap','land','toWall','grab','climb','wallFire','release'],secs=240)
+
+@test('mutank_moves','boss5','city')
+def mutank_moves(c):
+    c.js('g.startBoss(5);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;P.y=g.FLOOR-P.h;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const B=g.B,P=g.P,out={},A=g.arena,ev=g.ev;
+      const reset=(x)=>{ev("mtSetGround();B.state='idle';B.t=99;B.vx=0;B.vy=0;B.open=0;B.phase=1");B.x=x;P.x=A[0]+120;P.y=g.FLOOR-P.h;P.vx=0;P.vy=0;P.inv=1e9};
+      // the ram ends in the wall: dazed, hatch open, 50% more damage
+      reset(A[0]+500);B.face=-1;P.x=A[0]+300;ev("B.state='rev';B.t=.1");g.sim(2,()=>{P.inv=1e9;P.y=g.FLOOR-P.h-400;P.vy=0;if(B.state==='crash')return false});
+      out.crash=B.state;out.nearWall=B.x-A[0]<40;out.openMult=ev('mtHitMult(()=>true)');
+      reset(A[0]+500);out.mult=ev('mtHitMult(()=>true)');let h;
+      // a stomp on the turret hurts it and does not hurt her; touching the hull does
+      reset(A[0]+400);P.inv=0;P.hurtT=0;P.hp=5;P.maxhp=5;P.x=B.x+B.w/2-P.w/2;P.y=B.y-P.h-30;P.vy=200;P.onGround=false;P.prevBottom=P.y+P.h;h=B.hp;
+      g.sim(.3,()=>{});out.stomp=[h-B.hp,P.hp];
+      reset(A[0]+400);P.inv=0;P.hurtT=0;P.hp=5;P.x=B.x-P.w+20;P.y=g.FLOOR-P.h;g.sim(.05,()=>{});out.touch=P.hp;P.inv=1e9;
+      // tentacles from the floor: one comes up right under her
+      reset(A[0]+700);P.inv=0;P.hurtT=0;P.hp=5;ev('mtTentacles(3)');out.tents=g.eshots.filter(b=>b.k==='ftent').length;
+      out.under=g.eshots.some(b=>b.k==='ftent'&&Math.abs(b.x-(P.x+P.w/2))<5);let hit=0;g.sim(1.2,()=>{if(P.hurtT>0)hit=1});out.tentHurt=hit;P.inv=1e9;
+      // up the wall: mortar shells, then it lets go and crashes down
+      reset(A[0]+400);B.phase=2;ev("B.state='toWall';B.side=1;B.ceil=false");const st=new Set();let mort=0,wall=0;
+      g.sim(8,()=>{P.inv=1e9;st.add(B.state);if(B.mode==='wall')wall=1;mort=Math.max(mort,g.eshots.filter(b=>b.k==='mortar').length);if(B.state==='crash')return false});
+      out.climb=[...st].join(',');out.mortar=mort;out.wall=wall;out.afterWall=[B.state,B.mode];
+      // phase 3: round the corner onto the girder, crawl over her, dangle, drop
+      reset(A[0]+400);B.phase=3;P.x=A[0]+600;ev("B.state='toWall';B.side=-1;B.ceil=true");const st3=new Set();let ceil=0;
+      g.sim(12,()=>{P.inv=1e9;st3.add(B.state);if(B.mode==='ceil')ceil=1;if(B.state==='crash')return false});
+      out.ceil=[...st3].join(',');out.onCeil=ceil;out.afterCeil=[B.state,B.mode,Math.round(B.y+B.h)];
+      // beaten on the wall, it falls down
+      reset(A[0]+400);B.phase=2;ev("B.state='toWall';B.side=1;B.ceil=false");g.sim(4,()=>{P.inv=1e9;if(B.state==='wallFire')return false});
+      g.hitBoss(999,B.x+B.w/2,B.y+B.h/2);g.sim(2.5,()=>{P.inv=1e9});out.deadFell=[g.dead,Math.round(g.B.y+g.B.h)];
+      return out""")
+    fl=c.js('return g.FLOOR')
+    assert r['crash']=='crash' and r['nearWall'] and r['openMult']==1.5 and r['mult']==1, r
+    assert r['stomp'][0]>0 and r['stomp'][1]==5 and r['touch']<5, r
+    assert r['tents']==3 and r['under'] and r['tentHurt'], r
+    assert 'grab' in r['climb'] and 'wallFire' in r['climb'] and 'release' in r['climb'] and r['wall'] and r['mortar']>0 and r['afterWall']==['crash','ground'], r
+    assert 'turn' in r['ceil'] and 'crawl' in r['ceil'] and 'dangle' in r['ceil'] and 'drop' in r['ceil'] and r['onCeil'] and r['afterCeil'][:2]==['crash','ground'] and r['afterCeil'][2]==fl, r
+    assert r['deadFell'][0] and r['deadFell'][1]==fl, r
+    return 'ram into the wall opens the hatch (x1.5), stomp on the turret, floor tentacles, wall climb + mortars, girder drop, falls when beaten'
+
+@test('city_exit','boss5','city')
+def city_exit(c):
+    # the barricade closes the street until the Mutank is beaten; then it blows apart, the bunker door is reached and
+    # level 5, the last one, ends the game with the victory screen
+    c.js('g.startBoss(5);g.freeze();')
+    c.js("const P=g.P;P.inv=1e9;P.x=g.arena[0]+200;P.y=g.FLOOR-P.h;g.lock();g.sim(2.5,()=>{P.inv=1e9})")
+    r=c.js("""const P=g.P,G=g.grid,a1=Math.floor(g.arena[1]/40),row=G.length-3,out={};
+      out.closed=G[row][a1]!==0;g.hitBoss(999,g.B.x+g.B.w/2,g.B.y+g.B.h/2);g.sim(4,()=>{P.inv=1e9});
+      out.dead=g.dead;out.open=G[row][a1]===0;out.doorPast=g.door.x>g.arena[1]+300;
+      P.x=g.arena[1]-200;P.y=g.FLOOR-P.h;g.key('r',1);let entered=false;g.sim(9,()=>{P.inv=1e9;if(P.entering)entered=true;if(g.state!=='play')return false});g.key('r',0);
+      out.entered=entered;out.state=g.state;return out""")
+    assert r['closed'] and r['dead'] and r['open'] and r['doorPast'] and r['entered'] and r['state']=='win', r
+    return 'barricade opens after the Mutank, the bunker door ends the game'
+
+@test('city_foes','enemies','city')
+def city_foes(c):
+    c.start(5,1)
+    r=c.js("""const P=g.P,out={},fy=P.y+P.h;P.inv=1e9;
+      const fresh=()=>{g.enemies.length=0;g.eshots.length=0;P.x=200;P.y=fy-P.h;P.vx=0;P.vy=0;P.inv=1e9};
+      const watch=(e,secs,each)=>{const s=new Set();g.sim(secs,i=>{P.inv=1e9;P.x=200;P.y=fy-P.h;P.vx=0;s.add(e.state);if(each)each()});return [...s]};
+      // the rat: crouch, dash, skid
+      fresh();let e=g.spawn('mutRat',P.x+220,fy);e.cd=0;out.rat=watch(e,3);
+      // the acid spitter: swell, a glob, a pool of acid on the floor (she steps away once it spits, so the glob lands)
+      fresh();e=g.spawn('acidSpitter',P.x+300,fy);e.cd=0;let pool=0;out.spit=watch(e,3,()=>{if(g.eshots.some(b=>b.k==='glob'))P.x=-400;if(g.eshots.some(b=>b.k==='acidPool'))pool=1});out.pool=pool;
+      // the crow: caw, dive, back to its perch
+      fresh();e=g.spawn('mutCrow',P.x+120,fy-150);e.perchX=P.x+140;e.perchY=fy-150;e.cd=0;out.crow=watch(e,4);
+      // the brute: roar, charge; a wall stops it cold; while charging, hits from the front bounce off
+      fresh();e=g.spawn('brute',P.x+380,fy);e.cd=0;e.face=-1;let blocked=null;
+      out.brute=watch(e,5,()=>{if(e.state==='charge'&&blocked===null){const h=e.hp;g.attack(e,1,e.x-20);blocked=e.hp===h}});out.blocked=blocked;
+      // the manhole tentacle: warn, up, slam, lie, back down; the shut lid cannot be hit
+      fresh();e=g.spawn('tentacle',P.x+60,fy);g.sim(.05,()=>{});const h0=e.hp;g.attack(e,1,e.x-20);out.lid=e.hp===h0;
+      out.tent=watch(e,3);
+      return out""")
+    for k,need in (('rat',['crouch','dash','skid']),('spit',['swell']),('crow',['caw','dive','rise','perch']),('brute',['roar','charge','stun']),('tent',['warn','up','slam','lie','down'])):
+        assert all(s in r[k] for s in need), (k,r[k])
+    assert r['pool'] and r['blocked'] and r['lid'], r
+    # downed power lines: off, crackle, spark; sparking hurts
+    w=c.js("""g.start(5,1);g.freeze();const W=g.ev('cityWires');if(!W.length)return null;const w=W[0],P=g.P,s=new Set();
+      P.x=w.x+(w.k==='arc'?-P.w/2:w.w/2-P.w/2);P.y=w.y-P.h;P.hp=5;P.maxhp=5;P.inv=0;let hurt=0;
+      g.sim(6,()=>{s.add(w.st);P.x=w.x+(w.k==='arc'?-P.w/2:w.w/2-P.w/2);P.y=w.y-P.h;P.vy=0;if(P.hurtT>0)hurt=1;P.inv=Math.min(P.inv,.01)});return [[...s].sort(),hurt]""")
+    assert w and w[0]==['off','on','warn'] and w[1], w
+    return 'rat, acid spitter, crow, brute (blocks while charging, dazed by walls), manhole tentacle, live wires'
+
+@test('ratking','enemies','city')
+def ratking(c):
+    for seed in range(1,8):
+        c.start(5,seed)
+        if c.js("return g.enemies.some(e=>e.type==='ratKing')"): break
+    r=c.js("""const P=g.P,e=g.enemies.find(e=>e.type==='ratKing'),out={};P.inv=1e9;
+      out.sleep=e.state;const fy=e.y+e.h;P.x=e.kx0+60;P.y=fy-P.h;const st=new Set();let waves=0,kids=0;
+      g.sim(25,i=>{P.inv=1e9;st.add(e.state);if(i%240===0){P.x=e.kx0+60+Math.random()*(e.kx1-e.kx0-160);P.y=fy-P.h;P.vy=0}
+        waves=Math.max(waves,g.eshots.filter(b=>b.k==='rubbleWave').length);kids=Math.max(kids,g.enemies.filter(k=>k.kid).length);
+        if(e.x<e.kx0-1||e.x+e.w>e.kx1+1)out.out=1});
+      out.states=[...st].join(',');out.waves=waves;out.kids=kids;
+      for(let i=0;i<80&&!e.dead;i++){g.attack(e,1.5,e.x-10);g.sim(.05,()=>{P.inv=1e9})}
+      out.dead=e.dead;out.power=g.items.some(it=>it.k==='power'&&it.drop);
+      P.inv=0;P.hp=0;P.dead=true;P.deadT=0;P.fell=true;g.sim(3);out.back=g.enemies.some(k=>k.type==='ratKing');
+      return out""")
+    assert r['sleep']=='sleep' and not r.get('out'), r
+    for s in ('wake','scratch','charge','stun','crouch','leap','squeak'): assert s in r['states'], r
+    assert r['waves']>0 and 0<r['kids']<=3 and r['dead'] and r['power'] and not r['back'], r
+    return 'wakes in its plaza, charge->dazed, leap->ripples, calls rats (max 3), drops a big mushroom, stays dead'
 
 @test('snowman_moves','boss4','ice')
 def snowman_moves(c):
@@ -602,7 +717,7 @@ def mummy_ruins(c):
 # ------------------------------------------------------------------ rendering / ui (screenshots for a human look)
 @test('render')
 def render(c):
-    for l in (1,2,3,4):
+    for l in c.js('return Object.keys(g.levels).map(Number)'):
         c.start(l,2); c.sim(.5); c.shot(f'level{l}')
     return 'screenshots in tests/out/level*.png'
 

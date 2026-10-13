@@ -2,6 +2,13 @@
 # A changed file under src/ that matches nothing makes --changed run every test.
 ALWAYS={'smoke'}
 ZONES=[
+  ('src/levels/city/tank.js',   {'boss5','mutank_moves','city_exit'}),
+  ('src/levels/city/ratking.js',{'ratking'}),
+  ('src/levels/city/foes.js',   {'city_foes','ratking','boss5'}),
+  ('src/levels/city/gen.js',    {'gen5','boss5','mutank_moves','ratking','city_foes','city_exit'}),
+  ('src/levels/city/draw.js',   {'render'}),
+  ('src/levels/city/music.js',  set()),
+  ('src/levels/city/*',         {'gen5','city_foes','ratking','boss5','mutank_moves'}),
   ('src/levels/ice/snowman.js', {'boss4','snowman_throw','snowman_moves','snowman_phase3'}),
   ('src/levels/ice/foes.js',    {'ice_foes','boss4','witch_flake'}),          # boss4: the snowman shares the ice projectiles
   ('src/levels/ice/gen.js',     {'gen4','ice_physics','boss4','snowman_throw','snow_fill'}),
@@ -11,7 +18,7 @@ ZONES=[
   ('src/levels/swamp/*',        {'gen3','boss3'}),
   ('src/levels/desert/*',       {'gen2','boss2','mummy_ruins'}),
   ('src/levels/forest/*',       {'gen1','boss1','bigslime','respawn'}),
-  ('src/levels/common/*',       {'gen1','gen2','gen3','gen4','bigslime','mummy_ruins'}),
+  ('src/levels/common/*',       {'gen1','gen2','gen3','gen4','gen5','bigslime','mummy_ruins'}),
   ('src/bosses/croc.js',        {'boss1','croc_rules'}),
   ('src/bosses/dragon.js',      {'boss2','dragon_armor','dragon_gust'}),
   ('src/bosses/hydra.js',       {'boss3'}),
@@ -30,7 +37,7 @@ ZONES=[
   ('src/audio/*',               set()),
   ('src/debug.js',              set()),
   ('src/main.js',               set()),
-  ('src/manifest.txt',          {'gen1','gen2','gen3','gen4','boss1','boss2','boss3','boss4','ui'}),
+  ('src/manifest.txt',          {'gen1','gen2','gen3','gen4','gen5','boss1','boss2','boss3','boss4','boss5','ui'}),
   ('src/sprites/*',             {'render','raith'}),
   ('tools/*',                   set()),
   ('assets/*',                  {'render'}),

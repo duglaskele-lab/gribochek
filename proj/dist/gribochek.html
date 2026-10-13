@@ -65,10 +65,11 @@ h2{font-size:24px;font-weight:400;margin:14px 0 8px}
 .hero-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0 2px;font-size:19px}
 .hero-row .seg{margin:0}.hero-btn[aria-pressed="true"]{background:var(--cap);color:#fff;text-shadow:1px 1px 0 var(--ink)}
 .lvl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
+.lvl-grid .lvl-btn:last-child:nth-child(odd){grid-column:1/-1}
 @media (max-width:560px){.lvl-grid{grid-template-columns:1fr}}
 .boss-row{margin:14px 0 4px;text-align:left}
 .boss-row h2{margin:0 0 2px}.card .boss-row p{font-size:16px;margin:0 0 8px;opacity:.8}
-.boss-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.boss-btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
 @media (max-width:560px){.boss-btns{grid-template-columns:1fr 1fr}}
 .boss-btn{font:inherit;font-size:18px;color:#fff;background:#8a3b2a;border:2px solid var(--ink);border-radius:12px;padding:8px 6px;cursor:pointer;box-shadow:0 3px 0 var(--ink);text-shadow:1px 1px 0 var(--ink)}
 .boss-btn:hover,.boss-btn:focus-visible{background:#b3503a;outline:3px solid var(--cap);outline-offset:2px}
@@ -1256,6 +1257,46 @@ function repairColumn(n){
     if(r>=R){grid[r][c]=T_SOLID;flow[r][c]=0}
     else if(r>=R-3&&grid[r][c]!==T_EMPTY){grid[r][c]=T_EMPTY;flow[r][c]=0}
   }
+}
+// The passability check of the levels with their own generators (4 and 5): standable spots (floors, planks,
+// platforms; a lift joins the top and bottom of its run) linked by walks, drops and jumps the jump model allows,
+// with headroom under ceilings. From the start the goal column must be reachable, and from every spot reached the
+// goal must still be reachable (no traps). sky: the rows above the map are open air (no roof).
+function graphCheck(startY,goalC,sky){
+  const nodes=[], byCol=Array.from({length:COLS},()=>[]);
+  const add=(c,y,k)=>{if(c<0||c>=COLS)return null;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n);return n};
+  const rides=[];   // [top node, bottom node] of every column of a lift
+  const free=t=>!isSolidT(t);
+  for(let c=0;c<COLS;c++)for(let r=2;r<ROWS;r++){const t=grid[r][c],up=grid[r-1][c];
+    if(isFloorT(t)&&free(up)&&up!==T_THORN&&free(grid[r-2][c]))add(c,r*TS,t===T_PLANK?'plank':'floor')}
+  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);
+    if(pl.vy&&pl.y0!==pl.y1){for(let c=a;c<b;c++){const t=add(c,pl.y0,'plat'),d=add(c,pl.y1,'plat');if(t&&d)rides.push([t,d])}continue}
+    for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
+  const clearCol=(c,r0,r1)=>{if(c<0||c>=COLS)return false;for(let r=r0;r<=r1;r++){if(r<0){if(sky)continue;return false}if(isSolidT(grid[r][c]))return false}return true};
+  const oneway=k=>k==='plank'||k==='plat';
+  const canMove=(a,b)=>{
+    const dx=b.c-a.c,dy=b.y-a.y,gap=Math.abs(dx)-1,ra=Math.floor(a.y/TS),rb=Math.floor(b.y/TS);
+    if(dx===0)return dy>0?(oneway(a.k)&&clearCol(a.c,ra,rb-1)):(oneway(b.k)&&-dy<=REACH.rise-12&&clearCol(a.c,rb-2,ra-1));
+    if(-dy>REACH.rise-12)return false;
+    if(gap>0){const r=REACH.reach(dy,true);if(r<0||r*.9<gap*TS)return false}
+    const hi=Math.min(a.y,b.y),hr=Math.floor(hi/TS),extra=gap>=2?90:gap>0?40:(dy<0?10:0);
+    const r0=Math.floor((hi-58-extra)/TS),c0=Math.min(a.c,b.c),c1=Math.max(a.c,b.c);
+    for(let c=c0;c<=c1;c++)if(!clearCol(c,r0,hr-1))return false;
+    if(a.y>hi&&!clearCol(a.c,hr,ra-1))return false;   // jumping up out of a low spot
+    if(b.y>hi&&!clearCol(b.c,hr,rb-1))return false;   // dropping down into one
+    return true;
+  };
+  for(const a of nodes)for(let c=Math.max(0,a.c-4);c<=Math.min(COLS-1,a.c+8);c++)for(const b of byCol[c])if(b!==a&&canMove(a,b)){a.out.push(b);b.inn.push(a)}
+  for(const [t,d] of rides){t.out.push(d);d.inn.push(t);d.out.push(t);t.inn.push(d)}
+  const start=byCol[3].find(n=>n.y===startY)||byCol[3][0];if(!start)return{ok:false,why:'start'};
+  const fw=new Set([start]),q=[start];
+  while(q.length){const a=q.shift();for(const b of a.out)if(!fw.has(b)){fw.add(b);q.push(b)}}
+  const goals=nodes.filter(n=>n.c>=goalC);
+  if(!goals.some(n=>fw.has(n))){let far=0;for(const n of fw)far=Math.max(far,n.c);return{ok:false,why:'unreachable',far}}
+  const bw=new Set(goals),q2=[...goals];
+  while(q2.length){const a=q2.shift();for(const b of a.inn)if(!bw.has(b)){bw.add(b);q2.push(b)}}
+  for(const n of fw)if(!bw.has(n))return{ok:false,why:'trap',c:n.c,y:n.y};
+  return{ok:true,nodes:nodes.length};
 }
 // ==== core/heroes.js ====
 /* ---------- heroes: who the player plays ---------- */
@@ -4099,6 +4140,7 @@ function drawTiles(){
       if(tile(c-1,r)!==T_PLANK){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+14);ctx.stroke()}
       if(tile(c+1,r)!==T_PLANK){ctx.beginPath();ctx.moveTo(x+TS,y);ctx.lineTo(x+TS,y+14);ctx.stroke()}
     }else if(t===T_THORN){
+      if(LV().drawThorn){LV().drawThorn(c,r);continue}   // level def drawThorn(c,r): its own spikes (the city's rusty rebar)
       if(BIOME==='forest'||LV().thorn){ctx.fillStyle=LV().thorn||'#5b3a5e';
         for(let k=0;k<4;k++){const sx=x+k*10;ctx.beginPath();ctx.moveTo(sx,y+TS);ctx.lineTo(sx+5,y+14+hash(c,k)*8);ctx.lineTo(sx+10,y+TS);ctx.closePath();ctx.fill();ctx.stroke()}}
       else{ctx.fillStyle='#6a9c4a';ctx.beginPath();ctx.roundRect(x+8,y+14,24,26,10);ctx.fill();ctx.stroke();
@@ -4455,6 +4497,7 @@ function drawShop(sh){
 }
 function drawDoor(){
   const d=door, x=d.x, y=d.y; if(x<camX-200||x>camX+VW+200) return;
+  if(LV().drawDoor){LV().drawDoor(d);return}   // level def drawDoor(d): its own way out (the city's bunker door)
   if(BIOME==='swamp'&&!bossDead) return;   // the stump door rises where the hydra sat
   ctx.strokeStyle=INK;ctx.lineWidth=3.5;
   if(BIOME!=='desert'){
@@ -4824,7 +4867,7 @@ const I18N={
   intro:'Четыре уровня, каждый раз новые: болотный лес с крокодилом, пустыня с драконом, высокое болото с гидрой и ледяная пещера со снеговиком. На каждом уровне спрятано не больше двух хорошо замаскированных тайников.',
   play:'Играть',settings:'Настройки',settingsHint:'Настройки (Esc)',resume:'Продолжить',back:'Назад',restart:'Заново этот уровень',newMap:'Новая карта',
   language:'Язык',controls:'Управление',sporesGotL:n=>`Собрано спор: ${n}`,time:t=>`Время: ${t}`,seedL:s=>`Карта №${s}`,
-  winTitle:'Победа!',winText:'Злой снеговик растаял, и в пещере наступила тишина. Грибочек прошла все четыре уровня и может возвращаться домой.',again:'Сыграть ещё',rotate:'Поверни телефон горизонтально.',
+  winTitle:'Победа!',winText:'Мутанк заглох навсегда, баррикада разлетелась, и над бункером загорелся зелёный фонарь. Грибочек прошла все пять уровней и может возвращаться домой.',again:'Сыграть ещё',rotate:'Поверни телефон горизонтально.',
   nextTitle:'Уровень 2: пустыня',nextText:'Дверь пенька ведёт в пески, к руинам древнего восточного города. Здесь живут скорпионы, попугаи-хулиганы, песчаные черви, кактусы-стрелки, мумии и жуки-скарабеи, а в конце ждёт огненный дракон.',nextTip:'Берегись зыбучих песков: в них нельзя стоять, выбирайся короткими прыжками. Дракон уязвим для удара рукой, когда устаёт после пикирования и опускает голову. Голова получает на 40% больше урона. Когда земля вспыхивает — прыгай на платформу.',next:'Дальше',next3Title:'Уровень 3: болото',next3Text:'За дверью — топкое болото, и чем дальше, тем выше деревья. Здесь хозяйничают люди-ящеры: мечники, маги и закованный в броню командир, а на длинных ветвях стоят их хижины. В кустах сидят гоблины в тотемных масках, по веткам скачут жабы-языкачи, под ветками ждут пауки, над водой вьются комары, в широких заводях плавают пираньи, а в ядовитой заводи живёт трёхголовая гидра.',next3Tip:'Горящие глаза в кустах — там засел гоблин с духовой трубкой; удар по кусту выгонит его. Бочки и ящики разбиваются ударом или рывком. Хижина ящеров выпускает воинов, пока её не сломаешь. Комар перед броском показывает красный пунктир — отойди с линии, а промахнувшись, он застревает. Плоты и лифты на лианах возят над болотом. Трухлявые ветки обваливаются, если на них постоять, но упасть в болото не страшно: доплыви до ближайшего дерева и залезь обратно. Командира не пробить, пока не собьёшь с него шлем прыжком, — потом бей по голове. После двух прыжков по голове он прикрывает её рукой: на руке можно стоять, но прыгать по голове бесполезно — бей рукой. Прыжок по голове гидры ранит её, но после трёх прыжков подряд голова звереет — у неё загораются глаза. Отруби все три головы — они отрастут, а яд в заводи поднимется. Зелёный пунктир — это прицел лазера: уходи с линии.',
   levelName:n=>T('lvlName'+n),lvlName1:'Уровень 1: лес',lvlName2:'Уровень 2: пустыня',lvlName3:'Уровень 3: болото',
   keys:[['← →','бег (A, D)'],['Пробел','прыжок, держи для высоты; с зонтиком — парение; в воде — гребок (W, ↑)'],['K','удар рукой с ударной волной (X); удары по врагам восполняют ману'],['L','бросок гриба за ману; у Raithwyn — хадукен: шар огня, 15 маны (C)'],['J','Raithwyn: магическая сфера, летит волной, 5 маны'],['Левый Shift','рывок, в воздухе тоже'],['↓ + прыжок','спрыгнуть с доски'],['E или ↓','лавка у продавца'],['Прыжок на врага','держи прыжок — высокий отскок от головы'],['Esc','настройки и пауза (P)'],['F1','стоп-кадр без меню (например, для скриншота)']],
@@ -4843,7 +4886,7 @@ const I18N={
   intro:'Four levels, freshly generated every run: a swamp forest with a crocodile, a desert with a dragon, a tall swamp with a hydra and an ice cave with a snowman. Every level hides up to two well-disguised secrets.',
   play:'Play',settings:'Settings',settingsHint:'Settings (Esc)',resume:'Resume',back:'Back',restart:'Restart this level',newMap:'New map',
   language:'Language',controls:'Controls',sporesGotL:n=>`Spores collected: ${n}`,time:t=>`Time: ${t}`,seedL:s=>`Map #${s}`,
-  winTitle:'Victory!',winText:'The grumpy snowman has melted and the cave is quiet at last. Mushroom Girl has made it through all four levels and can head home.',again:'Play again',rotate:'Turn your phone sideways.',
+  winTitle:'Victory!',winText:'The Mutank has stalled for good, the barricade is blown apart and the green lamp over the bunker is lit. Mushroom Girl has made it through all five levels and can head home.',again:'Play again',rotate:'Turn your phone sideways.',
   nextTitle:'Level 2: Desert',nextText:'The stump door leads into the sands and the ruins of an old eastern city. Scorpions, rowdy parrots, sandworms, cactus shooters, mummies and scarab beetles live here, and a fire dragon waits at the end.',nextTip:'Watch out for quicksand: don’t stand still in it, hop your way out. The dragon is open to punches when it gets tired after a dive and lowers its head. The head takes 40% more damage. When the ground ignites, jump onto a platform.',next:'Continue',next3Title:'Level 3: Swamp',next3Text:'Beyond the door lies a deep swamp, and the further you go, the taller the trees. Lizardmen rule here: swordsmen, mages and an armoured commander, with huts on the long boughs. Goblins in totem masks hide in the bushes, tongue toads hop along the branches, spiders wait under them, mosquitoes hover over the water, piranhas swim in the wide pools, and a three-headed hydra lurks in the poisoned pool.',next3Tip:'Burning eyes in a bush mean a goblin with a blowgun; hit the bush to flush him out. Barrels and crates break with a punch or a dash. A lizardman hut keeps sending out warriors until you wreck it. A mosquito shows a red dashed line before it dives: step aside, and if it misses it gets stuck. Rafts and vine lifts carry you over the bog. Rotten branches give way if you stand on them, but falling into the bog is fine: swim to the nearest tree and climb back up. The commander can’t be hurt until you stomp his helmet off; then aim for his head. After two stomps he covers his head with an arm: you can stand on it, but stomps won’t work, so punch. Stomping a hydra head hurts it, but three quick stomps drive it berserk: watch for burning eyes. Take down all three heads and they grow back while the poison rises. A dashed green outline is the laser’s aim: get out of the line.',
   levelName:n=>T('lvlName'+n),lvlName1:'Level 1: Forest',lvlName2:'Level 2: Desert',lvlName3:'Level 3: Swamp',
   keys:[['← →','run (A, D)'],['Space','jump, hold to go higher; glide with the umbrella; swim stroke in water (W, ↑)'],['K','punch with a shockwave (X); hits on foes restore mana'],['L','throw a mushroom for mana; Raithwyn: a hadoken fireball, 15 mana (C)'],['J','Raithwyn: a magic sphere that flies in waves, 5 mana'],['Left Shift','dash, works in the air too'],['↓ + jump','drop through a plank'],['E or ↓','shop at the merchant'],['Jump on a foe','hold jump for a high bounce off its head'],['Esc','settings and pause (P)'],['F1','freeze the game without the menu (e.g. for a screenshot)']],
@@ -5622,42 +5665,7 @@ function validateIce(){
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(grid[r][c]===T_CRACKW){saved.push([r,c]);grid[r][c]=T_EMPTY}
   try{return validateIceGraph()}finally{for(const [r,c] of saved)grid[r][c]=T_CRACKW}
 }
-function validateIceGraph(){
-  const goalC=Math.floor(ARENA_L/TS), nodes=[], byCol=Array.from({length:COLS},()=>[]);
-  const add=(c,y,k)=>{if(c<0||c>=COLS)return null;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n);return n};
-  const rides=[];   // [top node, bottom node] of every column of a lift
-  const free=t=>!isSolidT(t);
-  for(let c=0;c<COLS;c++)for(let r=2;r<ROWS;r++){const t=grid[r][c],up=grid[r-1][c];
-    if(isFloorT(t)&&free(up)&&up!==T_THORN&&free(grid[r-2][c]))add(c,r*TS,t===T_PLANK?'plank':'floor')}
-  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);
-    if(pl.vy&&pl.y0!==pl.y1){for(let c=a;c<b;c++){const t=add(c,pl.y0,'plat'),d=add(c,pl.y1,'plat');if(t&&d)rides.push([t,d])}continue}
-    for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
-  const clearCol=(c,r0,r1)=>{if(c<0||c>=COLS)return false;for(let r=r0;r<=r1;r++){if(r<0)return false;if(isSolidT(grid[r][c]))return false}return true};
-  const oneway=k=>k==='plank'||k==='plat';
-  const canMove=(a,b)=>{
-    const dx=b.c-a.c,dy=b.y-a.y,gap=Math.abs(dx)-1,ra=Math.floor(a.y/TS),rb=Math.floor(b.y/TS);
-    if(dx===0)return dy>0?(oneway(a.k)&&clearCol(a.c,ra,rb-1)):(oneway(b.k)&&-dy<=REACH.rise-12&&clearCol(a.c,rb-2,ra-1));
-    if(-dy>REACH.rise-12)return false;
-    if(gap>0){const r=REACH.reach(dy,true);if(r<0||r*.9<gap*TS)return false}
-    const hi=Math.min(a.y,b.y),hr=Math.floor(hi/TS),extra=gap>=2?90:gap>0?40:(dy<0?10:0);
-    const r0=Math.floor((hi-58-extra)/TS),c0=Math.min(a.c,b.c),c1=Math.max(a.c,b.c);
-    for(let c=c0;c<=c1;c++)if(!clearCol(c,r0,hr-1))return false;
-    if(a.y>hi&&!clearCol(a.c,hr,ra-1))return false;   // jumping up out of a low spot
-    if(b.y>hi&&!clearCol(b.c,hr,rb-1))return false;   // dropping down into one
-    return true;
-  };
-  for(const a of nodes)for(let c=Math.max(0,a.c-4);c<=Math.min(COLS-1,a.c+8);c++)for(const b of byCol[c])if(b!==a&&canMove(a,b)){a.out.push(b);b.inn.push(a)}
-  for(const [t,d] of rides){t.out.push(d);d.inn.push(t);d.out.push(t);t.inn.push(d)}
-  const start=byCol[3].find(n=>n.y===startY)||byCol[3][0];if(!start)return{ok:false,why:'start'};
-  const fw=new Set([start]),q=[start];
-  while(q.length){const a=q.shift();for(const b of a.out)if(!fw.has(b)){fw.add(b);q.push(b)}}
-  const goals=nodes.filter(n=>n.c>=goalC);
-  if(!goals.some(n=>fw.has(n))){let far=0;for(const n of fw)far=Math.max(far,n.c);return{ok:false,why:'unreachable',far}}
-  const bw=new Set(goals),q2=[...goals];
-  while(q2.length){const a=q2.shift();for(const b of a.inn)if(!bw.has(b)){bw.add(b);q2.push(b)}}
-  for(const n of fw)if(!bw.has(n))return{ok:false,why:'trap',c:n.c,y:n.y};
-  return{ok:true,nodes:nodes.length};
-}
+function validateIceGraph(){return graphCheck(startY,Math.floor(ARENA_L/TS),false)}
 // which kind of ice is under the feet: 2 = glassy frozen floor, 1 = ice block, 0 = none
 function iceUnder(b){
   const r=Math.floor((b.y+b.h+1)/TS);if(r<0||r>=ROWS)return 0;let s=0;
@@ -6494,6 +6502,1236 @@ registerPlatStyle('ice',(pl,w)=>{   // a slab of ice with a fringe of icicles un
     ctx.strokeStyle='rgba(43,60,90,.55)';ctx.lineWidth=1.6;ctx.beginPath();for(let k=0;k<w/34;k++){const cx=-w/2+16+k*34;ctx.moveTo(cx,-8);ctx.lineTo(cx+5,-1);ctx.lineTo(cx-1,8)}ctx.stroke();
     ctx.fillStyle='#cdeefc';ctx.strokeStyle=INK;ctx.lineWidth=1.5;for(let k=0;k<w/20;k++){const ix=-w/2+8+k*20;ctx.beginPath();ctx.moveTo(ix-3,8);ctx.lineTo(ix,15+hash(k,3)*6);ctx.lineTo(ix+3,8);ctx.fill();ctx.stroke()}
 });
+// ==== levels/city/gen.js ====
+/* ---------- level 5: the ruined city ---------- */
+// Open sky, a screen and a quarter tall. Streets of cracked asphalt with wrecked cars and craters full of rusty
+// rebar; blocks of flats to climb floor by floor and leave over the roof; rooftops over sinkholes into the dark;
+// a collapsed overpass of crumbling slabs; crane pallets and lift cages; downed power lines that spark now and then;
+// manholes with purple tentacles in them; brick walls to smash. Mutants everywhere, the Rat King in a ruined plaza
+// and, at the end, the Mutank between two burnt-out buildings.
+// Every new kind of foe or trap first shows up on its own, somewhere calm, before it is mixed with the rest.
+const CITY_B=21, CITY_RUB=22, CITY_CAR=23, CITY_JUNK=24;   // flow marks of solid tiles: building masonry, rubble, a wrecked car, the barricade
+let cityStartY=null, cityWires=[], cityGate=[], cityBg=null;   // cityBg[r][c]: 1 = inside a building, 2 = basement / sewer
+function genCity(seed){
+  let v=null;
+  for(let attempt=0;attempt<40;attempt++){buildCity(seed,attempt);v=validateCity();if(v.ok){GEN_INFO={attempt,repairs:0};return}}
+  GEN_INFO={attempt:40,repairs:0,fail:v};
+}
+function buildCity(seed,attempt){
+  LEVEL=5;BIOME='city';SEED=seed;ROWS=18;WH=ROWS*TS;FLOOR=(ROWS-2)*TS;ARENA_TRIG_Y=FLOOR-5*TS;CAM_BOT=0;
+  RNG=makeRng(seed*7919+5*104729+17+attempt*15485863);
+  grid=Array.from({length:ROWS},()=>new Uint8Array(MAXC));
+  flow=Array.from({length:ROWS},()=>new Int8Array(MAXC));
+  cityBg=Array.from({length:ROWS},()=>new Uint8Array(MAXC));
+  COLS=MAXC;
+  plats=[];enemies=[];items=[];checks=[];shops=[];powerSpots=[];secretZones=[];PLAN=[];trees=[];decor=[];springs=[];hiddenPlanks=false;covers=[];switches=[];ruins=[];ruinSpan=null;
+  cityWires=[];cityGate=[];
+  const spawns=[];
+  let x=0,fl=14,progress=0,brutes=0;
+  const FMIN=7,FMAX=15;   // the rows the ground keeps to
+  // a column: open air above row top, solid below it (k: the flow mark of the solid part)
+  const fillCol=(c,top,k=0)=>{for(let r=0;r<ROWS;r++){const s=r>=top;grid[r][c]=s?T_SOLID:T_EMPTY;flow[r][c]=s?k:0;cityBg[r][c]=0}};
+  // high ground is rooftops (masonry all the way down), low ground is the street
+  const run=(n,k)=>{const kk=k!==undefined?k:fl<=11?CITY_B:0;for(let i=0;i<n;i++)fillCol(x+i,fl,kk);x+=n};
+  const street=()=>{if(fl<12)stepFl(12)};   // street-level segments first come down off the roofs
+  const pit=c=>fillCol(c,ROWS);   // a sinkhole: no bottom
+  // the ground changes height in rubble steps (2 rows at most every 2 columns)
+  const stepFl=t=>{t=clamp(t,FMIN,FMAX);while(fl!==t){fl+=clamp(t-fl,-2,2);run(2,CITY_RUB)}};
+  const solidAt=(c,r,k)=>{grid[r][c]=T_SOLID;flow[r][c]=k};
+  const plank=(c,r,w)=>{for(let i=0;i<w;i++)if(grid[r][c+i]===T_EMPTY)grid[r][c+i]=T_PLANK};
+  const spore=(c,y)=>items.push({k:'spore',x:c*TS+TS/2,y,ph:RNG()*6});
+  const sporeRow=(c0,c1,r,up=30)=>{for(let c=c0;c<=c1;c++)spore(c,r*TS-up)};
+  const arc=(c0,c1,y0,hgt)=>{const n=c1-c0;for(let i=1;i<n;i++){const t=i/n;spore(c0+i,y0-Math.sin(t*Math.PI)*hgt)}};
+  const spawnAt=(type,c,r,props)=>spawns.push({type,c,extra:{y:r*TS},props});
+  const deco=(k,c,y,dx=0)=>decor.push({k,x:c*TS+TS/2+dx,y,s:RNG()});
+  const heart=(c,y)=>items.push({k:'heart',x:c*TS+TS/2,y,ph:0});
+  const power=(c,y)=>{const px=c*TS+TS/2;items.push({k:'power',x:px,y,ph:0});powerSpots.push([px,y])};
+  const slab=(c,r,w)=>plats.push({crumble:true,style:'slab',x:c*TS,y:r*TS,w:w*TS,h:16,x0:c*TS,x1:c*TS,vx:0,hy:r*TS,st:'idle',t:0,vy:0,rot:0});
+  const maxGap=(dyT,dash,m)=>{const r=REACH.reach(dyT*TS,dash);return r<0?0:Math.floor(r*m/TS)};
+  const car=c=>{for(const cc of [c,c+1])solidAt(cc,fl-1,CITY_CAR);decor.push({k:'car',x:(c+1)*TS,y:fl*TS,s:RNG(),f:RNG()<.5?-1:1})};
+  // a downed power line: 'cable' lies across the street (jump over it or wait), 'arc' hangs from a broken pole and
+  // sparks down to the ground (wait for it). off -> crackling warning -> sparking, each line on its own clock.
+  const wire=(k,c0,w,L)=>{const off=[2.2,1.8,1.4][L];
+    const o={k,x:c0*TS+(k==='arc'?TS/2:0),w:w*TS,y:fl*TS,top:k==='arc'?(fl-4)*TS+10:fl*TS-50,off,warn:.6,on:.8,t:RNG()*off,st:'off'};
+    cityWires.push(o);decor.push({k:'wire',x:o.x+(k==='arc'?0:o.w/2),y:o.y,s:0,w:o});
+    if(k==='arc')deco('pole',c0,fl*TS,-34);else deco('stump',c0-1,fl*TS,10)};
+  // what lives where: each kind of mutant comes in at its own point of the level; until then it is not placed
+  const UNLOCK={mutRat:0,mutCrow:.12,acidSpitter:.22,brute:.45};
+  const seen=new Set();
+  const can=t=>progress>=UNLOCK[t]&&(t!=='brute'||brutes<3);
+  // a foe nobody has met yet first comes alone, in a calm street
+  let calm=false;
+  const foe=(t,c,r,props)=>{if(!can(t))return false;if(!seen.has(t)&&!calm)return false;seen.add(t);if(t==='brute')brutes++;spawnAt(t,c,r,props);return true};
+  const lamp=(c,crow)=>{deco('lamp',c,fl*TS);if(crow)foe('mutCrow',c,fl-4,{perchX:c*TS+TS/2,perchY:fl*TS-152})};
+  const startFl=fl;
+
+  const SEG={
+    // an ordinary street: a wrecked car or two, lamp posts, a mutant now and then
+    street(L){street();const n=ri(10,13)+L,c0=x;run(n,0);
+      if(chance(.75))car(c0+ri(3,n-5));
+      if(chance(.5))lamp(c0+ri(1,3),L>0&&chance(.5));
+      if(chance(.55))sporeRow(c0+1,c0+4,fl);
+      if(chance(.6+L*.15))foe('mutRat',c0+ri(4,n-2),fl);if(L>0&&chance(.4))foe('acidSpitter',c0+n-2,fl)},
+    // a bomb crater: down a heap of rubble, rusty rebar sticking up at the bottom, and up again
+    crater(L){street();const d=L>0?3:2;if(fl+d>FMAX)stepFl(FMAX-d);run(2,0);stepFl(fl+d);const w=[2,3,3][L],c0=x;run(2,CITY_RUB);
+      for(let i=0;i<w;i++){fillCol(x+i,fl,CITY_RUB);grid[fl][x+i]=T_THORN;flow[fl][x+i]=0}
+      arc(c0+1,x+w+1,fl*TS-40,70);x+=w;run(2,CITY_RUB);stepFl(fl-d);run(2,0);
+      if(L>0&&chance(.4))foe('mutRat',x-2,fl)},
+    // downed power lines that spark now and then
+    wires(L){street();const n=ri(11,13),c0=x;run(n,0);
+      if(L===0)wire('cable',c0+5,2,0);
+      else if(L===1){wire(chance(.5)?'cable':'arc',c0+4,2,1);if(chance(.5))foe('mutRat',c0+n-2,fl)}
+      else{wire('arc',c0+3,1,2);wire('cable',c0+7,2,2);if(chance(.5))lamp(c0+n-2,true)}
+      sporeRow(c0+1,c0+2,fl)},
+    // a ruined block of flats: in at the door, up the broken floors (a crate on each one is a step up), out through
+    // the hole in the roof and down the far side. The cracked back door is a shortcut, but the loot is upstairs.
+    flats(L){const floors=L>0?3:2,FH=4;stepFl(Math.max(fl,floors*FH+4));run(2,0);
+      const w=ri(10,12),c0=x,c1=x+w-1,R=fl-floors*FH;
+      for(let c=c0;c<=c1;c++){fillCol(c,fl,0);for(let r=R;r<fl;r++){const wall=c===c0||c===c1||r===R;if(wall){grid[r][c]=T_SOLID;flow[r][c]=CITY_B}else cityBg[r][c]=1}}
+      for(let r=fl-3;r<fl;r++){grid[r][c0]=T_EMPTY;flow[r][c0]=0;cityBg[r][c0]=1;grid[r][c1]=T_CRACKW;flow[r][c1]=0}   // the front door; the cracked back door
+      const hx=c1-3;grid[R][hx]=T_EMPTY;grid[R][hx+1]=T_EMPTY;flow[R][hx]=flow[R][hx+1]=0;   // the hole in the roof
+      for(let k=1;k<floors;k++){const r=fl-k*FH,gap=c0+ri(2,w-5);plank(c0+1,r,w-2);grid[r][gap]=grid[r][gap+1]=T_EMPTY;
+        sporeRow(c0+2,c0+4,r)}
+      for(let k=0;k<floors;k++){const r=fl-k*FH-1,cc=k===floors-1?hx:c0+ri(2,w-3);solidAt(cc,r,CITY_RUB)}   // crates to step up on
+      sporeRow(c0+3,c0+w-3,R);
+      if(chance(.45))heart(c0+2,(R+FH)*TS-30);else if(chance(.3))power(c0+w-3,(R+FH)*TS-60);
+      if(L>0)foe('mutRat',c0+w-3,fl);
+      if(L>1&&floors>2)foe('acidSpitter',c0+3,fl-FH);
+      x=c1+1;run(3,0)},
+    // over the rooftops: up a fire escape, roof to roof over sinkholes, down a heap of rubble
+    roofs(L){const top=clamp(fl-ri(5,6),FMIN,FMAX),k=2+(L>1?1:0);stepFl(Math.max(fl,top+4));
+      // the fire escape: grates on alternate sides up the side of the first building
+      run(1,0);const c0=x,w=6,d=fl-top,n=Math.ceil(d/3)-1;for(let i=0;i<w;i++)fillCol(x+i,fl,0);
+      for(let i=1;i<=n;i++){const r=fl-Math.round(d*i/(n+1)),right=(n-i)%2===0,c=right?c0+w-3:c0+1;plank(c,r,2);sporeRow(c,c+1,r)}
+      x+=w;fl=top;run(ri(4,5),CITY_B);deco('tank',x-2,fl*TS);
+      for(let j=0;j<k;j++){
+        const nf=clamp(fl+pick([-1,0,0,1,2]),FMIN,FMAX),g=clamp([2,3,3][L]+(chance(.3)?1:0),2,Math.max(2,maxGap(nf-fl,false,.8)));
+        for(let i=0;i<g;i++)pit(x+i);x+=g;fl=nf;const rw=ri(4,6),r0=x;run(rw,CITY_B);
+        if(chance(.5))deco(pick(['antenna','chimney','vent']),r0+ri(1,rw-2),fl*TS);
+        if(chance(.5))spore(r0+(rw>>1),fl*TS-30);
+        if(L>0&&j===k-1&&chance(.5))foe('mutCrow',r0+1,fl-4,{perchX:(r0+1)*TS+TS/2,perchY:fl*TS-70})}
+      arc(c0+w,x-1,fl*TS-40,40)},
+    // the collapsed overpass: crumbling slabs over a sinkhole, with a concrete pillar halfway to catch your breath
+    overpass(L){run(3,0);const f0=fl,k=2+(L>1?1:0);
+      const slabs=n=>{for(let j=0;j<n;j++){const g=clamp(ri(1,2),1,Math.max(1,maxGap(0,false,.75)));for(let i=0;i<g;i++)pit(x+i);x+=g;
+        const sw=L>1?1:2;for(let i=0;i<sw;i++)pit(x+i);slab(x,f0,sw);spore(x+(sw>>1),f0*TS-30);x+=sw}};
+      slabs(k);for(let i=0;i<2;i++)pit(x+i);x+=2;
+      for(let i=0;i<3;i++)fillCol(x+i,f0,CITY_RUB);deco('pillar',x+1,f0*TS);sporeRow(x,x+2,f0);x+=3;   // the pillar
+      slabs(k);for(let i=0;i<2;i++)pit(x+i);x+=2;fl=f0;run(3,0);
+      if(L>0&&chance(.4))foe('mutCrow',x-2,fl-4,{perchX:(x-2)*TS+TS/2,perchY:fl*TS-70})},
+    // a crane carries pallets back and forth over a sinkhole
+    crane(L){run(3,0);const f0=fl,n=L>1?2:1;
+      for(let j=0;j<n;j++){const w=2,span=ri(4,5)+L,c0=x+1;for(let i=0;i<span+w+2;i++)pit(x+i);
+        const r=f0-(j?1:0);plats.push({style:'pallet',x:c0*TS,y:r*TS,w:w*TS,h:16,x0:c0*TS,x1:(c0+span)*TS,vx:(RNG()<.5?-1:1)*(80+L*20)});
+        spore(c0+(span>>1),r*TS-60);x+=span+w+2;
+        if(j<n-1){run(3,CITY_RUB)}}
+      fl=f0;run(3,0);if(L>1&&chance(.5))wire('arc',x-2,1,2)},
+    // a lift cage in a ruined shaft takes you up onto a roof (or down off one)
+    lift(L){const d=5,canUp=fl-d>=FMIN,canDown=fl+d<=FMAX;if(!canUp&&!canDown){run(5);return}
+      const up=canUp&&(!canDown||chance(.65)),f0=fl,f1=up?f0-d:f0+d;
+      run(2);const g=1,c0=x+g;for(let i=0;i<g+2+2;i++)pit(x+i);
+      plats.push({style:'cage',x:c0*TS,y:f1*TS,w:2*TS,h:16,x0:c0*TS,x1:c0*TS,vx:0,y0:Math.min(f0,f1)*TS,y1:Math.max(f0,f1)*TS,vy:(f1<f0?-1:1)*(90+L*15),wt:.7});
+      deco('liftTop',c0+1,Math.min(f0,f1)*TS-120,-20);spore(c0,Math.min(f0,f1)*TS-60);
+      x+=g+2+2;fl=f1;run(4);
+      if(L>0&&up&&chance(.4))foe('mutCrow',x-2,fl-4,{perchX:(x-2)*TS+TS/2,perchY:fl*TS-70})},
+    // manholes: something purple lives down there
+    sewer(L){street();const n=ri(12,14),c0=x;run(n,0);
+      const m=L>1?2:1;for(let j=0;j<m;j++){spawnAt('tentacle',c0+3+j*6,fl);deco('manhole',c0+3+j*6,fl*TS)}
+      sporeRow(c0+n-3,c0+n-2,fl);if(L>0&&chance(.5))foe('mutRat',c0+n-2,fl)},
+    // a brick wall across the street: punch it, dash into it or throw something at it
+    brickwall(L){street();const n=ri(9,11),c0=x;run(n,0);const wc=c0+ri(4,n-4),th=chance(.4)?2:1;
+      for(let t=0;t<th;t++){for(let r=fl-5;r<fl;r++){grid[r][wc+t]=T_CRACKW;flow[r][wc+t]=0}for(let r=fl-9;r<fl-5;r++)solidAt(wc+t,r,CITY_B)}
+      sporeRow(wc+th+1,Math.min(c0+n-2,wc+th+3),fl);if(chance(.4))heart(wc+th+1,fl*TS-30);
+      if(L>0)foe(chance(.5)?'acidSpitter':'mutRat',c0+n-2,fl)},
+    // a wide street where a brute roams: wrecked cars stop its charge cold
+    plaza(L){street();const n=ri(16,18),c0=x;run(n,0);car(c0+3);car(c0+n-5);lamp(c0+ri(6,9),false);
+      calm=true;const b=foe('brute',c0+(n>>1),fl);calm=false;if(!b)foe('mutRat',c0+(n>>1),fl);
+      arc(c0+5,c0+n-6,fl*TS-40,50)},
+    // a step down into a lower street
+    drop(L){const nf=Math.min(FMAX,fl+ri(3,5));if(nf-fl<2){run(4);return}run(2);fl=nf;run(ri(5,7));
+      if(chance(.5))foe('mutRat',x-3,fl)},
+    // a breather; the shop wants a bit of room
+    rest(cp,shop){street();const n=shop?12:ri(6,8),c0=x;run(n,0);
+      if(shop){shops.push({x:(c0+6)*TS+TS/2,y:fl*TS});deco('barrel',c0+3,fl*TS);deco('barrel',c0+9,fl*TS)}
+      if(cp){const cc=shop?c0+1:c0+n-2;checks.push({x:cc*TS+TS/2,y:fl*TS,on:false});deco('barrel',cc+1,fl*TS,10)}
+      if(!shop){if(chance(.5))arc(c0+1,c0+n-2,fl*TS-30,50);if(chance(.3))heart(c0+2,fl*TS-30)}},
+  };
+
+  /* secrets: each one records a zone; entering it counts the secret as found */
+  const zone=(c0,r0,w,hh)=>{const z={x:c0*TS,y:r0*TS,w:w*TS,h:hh*TS,found:false};secretZones.push(z);return z};
+  const hideIn=(z,n0)=>{for(let i=n0;i<items.length;i++)items[i].hid=z};
+  const prize=(cx,cy)=>{const k=wpick([['gold',4],['heart',2.5],['power',1.5]]);items.push({k,x:cx,y:cy,ph:0});if(k==='power')powerSpots.push([cx,cy])};
+  const SEC={
+    // a patch of the pavement is rotten: step on it and you drop into a basement
+    basement(){street();if(fl>13)stepFl(13);const n0=items.length,c0=x;run(11,0);
+      for(let i=1;i<=8;i++)for(const r of [fl+1,fl+2]){grid[r][c0+i]=T_FAKE;flow[r][c0+i]=0;cityBg[r][c0+i]=2}
+      for(let i=3;i<=5;i++){grid[fl][c0+i]=T_FAKE;flow[fl][c0+i]=0}
+      prize((c0+7)*TS+TS/2,(fl+2)*TS+12);spore(c0+1,(fl+2)*TS+16);spore(c0+2,(fl+2)*TS+16);
+      hideIn(zone(c0+1,fl+1,8,2),n0)},
+    // a cracked roof under a high billboard: a heavy landing breaks through into a forgotten attic
+    attic(){const n0=items.length,c0=x;stepFl(Math.max(fl,13));run(2,0);
+      const R=fl-3,c1=x;for(let c=c1;c<c1+9;c++){fillCol(c,R,CITY_B)}
+      for(let c=c1+4;c<=c1+6;c++){grid[R][c]=T_CRACK;flow[R][c]=CITY_B}
+      for(let c=c1+3;c<=c1+7;c++)for(const r of [R+1,R+2]){grid[r][c]=T_FAKE;flow[r][c]=CITY_B;cityBg[r][c]=1}
+      plank(c1+1,R-3,2);plank(c1+4,R-6,2);sporeRow(c1+4,c1+5,R-6);deco('billboard',c1+5,(R-6)*TS);
+      prize((c1+5)*TS+TS/2,(R+2)*TS+12);spore(c1+3,(R+2)*TS+16);spore(c1+7,(R+2)*TS+16);
+      hideIn(zone(c1+3,R+1,5,2),n0);x=c1+9;fl=R;run(2,CITY_B);stepFl(fl+3)},
+    // scaffolding with invisible boards: they show up only when you come close
+    scaffold(){street();const n0=items.length,c0=x;run(12,0);
+      deco('scaffold',c0+6,fl*TS);
+      for(const [c,r,w] of [[c0+3,fl-3,2],[c0+6,fl-6,2],[c0+8,fl-9,3]]){plank(c,r,w);for(let i=0;i<w;i++)flow[r][c+i]=6}
+      hiddenPlanks=true;prize((c0+9)*TS+TS/2,(fl-9)*TS-30);spore(c0+10,(fl-9)*TS-30);
+      hideIn(zone(c0+8,fl-11,3,2),n0)},
+  };
+
+  /* ---- the plan ---- */
+  run(12,0);deco('barrel',10,fl*TS);sporeRow(5,8,fl);
+  const total=ri(18,20);
+  const W={street:2.4,crater:1.6,wires:1.5,flats:1.3,roofs:1.3,overpass:1.1,crane:1,lift:1,sewer:1.3,brickwall:1.2,plaza:1,drop:1.2};
+  // later arrivals: the manholes from a third of the way, the brutes' plazas from the middle
+  const FROM={sewer:.3,plaza:.45,overpass:.15,crane:.2,lift:.2,roofs:.12,wires:.06};
+  const secKinds=[],secPool=[['basement',1],['attic',1],['scaffold',1]],nSec=chance(.75)?2:1;
+  while(secKinds.length<nSec){const k=wpick(secPool);secKinds.push(k);secPool.splice(secPool.findIndex(o=>o[0]===k),1)}
+  const secretAt=new Map();
+  secKinds.forEach((k,j)=>{let idx=clamp(Math.floor(total*(j+.5)/nSec)+ri(-1,1),2,total-2);while(secretAt.has(idx))idx++;secretAt.set(idx,k)});
+  const kingAt=Math.floor(total*.66);
+  let sinceCP=0,last='';const recent=[];
+  for(let i=0;i<total;i++){
+    progress=i/total;
+    if(i===Math.floor(total/2)){PLAN.push({t:'shop',c:x});SEG.rest(true,true);sinceCP=0}
+    else if(sinceCP>=4||i===kingAt){PLAN.push({t:'rest',c:x});SEG.rest(true,false);sinceCP=0}
+    if(i===kingAt){PLAN.push({t:'miniboss',k:'ratKing',c:x});ratPlaza();sinceCP=1;continue}
+    if(secretAt.has(i)){const k=secretAt.get(i);PLAN.push({t:'secret:'+k,c:x});SEC[k]()}
+    const L=progress<.25?0:progress<.6?(chance(.75)?1:0):(chance(.7)?2:1);
+    const cands=[];
+    for(const ty in W){if(ty===last)continue;let w=W[ty];
+      if(FROM[ty]&&progress<FROM[ty])continue;
+      if(recent.slice(-3).indexOf(ty)>=0)w*=.35;
+      if(ty==='drop')w*=fl<=10?2:.4;
+      if(ty==='drop'&&fl+3>FMAX)w=0;
+      if(ty==='plaza'&&brutes>=3)w*=.2;
+      if(w>0)cands.push([ty,w])}
+    // the first manhole and the first plaza come as soon as they are allowed
+    let ty=wpick(cands);
+    let LL=L;
+    if(progress>=FROM.sewer&&!PLAN.some(q=>q.t==='sewer')&&last!=='sewer'){ty='sewer';LL=0}   // the first manhole: on its own
+    else if(progress>=FROM.plaza&&!PLAN.some(q=>q.t==='plaza')&&last!=='plaza')ty='plaza';
+    const n0=spawns.length;PLAN.push({t:ty,L:LL,c:x,fl});SEG[ty](LL);
+    // the first meeting with a new mutant: alone, at the end of a stretch with nobody else in it
+    // (the brute makes its entrance in a plaza of its own)
+    const fresh=Object.keys(UNLOCK).find(t=>t!=='brute'&&can(t)&&!seen.has(t));
+    if(fresh&&spawns.length===n0&&grid[fl][x-2]===T_SOLID){calm=true;if(fresh==='mutCrow')lamp(x-2,true);else foe(fresh,x-2,fl);calm=false}last=ty;recent.push(ty);sinceCP++;
+  }
+  // the Rat King's plaza: heaps of rubble at both ends, drain pipes the rats come out of
+  function ratPlaza(){if(fl<11)stepFl(11);run(2,0);stepFl(fl-2);run(2,CITY_RUB);stepFl(fl+2);
+    const n=18,c0=x;run(n,0);deco('pipe',c0,fl*TS);deco('pipe',c0+n-1,fl*TS);
+    car(c0+n-6);
+    spawnAt('ratKing',c0+(n>>1),fl,{kx0:c0*TS,kx1:(c0+n)*TS});
+    heart(c0+2,fl*TS-30);x=c0+n;stepFl(fl-2);run(2,CITY_RUB);stepFl(fl+2);run(2,0)}
+
+  // a checkpoint and the last shop right before the boss
+  stepFl(12);PLAN.push({t:'final',c:x});SEG.rest(true,true);run(3,0);
+  /* ---- the Mutank's street: between two burnt-out buildings ----
+     In through the archway of the left building (its facade is the left wall of the arena), the right building closes
+     the far end; a pile of wrecked cars blocks the street out until the tank is beaten. A steel girder spans the top. */
+  const fr=ROWS-2;stepFl(FMAX);fl=fr;run(2,0);
+  const lb=x;for(let c=lb;c<lb+3;c++){fillCol(c,fr,0);for(let r=2;r<fr-3;r++)solidAt(c,r,CITY_B);for(let r=fr-3;r<fr;r++)cityBg[r][c]=1}
+  x=lb+3;const a0=x,AW=24;ARENA_L=a0*TS;
+  for(let c=a0;c<a0+AW;c++)fillCol(c,fr,0);
+  heart(a0+4,fr*TS-30);
+  ARENA_R=(a0+AW)*TS;
+  const rb=a0+AW;for(let c=rb;c<rb+3;c++){fillCol(c,fr,0);for(let r=2;r<fr;r++)solidAt(c,r,CITY_B)}
+  for(let r=fr-3;r<fr;r++)for(let c=rb;c<rb+3;c++){flow[r][c]=CITY_JUNK;cityGate.push([r,c])}   // the barricade
+  const e0=rb+3,EW=20;x=e0;fl=fr;run(EW,0);sporeRow(e0+3,e0+8,fr);
+  COLS=e0+EW+2;for(let c=e0+EW;c<COLS;c++)fillCol(c,fr-8,CITY_B);
+  door={x:(e0+EW-6)*TS,y:FLOOR-104,w:76,h:104};
+  /* ---- dressing: lamp posts, rubble, burnt barrels along the streets ---- */
+  const safe=[...checks.map(q=>q.x/TS),...shops.map(q=>q.x/TS)];
+  for(let c=14;c<a0-4;c++){const r=topRow(c);if(r<0||flow[r][c]===CITY_CAR||grid[r][c]!==T_SOLID||grid[r-1][c]!==T_EMPTY||grid[r-2][c]!==T_EMPTY||safe.some(q=>Math.abs(q-c)<2))continue;
+    if(decor.some(d=>Math.abs(d.x-(c*TS+TS/2))<TS*1.5))continue;
+    if(chance(.07))deco('rubble',c,r*TS,ri(-8,8));else if(chance(.04))deco(flow[r][c]===CITY_B?'vent':'sign',c,r*TS,ri(-8,8))}
+  for(const sp of spawns){if(sp.c<16||safe.some(q=>Math.abs(q-sp.c)<4))continue;const e=makeEnemy(sp.type,sp.c,sp.extra);if(e){if(sp.props)Object.assign(e,sp.props);enemies.push(e)}}
+  cityStartY=startFl*TS;
+  sporeTotal=items.filter(i=>i.k==='spore').length;
+  B=makeBoss();
+  function topRow(c){for(let r=0;r<ROWS;r++)if(grid[r][c]!==T_EMPTY)return r;return -1}
+}
+// Passability: brick walls with cracks count as open (punch, dash or a thrown mushroom smash them); open sky above.
+function validateCity(){
+  const saved=[];
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(grid[r][c]===T_CRACKW){saved.push([r,c]);grid[r][c]=T_EMPTY}
+  try{return graphCheck(cityStartY,Math.floor(ARENA_L/TS),true)}finally{for(const [r,c] of saved)grid[r][c]=T_CRACKW}
+}
+// the barricade of wrecked cars at the end of the Mutank's street is blown away once the tank is beaten
+function openCityGate(){
+  if(!cityGate.length||!bossDead) return;
+  for(const [r,c] of cityGate){grid[r][c]=T_EMPTY;flow[r][c]=0;burst(c*TS+TS/2,r*TS+TS/2,8,'#8a8f99',260,1200,[4,8]);dust(c*TS+TS/2,r*TS+TS/2,3)}
+  cityGate=[];sfx('boom');shake(.4,8);
+}
+// ==== levels/city/draw.js ====
+/* ---------- ruined city drawing ---------- */
+// A smoky dusk: the sky goes from bruised violet to a sick orange glow low down, ruined towers stand in two layers
+// (a few windows still glow purple: whatever came out of the ground is out there), smoke rises from fires far off,
+// and purple ash drifts down.
+function drawCityBG(){
+  const g=ctx.createLinearGradient(0,-OFFY,0,VH+OFFY);g.addColorStop(0,'#2a1f3f');g.addColorStop(.45,'#5a3a5e');g.addColorStop(.78,'#c4706a');g.addColorStop(1,'#e8a26a');
+  ctx.fillStyle=g;ctx.fillRect(0,-OFFY-2,VW,VH+OFFY*2+4);
+  // a hazy sun behind the smog
+  const sx=VW*.72-camX*.02,sy=VH*.52-camY*.05;ctx.fillStyle='rgba(255,200,150,.25)';ctx.beginPath();ctx.arc(sx,sy,90,0,7);ctx.fill();ctx.fillStyle='rgba(255,220,180,.55)';ctx.beginPath();ctx.arc(sx,sy,46,0,7);ctx.fill();
+  // smoke columns far away
+  for(let i=0;i<4;i++){const sw=VW+400,bx=((hash(i,41)*sw*2-camX*.08)%sw+sw)%sw-200,base=VH*.62-camY*.08;
+    for(let k=0;k<7;k++){const ph=(time*.06+k/7)%1,y=base-ph*VH*.7,x=bx+Math.sin(ph*5+i)*30*ph+ph*80,r=18+ph*60;
+      ctx.fillStyle=`rgba(60,45,70,${.32*(1-ph)})`;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill()}}
+  // two layers of ruined towers
+  const towers=(fac,seed,base,hMin,hMax,colr,win)=>{const o=camX*fac,yo=-camY*fac*.6,sp=70;
+    const i0=Math.floor(o/sp)-1,i1=Math.floor((o+VW)/sp)+2;
+    for(let i=i0;i<=i1;i++){const h=hash(i,seed);if(h<.12)continue;const w=sp*(.7+hash(i,seed+1)*.5),x=i*sp-o,top=base-hMin-(hMax-hMin)*hash(i,seed+2)+yo;
+      ctx.fillStyle=colr;ctx.beginPath();ctx.moveTo(x,VH+OFFY+10);ctx.lineTo(x,top+10);
+      // a broken, jagged top
+      const n=4;for(let k=0;k<=n;k++){const u=k/n;ctx.lineTo(x+w*u,top+(hash(i*7+k,seed+3)>.5?hash(i+k,seed+4)*34:0))}
+      ctx.lineTo(x+w,VH+OFFY+10);ctx.closePath();ctx.fill();
+      if(win){for(let wy=top+26;wy<VH+OFFY;wy+=22)for(let wx=x+8;wx<x+w-10;wx+=16){const hh=hash(Math.floor(wx*.7+i),Math.floor(wy));
+        if(hh<.08){const a=.35+.3*Math.sin(time*1.3+hh*90);ctx.fillStyle=`rgba(200,120,255,${a})`;ctx.fillRect(wx,wy,7,10)}
+        else if(hh<.5){ctx.fillStyle='rgba(20,14,28,.45)';ctx.fillRect(wx,wy,7,10)}}}}};
+  towers(.12,51,VH*.78,120,300,'rgba(70,52,84,.85)',true);
+  towers(.3,61,VH*.95,60,220,'rgba(42,32,52,.95)',true);
+  // drifting purple ash
+  for(let i=0;i<26;i++){const sw=VW+60,x=((hash(i,71)*sw*3-camX*.4+Math.sin(time*.7+i)*30)%sw+sw)%sw-30,y=((hash(i,72)*VH+time*(14+hash(i,73)*18)-camY*.3)%(VH+40)+VH+40)%(VH+40)-20;
+    ctx.fillStyle=`rgba(210,160,255,${.25+hash(i,74)*.35})`;ctx.beginPath();ctx.arc(x,y,1.4+hash(i,75)*1.8,0,7);ctx.fill()}
+}
+// behind the tiles: the insides of buildings and basements, and the steel girder over the Mutank's street
+function drawCityBack(){
+  const c0=Math.max(0,Math.floor(camX/TS)-1),c1=Math.min(COLS-1,Math.ceil((camX+VW)/TS)+1);
+  for(let c=c0;c<=c1;c++)for(let r=rowLo();r<=rowHi();r++){const b=cityBg&&cityBg[r][c];if(!b)continue;const x=c*TS,y=r*TS,h=hash(c,r);
+    if(b===1){ctx.fillStyle='#4c4256';ctx.fillRect(x-.5,y-.5,TS+1,TS+1);   // old wallpaper, stained and peeling
+      ctx.fillStyle='rgba(120,100,130,.35)';if((c+r)%2)ctx.fillRect(x+4,y,6,TS);
+      if(h<.18){ctx.fillStyle='rgba(30,22,36,.5)';ctx.beginPath();ctx.ellipse(x+20,y+20,14,9,h*9,0,7);ctx.fill()}
+      if(h>.9){ctx.fillStyle='#8a5a3a';ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.strokeRect(x+10,y+8,18,14);ctx.fillStyle='rgba(255,220,160,.35)';ctx.fillRect(x+12,y+10,14,10)}}
+    else{ctx.fillStyle='#2e2a33';ctx.fillRect(x-.5,y-.5,TS+1,TS+1);ctx.fillStyle='rgba(90,85,100,.35)';ctx.fillRect(x,y+TS-6,TS,2)}}
+  // the girder across the top of the arena
+  if(ARENA_R&&camX+VW>ARENA_L-200&&camX<ARENA_R+200){const y=MT_GIRDER_Y-20,x0=ARENA_L-3*TS,x1=ARENA_R+3*TS;
+    ctx.fillStyle='#6b4a3a';ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.fillRect(x0,y,x1-x0,20);ctx.strokeRect(x0,y,x1-x0,20);
+    ctx.fillStyle='#86604a';ctx.fillRect(x0,y+3,x1-x0,5);
+    ctx.strokeStyle='rgba(43,26,18,.7)';ctx.lineWidth=2;for(let x=x0+20;x<x1;x+=40){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+20,y+20);ctx.moveTo(x+20,y);ctx.lineTo(x,y+20);ctx.stroke()}
+    ctx.fillStyle='#d9c3a0';for(let x=x0+10;x<x1;x+=20){ctx.beginPath();ctx.arc(x,y+16,1.8,0,7);ctx.fill()}
+    // chains hanging from it
+    ctx.strokeStyle='#4a4a52';ctx.lineWidth=3;for(const fx of [.18,.55,.86]){const cx=ARENA_L+(ARENA_R-ARENA_L)*fx,len=60+hash(fx*10|0,3)*50,sw=Math.sin(time*1.2+fx*9)*6;
+      ctx.beginPath();for(let k=0;k<len;k+=8){ctx.moveTo(cx+sw*k/len,y+20+k);ctx.lineTo(cx+sw*(k+5)/len,y+26+k)}ctx.stroke()}}
+}
+function drawCitySolid(c,r,t,p){
+  const x=c*TS,y=r*TS,h=hash(c,r),f=flow[r][c];
+  const top=!vsol(c,r-1)&&r>0,bot=r<ROWS-1&&!vsol(c,r+1);
+  const edges=()=>{ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();
+    if(top){ctx.moveTo(x-.5,y);ctx.lineTo(x+TS+.5,y)}if(bot){ctx.moveTo(x,y+TS);ctx.lineTo(x+TS,y+TS)}
+    if(!vsol(c-1,r)&&c>0){ctx.moveTo(x,y);ctx.lineTo(x,y+TS)}if(!vsol(c+1,r)&&c<COLS-1){ctx.moveTo(x+TS,y);ctx.lineTo(x+TS,y+TS)}ctx.stroke()};
+  if(f===CITY_CAR)return;   // a wrecked car is drawn by its decoration
+  if(f===CITY_JUNK){ // the barricade: crushed car bodies and tyres piled up
+    const cols=['#8a3a2a','#3a5a7a','#6a6a72','#a08a3a'];ctx.fillStyle=cols[Math.floor(h*4)];ctx.fillRect(x-.5,y-.5,TS+1,TS+1);
+    ctx.fillStyle='rgba(30,30,36,.55)';ctx.fillRect(x+4,y+6+h*10,TS-10,8);ctx.fillStyle='rgba(140,70,30,.5)';ctx.beginPath();ctx.arc(x+10+h*20,y+28,5,0,7);ctx.fill();
+    ctx.fillStyle='#222';ctx.strokeStyle=INK;ctx.lineWidth=2;if(h>.6){ctx.beginPath();ctx.arc(x+20,y+20,11,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#777';ctx.beginPath();ctx.arc(x+20,y+20,4,0,7);ctx.fill()}
+    edges();return}
+  if(t===T_CRACKW){ // a brick wall with cracks: smash it
+    ctx.fillStyle='#a8553e';ctx.fillRect(x-.5,y-.5,TS+1,TS+1);ctx.strokeStyle='rgba(60,25,15,.55)';ctx.lineWidth=1.6;ctx.beginPath();
+    for(let k=0;k<4;k++){const yy=y+k*10;ctx.moveTo(x,yy);ctx.lineTo(x+TS,yy);const off=k%2?10:0;for(let bx=x+off;bx<x+TS;bx+=20){ctx.moveTo(bx,yy);ctx.lineTo(bx,yy+10)}}ctx.stroke();
+    ctx.save();ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+6+h*6,y+3);ctx.lineTo(x+15,y+15);ctx.lineTo(x+9,y+26);ctx.lineTo(x+19,y+37);ctx.moveTo(x+15,y+15);ctx.lineTo(x+29,y+12);ctx.lineTo(x+35-h*4,y+3);
+    ctx.strokeStyle='rgba(255,230,200,.6)';ctx.lineWidth=3;ctx.stroke();ctx.strokeStyle='rgba(43,26,18,.85)';ctx.lineWidth=1.6;ctx.stroke();ctx.restore();
+    ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();if(tile(c,r-1)!==T_CRACKW){ctx.moveTo(x,y);ctx.lineTo(x+TS,y)}ctx.moveTo(x,y);ctx.lineTo(x,y+TS);ctx.moveTo(x+TS,y);ctx.lineTo(x+TS,y+TS);ctx.stroke();return}
+  if(f===CITY_B){ // masonry: grey concrete panels, rows of windows, a concrete cap on the roof
+    ctx.fillStyle=(c>>1)%2?'#7d7a80':'#86828a';ctx.fillRect(x-.5,y-.5,TS+1,TS+1);
+    ctx.fillStyle='rgba(43,26,18,.12)';ctx.fillRect(x,y+TS-3,TS,3);
+    if(!top&&r%2===0&&h>.15){const lit=hash(c,r*3)<.06,br=hash(c*3,r)<.25;   // windows
+      ctx.fillStyle=lit?`rgba(200,120,255,${.5+.3*Math.sin(time*1.7+c)})`:br?'#1e1a26':'#3a3446';ctx.fillRect(x+9,y+8,22,20);
+      ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.strokeRect(x+9,y+8,22,20);if(!br){ctx.beginPath();ctx.moveTo(x+20,y+8);ctx.lineTo(x+20,y+28);ctx.stroke()}
+      else{ctx.strokeStyle='rgba(200,210,230,.6)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(x+10,y+9);ctx.lineTo(x+16,y+16);ctx.lineTo(x+12,y+24);ctx.stroke()}}
+    if(h<.08&&!top){ctx.fillStyle='rgba(43,26,18,.35)';ctx.beginPath();ctx.moveTo(x+4,y+4);ctx.lineTo(x+16,y+18);ctx.lineTo(x+10,y+30);ctx.lineTo(x+4,y+30);ctx.closePath();ctx.fill()}
+    if(top){ctx.fillStyle='#b0abb2';ctx.fillRect(x-.5,y,TS+1,9);ctx.fillStyle='#d2ced4';ctx.fillRect(x-.5,y+1,TS+1,3)}
+    if(t===T_CRACK){ctx.save();ctx.strokeStyle='rgba(43,26,18,.45)';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x+8+h*6,y+2);ctx.lineTo(x+14+h*6,y+12);ctx.lineTo(x+11+h*6,y+22);ctx.moveTo(x+28-h*5,y+2);ctx.lineTo(x+24-h*5,y+14);ctx.stroke();ctx.restore()}
+    edges();return}
+  if(f===CITY_RUB){ // rubble: broken concrete with bent rebar
+    ctx.fillStyle='#6e6a70';ctx.fillRect(x-.5,y-.5,TS+1,TS+1);
+    ctx.fillStyle='#8f8a92';ctx.strokeStyle='rgba(43,26,18,.5)';ctx.lineWidth=1.6;
+    for(let k=0;k<3;k++){const bx=x+4+hash(c,r+k)*24,by=y+4+hash(r,c+k)*24,s=6+hash(c+k,r)*7;ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+s,by-2);ctx.lineTo(bx+s+2,by+s*.8);ctx.lineTo(bx-1,by+s);ctx.closePath();ctx.fill();ctx.stroke()}
+    if(top){ctx.fillStyle='#a19ca4';ctx.beginPath();ctx.moveTo(x-.5,y);ctx.lineTo(x+TS+.5,y);ctx.lineTo(x+TS+.5,y+6);for(let k=3;k>=0;k--)ctx.lineTo(x+k*10,y+5+hash(c,k)*6);ctx.closePath();ctx.fill();
+      if(h>.7){ctx.strokeStyle='#8a4a2a';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(x+12,y+4);ctx.quadraticCurveTo(x+16,y-10,x+24,y-14);ctx.stroke()}}
+    edges();return}
+  // the street: cracked asphalt on a bed of gravel, then darker and darker earth with old pipes running through it
+  let d=0;while(d<6&&r-d-1>=0&&vsol(c,r-d-1))d++;   // how deep under the surface
+  const soil=['#6a5a52','#5a4c48','#4f423f','#463a38','#3e3331','#382e2c','#332a28'][d];
+  ctx.fillStyle=soil;ctx.fillRect(x-.5,y-.5,TS+1,TS+1);
+  if(d===1){ctx.fillStyle='#7d6c62';for(let k=0;k<5;k++){ctx.beginPath();ctx.arc(x+4+hash(c,k)*32,y+4+hash(k,c)*30,2+hash(c+k,r)*2,0,7);ctx.fill()}}
+  else if(d>1){ctx.fillStyle='rgba(20,14,12,.25)';ctx.beginPath();ctx.arc(x+8+h*22,y+10+hash(r,c)*20,2.5+h*2.5,0,7);ctx.fill();
+    if(hash(r,7)<.3&&d>=2){ctx.fillStyle='#55505a';ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.fillRect(x-.5,y+14,TS+1,12);ctx.beginPath();ctx.moveTo(x-.5,y+14);ctx.lineTo(x+TS+.5,y+14);ctx.moveTo(x-.5,y+26);ctx.lineTo(x+TS+.5,y+26);ctx.stroke();
+      ctx.fillStyle='rgba(140,70,30,.45)';ctx.fillRect(x+hash(c,r)*30,y+16,6,8);if((c+r)%5===0){ctx.fillStyle='#6a6670';ctx.fillRect(x+16,y+12,8,16);ctx.strokeRect(x+16,y+12,8,16)}}
+    else if(h>.93){ctx.fillStyle='#e8dcc0';ctx.beginPath();ctx.ellipse(x+20,y+22,7,3,h*5,0,7);ctx.fill()}}   // a bit of old bone
+  if(top){ctx.fillStyle='#3e3e46';ctx.fillRect(x-.5,y,TS+1,12);ctx.fillStyle='#55555e';ctx.fillRect(x-.5,y+1,TS+1,3);
+    if(c%4===0){ctx.fillStyle='rgba(230,200,90,.7)';ctx.fillRect(x+6,y+5,16,3)}   // the faded road marking
+    if(h<.25){ctx.strokeStyle='rgba(15,15,20,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+4+h*40,y+2);ctx.lineTo(x+12+h*30,y+7);ctx.lineTo(x+20+h*20,y+5);ctx.stroke()}}
+  edges();
+}
+// rusty rebar sticking up out of the rubble at the bottom of a crater
+function drawCityThorn(c,r){
+  const x=c*TS,y=r*TS;ctx.fillStyle='#6e6a70';ctx.beginPath();ctx.moveTo(x-.5,y+TS);for(let k=0;k<=4;k++)ctx.lineTo(x+k*10,y+TS-6-hash(c,k)*8);ctx.lineTo(x+TS+.5,y+TS);ctx.closePath();ctx.fill();
+  ctx.lineCap='round';for(let k=0;k<3;k++){const bx=x+8+k*12,lean=(hash(c,k+5)-.5)*12,hh=20+hash(c+k,r)*10;
+    ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(bx,y+TS-4);ctx.lineTo(bx+lean,y+TS-hh);ctx.stroke();
+    ctx.strokeStyle='#a0583a';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#c97a4a';ctx.beginPath();ctx.arc(bx+lean,y+TS-hh,2,0,7);ctx.fill()}
+  ctx.strokeStyle=INK;ctx.lineWidth=3;
+}
+// the way out: a bunker door under a concrete hood, a green lamp over it
+function drawCityDoor(d){
+  const x=d.x,y=d.y;ctx.strokeStyle=INK;ctx.lineWidth=3.5;ctx.lineJoin='round';
+  ctx.fillStyle='#7d7a80';ctx.beginPath();ctx.moveTo(x-46,y+d.h);ctx.lineTo(x-46,y-30);ctx.lineTo(x+d.w+46,y-30);ctx.lineTo(x+d.w+46,y+d.h);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#a19ca4';ctx.beginPath();ctx.moveTo(x-60,y-30);ctx.lineTo(x-40,y-58);ctx.lineTo(x+d.w+40,y-58);ctx.lineTo(x+d.w+60,y-30);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=bossDead?'#3a6a4a':'#4a4a52';ctx.beginPath();ctx.roundRect(x,y,d.w,d.h,[8,8,0,0]);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='rgba(43,26,18,.6)';ctx.lineWidth=2;for(let k=1;k<4;k++){ctx.beginPath();ctx.moveTo(x+6,y+k*d.h/4);ctx.lineTo(x+d.w-6,y+k*d.h/4);ctx.stroke()}
+  ctx.fillStyle='#c9a050';ctx.beginPath();ctx.arc(x+d.w-14,y+d.h*.55,5,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.stroke();
+  const on=bossDead,a=on?.7+.3*Math.sin(time*4):.15;ctx.fillStyle=`rgba(120,255,140,${a*.4})`;ctx.beginPath();ctx.arc(x+d.w/2,y-44,22,0,7);ctx.fill();
+  ctx.fillStyle=on?'#8aff9a':'#3a4a3a';ctx.beginPath();ctx.arc(x+d.w/2,y-44,8,0,7);ctx.fill();ctx.lineWidth=2.5;ctx.stroke();
+}
+/* ---------- decorations ---------- */
+function drawCar(d){
+  const x=d.x,y=d.y,f=d.f||1,s=d.s,body=['#8a3a2a','#3a5a7a','#6a6a72','#a08a3a','#4a6a3a'][Math.floor(s*5)];
+  ctx.save();ctx.translate(x,y);ctx.scale(f,1);ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.lineJoin='round';
+  shadow(0,0,46);
+  ctx.fillStyle=body;ctx.beginPath();ctx.moveTo(-42,-10);ctx.lineTo(-40,-26);ctx.lineTo(-24,-30);ctx.lineTo(-14,-46);ctx.lineTo(16,-46);ctx.lineTo(28,-30);ctx.lineTo(42,-27);ctx.lineTo(42,-10);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='rgba(140,70,30,.55)';ctx.beginPath();ctx.arc(-26,-18,6,0,7);ctx.arc(20,-22,4,0,7);ctx.fill();
+  ctx.fillStyle='#1e1a26';ctx.beginPath();ctx.moveTo(-11,-42);ctx.lineTo(0,-42);ctx.lineTo(0,-31);ctx.lineTo(-19,-31);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(4,-42);ctx.lineTo(14,-42);ctx.lineTo(22,-31);ctx.lineTo(4,-31);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.strokeStyle='rgba(200,210,230,.6)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(6,-40);ctx.lineTo(11,-35);ctx.lineTo(8,-32);ctx.stroke();
+  ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.fillStyle='#222';for(const wx of [-26,26]){ctx.beginPath();ctx.ellipse(wx,-7,10,s>.5?10:6,0,0,7);ctx.fill();ctx.stroke()}   // flat or missing tyres
+  ctx.restore();
+}
+function drawLamp(x,y,s){
+  const broken=s<.4,flick=broken?0:Math.sin(time*23+s*40)>.85?.2:1;ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.lineCap='round';
+  ctx.save();ctx.translate(x,y);if(broken)ctx.rotate(.18);
+  ctx.strokeStyle=INK;ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-150);ctx.quadraticCurveTo(0,-166,22,-164);ctx.stroke();
+  ctx.strokeStyle='#4a4a52';ctx.lineWidth=4;ctx.stroke();
+  ctx.fillStyle='#6a6a72';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(14,-166);ctx.lineTo(34,-166);ctx.lineTo(30,-156);ctx.lineTo(18,-156);ctx.closePath();ctx.fill();ctx.stroke();
+  if(!broken){ctx.fillStyle=`rgba(255,220,150,${.25*flick})`;ctx.beginPath();ctx.moveTo(18,-156);ctx.lineTo(30,-156);ctx.lineTo(54,-60);ctx.lineTo(-6,-60);ctx.closePath();ctx.fill();
+    ctx.fillStyle=`rgba(255,236,180,${.9*flick+.1})`;ctx.beginPath();ctx.ellipse(24,-155,6,3,0,0,7);ctx.fill()}
+  ctx.restore();
+}
+function drawCityDecor(k,d){
+  const x=d.x,y=d.y,s=d.s;ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';
+  switch(k){
+    case 'pole':{ctx.save();ctx.translate(x,y);ctx.rotate(-.12);ctx.fillStyle='#6a4a32';ctx.beginPath();ctx.roundRect(-6,-200,12,200,3);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#5a3e2a';ctx.fillRect(-26,-188,52,8);ctx.strokeRect(-26,-188,52,8);ctx.fillStyle='#9ac0d8';for(const px of [-20,20]){ctx.beginPath();ctx.arc(px,-192,4,0,7);ctx.fill();ctx.stroke()}ctx.restore();break}
+    case 'stump':{ctx.fillStyle='#6a4a32';ctx.beginPath();ctx.moveTo(x-8,y);ctx.lineTo(x-7,y-40);ctx.lineTo(x-2,y-34);ctx.lineTo(x+3,y-44);ctx.lineTo(x+8,y);ctx.closePath();ctx.fill();ctx.stroke();break}
+    case 'tank':{ctx.fillStyle='#7a5a42';for(const lx of [-22,22]){ctx.beginPath();ctx.moveTo(x+lx,y);ctx.lineTo(x+lx*.7,y-44);ctx.lineWidth=5;ctx.stroke()}ctx.lineWidth=3;
+      ctx.beginPath();ctx.roundRect(x-30,y-100,60,58,6);ctx.fill();ctx.stroke();ctx.fillStyle='#6a4a32';ctx.beginPath();ctx.moveTo(x-34,y-100);ctx.lineTo(x,y-122);ctx.lineTo(x+34,y-100);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.strokeStyle='rgba(43,26,18,.5)';ctx.lineWidth=2;for(let k=1;k<4;k++){ctx.beginPath();ctx.moveTo(x-30,y-100+k*14);ctx.lineTo(x+30,y-100+k*14);ctx.stroke()}break}
+    case 'antenna':{ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+s*10,y-70);ctx.moveTo(x-16,y-44);ctx.lineTo(x+18,y-50);ctx.moveTo(x-10,y-58);ctx.lineTo(x+14,y-62);ctx.stroke();break}
+    case 'chimney':{ctx.fillStyle='#a8553e';ctx.beginPath();ctx.rect(x-12,y-40,24,40);ctx.fill();ctx.stroke();
+      const ph=(time*.4+s)%1;ctx.fillStyle=`rgba(70,60,80,${.4*(1-ph)})`;ctx.beginPath();ctx.arc(x+ph*20,y-48-ph*60,8+ph*14,0,7);ctx.fill();break}
+    case 'vent':{ctx.fillStyle='#8a8f99';ctx.beginPath();ctx.roundRect(x-18,y-24,36,24,4);ctx.fill();ctx.stroke();ctx.strokeStyle='rgba(43,26,18,.6)';ctx.lineWidth=2;for(let k=0;k<4;k++){ctx.beginPath();ctx.moveTo(x-12+k*8,y-20);ctx.lineTo(x-12+k*8,y-4);ctx.stroke()}break}
+    case 'pillar':{ctx.fillStyle='#8f8a92';ctx.beginPath();ctx.moveTo(x-50,y+4);ctx.lineTo(x-56,y-14);ctx.lineTo(x+56,y-14);ctx.lineTo(x+50,y+4);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.strokeStyle='#8a4a2a';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(x-50,y-14);ctx.lineTo(x-62,y-26);ctx.moveTo(x+44,y-14);ctx.lineTo(x+60,y-30);ctx.stroke();break}
+    case 'liftTop':{ctx.fillStyle='#5b6170';ctx.beginPath();ctx.rect(x-60,y-14,120,14);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(x,y+2,12,0,7);ctx.fill();ctx.stroke();break}
+    case 'barrel':{ctx.fillStyle='#4a6a3a';ctx.beginPath();ctx.roundRect(x-14,y-36,28,36,4);ctx.fill();ctx.stroke();ctx.strokeStyle='rgba(43,26,18,.6)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-14,y-24);ctx.lineTo(x+14,y-24);ctx.moveTo(x-14,y-12);ctx.lineTo(x+14,y-12);ctx.stroke();
+      // a fire in the barrel
+      for(let k=0;k<3;k++){const fl=Math.sin(time*12+k*2+s*9)*4;ctx.fillStyle=k?'#ffb03a':'#ff6a2a';ctx.beginPath();ctx.moveTo(x-10+k*8,y-36);ctx.quadraticCurveTo(x-8+k*8,y-50-k*4+fl,x-4+k*6,y-58-k*3+fl);ctx.quadraticCurveTo(x+k*4,y-46,x-2+k*8,y-36);ctx.closePath();ctx.fill()}
+      ctx.fillStyle='rgba(255,170,80,.18)';ctx.beginPath();ctx.arc(x,y-46,34,0,7);ctx.fill();break}
+    case 'pipe':{ctx.fillStyle='#5b6170';ctx.beginPath();ctx.roundRect(x-26,y-58,52,58,6);ctx.fill();ctx.stroke();ctx.fillStyle='#1e1a26';ctx.beginPath();ctx.ellipse(x,y-30,16,18,0,0,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle=`rgba(170,90,230,${.25+.2*Math.sin(time*3+s*9)})`;ctx.beginPath();ctx.ellipse(x,y-30,10,12,0,0,7);ctx.fill();break}
+    case 'rubble':{ctx.fillStyle='#8f8a92';ctx.strokeStyle=INK;ctx.lineWidth=2;for(let k=0;k<3;k++){const bx=x-14+k*12,sz=8+hash(k,s*99|0)*8;ctx.beginPath();ctx.moveTo(bx,y);ctx.lineTo(bx+2,y-sz);ctx.lineTo(bx+sz,y-sz+3);ctx.lineTo(bx+sz+2,y);ctx.closePath();ctx.fill();ctx.stroke()}break}
+    case 'sign':{ctx.save();ctx.translate(x,y);ctx.rotate(-.5+s*.3);ctx.lineWidth=4;ctx.strokeStyle=INK;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-50);ctx.stroke();ctx.strokeStyle='#8a8f99';ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle=s>.5?'#e33b2e':'#3a8ee8';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(0,-56,12,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.fillRect(-7,-58,14,4);ctx.restore();break}
+    case 'billboard':{ctx.fillStyle='#4a4a52';for(const lx of [-40,40]){ctx.fillRect(x+lx-3,y-4,6,4)}ctx.fillStyle='#e8d8b0';ctx.beginPath();ctx.rect(x-60,y-80,120,60);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#e33b2e';ctx.beginPath();ctx.arc(x-24,y-50,16,0,7);ctx.fill();ctx.fillStyle='#3a3446';ctx.font='bold 16px '+FONT;ctx.textAlign='center';ctx.fillText('SALE',x+22,y-44);
+      ctx.fillStyle='rgba(43,26,18,.25)';ctx.beginPath();ctx.moveTo(x+20,y-80);ctx.lineTo(x+60,y-80);ctx.lineTo(x+60,y-34);ctx.closePath();ctx.fill();break}
+    case 'scaffold':{ctx.strokeStyle='rgba(43,26,18,.55)';ctx.lineWidth=4;for(const lx of [-100,-20,60]){ctx.beginPath();ctx.moveTo(x+lx,y);ctx.lineTo(x+lx,y-380);ctx.stroke()}
+      for(let k=1;k<9;k++){ctx.beginPath();ctx.moveTo(x-100,y-k*44);ctx.lineTo(x+60,y-k*44+(k%2?22:-22));ctx.stroke()}break}
+    case 'manhole':{ctx.fillStyle='#3a3d45';ctx.beginPath();ctx.ellipse(x,y-2,22,5,0,0,7);ctx.fill();ctx.stroke();ctx.strokeStyle='rgba(120,120,130,.8)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x-12,y-3);ctx.lineTo(x+12,y-3);ctx.stroke();break}
+    case 'car': drawCar(d);break;
+    case 'lamp': drawLamp(x,y,s);break;
+    case 'wire': drawWire(d.w);break;
+  }
+}
+/* ---------- platform styles ---------- */
+function drawSlab(pl,w){ // a slab of broken concrete with bent rebar
+  ctx.fillStyle='#9a959e';ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2,-8);ctx.lineTo(w/2,-8);ctx.lineTo(w/2-4,10);ctx.lineTo(w/2-12,6);ctx.lineTo(-w/2+10,12);ctx.lineTo(-w/2+2,6);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#b8b3bc';ctx.fillRect(-w/2+3,-6,w-6,3);
+  ctx.strokeStyle='#8a4a2a';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-w/2+8,10);ctx.lineTo(-w/2+4,22);ctx.moveTo(w/2-14,8);ctx.lineTo(w/2-8,20);ctx.stroke();
+  ctx.strokeStyle='rgba(43,26,18,.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-w*.1,-8);ctx.lineTo(-w*.05,0);ctx.lineTo(-w*.12,8);ctx.stroke();
+}
+function drawPallet(pl,w){ // a pallet of crates hanging from the crane on four cables
+  ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-w/2+6,-8);ctx.lineTo(0,-110);ctx.lineTo(w/2-6,-8);ctx.moveTo(0,-110);ctx.lineTo(0,-900);ctx.stroke();
+  ctx.fillStyle='#c9a06a';ctx.lineWidth=3;ctx.beginPath();ctx.rect(-w/2,-8,w,16);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='rgba(43,26,18,.6)';ctx.lineWidth=2;for(let k=1;k<4;k++){ctx.beginPath();ctx.moveTo(-w/2+k*w/4,-8);ctx.lineTo(-w/2+k*w/4,8);ctx.stroke()}
+  ctx.fillStyle='#e0b23a';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(0,-110,6,0,7);ctx.fill();ctx.stroke();
+}
+function drawCage(pl,w){ // a lift cage: a steel floor and a frame of bars
+  ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-90);ctx.lineTo(0,-900);ctx.stroke();
+  ctx.strokeStyle='rgba(43,26,18,.75)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2+3,-8);ctx.lineTo(-w/2+3,-90);ctx.lineTo(w/2-3,-90);ctx.lineTo(w/2-3,-8);ctx.stroke();
+  ctx.fillStyle='#5b6170';ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();ctx.rect(-w/2,-8,w,16);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='rgba(200,210,230,.5)';ctx.lineWidth=1.5;for(let k=1;k<6;k++){ctx.beginPath();ctx.moveTo(-w/2+k*w/6,-6);ctx.lineTo(-w/2+k*w/6,6);ctx.stroke()}
+}
+// ==== levels/city/foes.js ====
+/* ---------- ruined city: mutants ---------- */
+// Every attack is announced: the rat crouches with glowing eyes before it dashes, the acid spitter swells up, the crow
+// caws with its wings spread, the brute roars and stamps, the lid of a manhole rattles and glows purple before the
+// tentacle bursts out. After an attack each of them is open for a moment (the rat skids, the brute that ran into a
+// wall is dazed, the tentacle lies on the ground).
+const RAT_SEE=280, BRUTE_SEE=440;
+function pSameFloor(e,tol=46){return Math.abs(P.y+P.h-(e.y+e.h))<tol}
+function ratSpark(x,y,n,c='#c8ff6a'){for(let i=0;i<n;i++)parts.push({x:x+rand(-8,8),y:y+rand(-6,6),vx:rand(-120,120),vy:rand(-200,-40),g:900,c,s:rand(2,4),life:rand(.2,.45),max:0,t:'dot'})}
+function goo(x,y,n,c='rgba(150,230,60,.9)'){for(let i=0;i<n;i++)parts.push({x:x+rand(-10,10),y:y+rand(-6,6),vx:rand(-140,140),vy:rand(-260,-60),g:1100,c,s:rand(3,6),life:rand(.3,.6),max:0,t:'dot'})}
+function purpleMist(x,y,n){for(let i=0;i<n;i++)parts.push({x:x+rand(-14,14),y:y+rand(-8,8),vx:rand(-40,40),vy:rand(-90,-20),g:0,c:Math.random()<.5?'rgba(170,90,230,.75)':'rgba(120,60,190,.7)',s:rand(4,9),life:rand(.35,.7),max:0,t:'puff'})}
+// is there a floor just ahead (so a dash or a charge stops at a drop) and no wall
+function brakeAhead(e,dir,d=10){const fx=dir>0?e.x+e.w+d:e.x-d,r=Math.floor((e.y+e.h+4)/TS);return isFloorT(tile(Math.floor(fx/TS),r))}
+function wallAhead(e,dir,d=6){const fx=dir>0?e.x+e.w+d:e.x-d;for(let y=e.y+6;y<e.y+e.h-4;y+=TS*.5)if(solid(Math.floor(fx/TS),Math.floor(y/TS)))return true;return false}
+// the brute's arm, the rat king's head: boxes other code uses
+function bruteHead(e){const cx=e.x+e.w/2;return{x:cx-26,y:e.y-6,w:52,h:30}}
+function bruteBlocks(e,srcX){return e.type==='brute'&&!e.dead&&(e.state==='charge'||e.state==='roar')&&Math.sign(srcX-(e.x+e.w/2))===e.face}
+function tentBox(e){ // the part of the tentacle that is out of the manhole
+  const mx=e.mx,my=e.my,h=e.len||0;
+  if(e.state==='slam'||e.state==='lie'){const k=e.state==='lie'?1:e.k||0,L=TENT_LEN,ang=k*Math.PI/2,ex=mx+e.face*Math.sin(ang)*L,ey=my-Math.cos(ang)*L;
+    return{x:Math.min(mx,ex)-16,y:Math.min(my,ey)-16,w:Math.abs(ex-mx)+32,h:Math.max(26,my-Math.min(my,ey))+6}}
+  return{x:mx-17,y:my-h,w:34,h:Math.max(4,h)}}
+const TENT_LEN=136;
+const CITY_EUPD={
+  mutRat(e,dt){
+    const was=e.onGround;enemyGravity(e,dt);
+    const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx);
+    e.cd-=dt;e.anim+=Math.abs(e.vx)*dt/9;
+    switch(e.state){
+      case 'crouch': e.vx=approach(e.vx,0,1400*dt);e.t-=dt;if(e.t<=0){e.state='dash';e.t=.5;e.vx=e.face*520;sfx('dash')}break;
+      case 'dash':{e.t-=dt;e.vx=e.face*520;if(Math.random()<.5)dust(cx-e.face*16,e.y+e.h,1,-e.face);
+        if(e.t<=0||e.hitWall||(e.onGround&&!brakeAhead(e,e.face,4))){e.state='skid';e.t=.55;sfx('land')}break}
+      case 'skid': e.vx=approach(e.vx,0,1500*dt);e.t-=dt;if(e.t<=0){e.state='idle';e.cd=rand(1,1.6)}break;
+      default:
+        if(e.hitWall||(e.onGround&&!groundAhead(e,e.dir)))e.dir*=-1;
+        e.vx=e.onGround?e.dir*70:e.vx;e.face=e.dir;
+        if(!P.dead&&e.cd<=0&&adx<RAT_SEE&&adx>30&&pSameFloor(e)&&e.onGround){e.face=e.dir=Math.sign(dx)||e.dir;e.state='crouch';e.t=.42;e.vx=0;sfx('squeak')}
+    }
+    if(!was&&e.onGround&&e.state==='dash')e.state='skid';
+  },
+  acidSpitter(e,dt){
+    enemyGravity(e,dt);
+    const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx),near=!P.dead&&adx<520&&Math.abs(P.y-e.y)<260;
+    e.cd-=dt;e.anim+=dt;
+    if(e.state==='swell'){e.vx=0;e.t-=dt;e.sw=clamp(1-e.t/.6,0,1);if(Math.random()<.2)goo(cx+e.face*14,e.y+18,1);
+      if(e.t<=0){acidSpit(e);e.state='idle';e.cd=rand(2,2.8);e.sw=0}return}
+    if(near){if(adx>12)e.face=Math.sign(dx);
+      const want=adx>220?e.face:adx<150?-e.face:0;let mv=want;if(mv&&(!groundAhead(e,mv)||e.hitWall))mv=0;e.vx=approach(e.vx,mv*32,300*dt);
+      if(e.cd<=0&&adx<460){e.state='swell';e.t=.6;e.vx=0;sfx('gurgle')}}
+    else{if(e.hitWall||(e.onGround&&!groundAhead(e,e.dir)))e.dir*=-1;e.vx=approach(e.vx,e.dir*22,300*dt);e.face=e.dir}
+  },
+  mutCrow(e,dt){
+    if(e.px==null){e.px=e.perchX!=null?e.perchX:e.x+e.w/2;e.py=e.perchY!=null?e.perchY:e.y+e.h}
+    const pcx=P.x+P.w/2,pcy=P.y+P.h/2;e.cd-=dt;e.anim+=dt;
+    switch(e.state){
+      case 'caw': e.t-=dt;if(e.t<=0){e.state='dive';const dx=e.tx-(e.x+e.w/2),dy=e.ty-(e.y+e.h/2),l=Math.hypot(dx,dy)||1;e.vx=dx/l*500;e.vy=dy/l*500;e.t=l/500+.22;sfx('dash')}break;
+      case 'dive':{e.t-=dt;e.x+=e.vx*dt;e.y+=e.vy*dt;e.face=Math.sign(e.vx)||e.face;
+        if(e.t<=0||solid(Math.floor((e.x+e.w/2)/TS),Math.floor((e.y+e.h)/TS))){e.state='rise';if(solid(Math.floor((e.x+e.w/2)/TS),Math.floor((e.y+e.h)/TS)))dust(e.x+e.w/2,e.y+e.h,4)}break}
+      case 'rise':{const tx=e.px-e.w/2,ty=e.py-e.h,dx=tx-e.x,dy=ty-e.y,l=Math.hypot(dx,dy);
+        if(l<8){e.x=tx;e.y=ty;e.state='perch';e.cd=rand(1.3,2);break}
+        const sp=Math.min(260,l*4);e.x+=dx/l*sp*dt;e.y+=dy/l*sp*dt;if(Math.abs(dx)>4)e.face=Math.sign(dx);break}
+      default:{e.x=e.px-e.w/2;e.y=e.py-e.h;
+        const dx=pcx-e.px;if(Math.abs(dx)>10)e.face=Math.sign(dx);
+        if(!P.dead&&e.cd<=0&&Math.abs(dx)<300&&pcy>e.py+30&&pcy-e.py<380){e.state='caw';e.t=.45;e.tx=pcx;e.ty=pcy;sfx('squawk')}}
+    }
+  },
+  brute(e,dt){
+    enemyGravity(e,dt);
+    const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx);
+    e.cd-=dt;
+    switch(e.state){
+      case 'roar': e.vx=0;e.t-=dt;if(Math.random()<.3)dust(cx+rand(-20,20),e.y+e.h,1);if(e.t<=0){e.state='charge';e.t=0;e.run=0;sfx('dash');shake(.1,3)}break;
+      case 'charge':{e.vx=e.face*430;e.run+=430*dt;e.anim+=dt*14;if(Math.random()<.4)dust(cx-e.face*30,e.y+e.h,1,-e.face);
+        if(Math.floor(e.anim)%2&&Math.random()<.2&&Math.abs(e.x-P.x)<VW*.7)shake(.05,2);
+        if(wallAhead(e,e.face,8)){ // smack into a wall (or a wrecked car): it smashes a cracked one, is dazed by a solid one
+          const wc=Math.floor((e.face>0?e.x+e.w+8:e.x-8)/TS);let broke=false;for(let r=Math.floor(e.y/TS);r<=Math.floor((e.y+e.h-1)/TS);r++)if(tile(wc,r)===T_CRACKW)broke=breakWall(wc,r)||broke;
+          if(!broke){e.state='stun';e.t=1.5;e.vx=-e.face*120;e.vy=-200;e.onGround=false;shake(.3,7);sfx('clang');ratSpark(cx+e.face*36,e.y+30,8,'#fff3b0')}}
+        else if(e.run>620||(e.onGround&&!brakeAhead(e,e.face,14))){e.state='skid';e.t=.6}
+        break}
+      case 'skid': e.vx=approach(e.vx,0,1100*dt);e.t-=dt;if(Math.random()<.4)dust(cx+e.face*20,e.y+e.h,1,e.face);if(e.t<=0){e.state='walk';e.cd=rand(1.4,2.2)}break;
+      case 'stun': e.vx=approach(e.vx,0,600*dt);e.t-=dt;if(e.t<=0){e.state='walk';e.cd=rand(1.6,2.4)}break;
+      default:{
+        if(adx>16)e.face=Math.sign(dx);
+        let mv=0;if(!P.dead&&adx<BRUTE_SEE+80&&adx>90&&pSameFloor(e,120))mv=e.face;
+        if(mv&&(!groundAhead(e,mv)||e.hitWall))mv=0;
+        e.vx=approach(e.vx,mv*48,300*dt);const b=Math.floor(e.anim);e.anim+=Math.abs(e.vx)*dt/22;
+        if(Math.floor(e.anim)!==b&&Math.abs(e.x-P.x)<VW*.7)dust(cx,e.y+e.h,2);
+        if(!P.dead&&e.cd<=0&&adx<BRUTE_SEE&&pSameFloor(e,60)&&e.onGround){e.state='roar';e.t=.75;e.vx=0;sfx('roar')}
+      }
+    }
+  },
+  tentacle(e,dt){
+    if(e.mx==null){e.mx=e.x+e.w/2;e.my=e.y+e.h;e.len=0;e.state='hide';e.cd=.4}
+    const dx=P.x+P.w/2-e.mx,near=!P.dead&&Math.abs(dx)<120&&P.y+P.h>e.my-170&&P.y<e.my+10;
+    e.cd-=dt;e.ph=(e.ph||0)+dt;
+    switch(e.state){
+      case 'hide': e.len=0;if(e.cd<=0&&near){e.state='warn';e.t=.55;sfx('creak')}break;
+      case 'warn': e.t-=dt;if(Math.random()<.4)purpleMist(e.mx,e.my-4,1);if(e.t<=0){e.state='up';e.t=0;sfx('slosh')}break;
+      case 'up': e.t+=dt;e.len=Math.min(TENT_LEN,TENT_LEN*e.t/.16);if(e.t>.16){e.state='sway';e.t=.35;e.face=Math.sign(dx)||e.face}break;
+      case 'sway': e.t-=dt;e.face=Math.sign(dx)||e.face;if(e.t<=0){e.state='slam';e.k=0}break;
+      case 'slam': e.k=Math.min(1,e.k+dt/.22);if(e.k>=1){e.state='lie';e.t=.6;shake(.15,4);sfx('land');purpleMist(e.mx+e.face*TENT_LEN*.7,e.my-6,6)}break;
+      case 'lie': e.t-=dt;if(e.t<=0){e.state='down';e.t=.3}break;
+      case 'down': e.t-=dt;e.len=TENT_LEN*Math.max(0,e.t/.3);if(e.t<=0){e.state='hide';e.cd=1.5}break;
+    }
+    const b=e.state==='hide'||e.state==='warn'?{x:e.mx-20,y:e.my-6,w:40,h:6}:tentBox(e);e.x=b.x;e.y=b.y;e.w=b.w;e.h=b.h;
+  },
+};
+// a glob of acid lobbed in an arc to where the player stands
+function acidSpit(e){
+  const cx=e.x+e.w/2,f=e.face,x0=cx+f*16,y0=e.y+16,g=1400,tx=P.x+P.w/2+P.vx*.25,ty=P.y+P.h-8,T=clamp(Math.abs(tx-x0)/330,.55,1.2);
+  eshots.push({k:'glob',x:x0,y:y0,vx:(tx-x0)/T,vy:(ty-y0-.5*g*T*T)/T,g,r:11});sfx('spit');goo(x0,y0,4);
+}
+/* ---------- ruined city: enemy projectiles ---------- */
+function updateCityShot(b,dt,pb){
+  switch(b.k){
+    case 'glob':{b.vy+=b.g*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
+      if(Math.random()<.4)parts.push({x:b.x,y:b.y,vx:0,vy:0,g:400,c:'rgba(160,235,70,.8)',s:rand(2,4),life:.25,max:0,t:'dot'});
+      const c=Math.floor(b.x/TS),r=Math.floor((b.y+b.r)/TS);
+      if(b.y>WH+40){b.dead=true;return}
+      if(solid(c,Math.floor(b.y/TS))||(b.vy>0&&isFloorT(tile(c,r)))){b.dead=true;goo(b.x,b.y,8);sfx('splash');
+        if(b.vy>0&&isFloorT(tile(c,r)))eshots.push({k:'acidPool',x:b.x,y:r*TS,w:0,life:2.6,max:2.6});return}
+      if(!P.dead&&circleBox(b.x,b.y,b.r,pb)){hurt(b.x);b.dead=true;goo(b.x,b.y,8)}
+      return}
+    case 'acidPool':{b.life-=dt;b.w=Math.min(64,b.w+dt*400);if(b.life<=0){b.dead=true;return}
+      if(Math.random()<.15)parts.push({x:b.x+rand(-b.w/2,b.w/2),y:b.y-3,vx:0,vy:rand(-50,-20),g:0,c:'rgba(180,240,90,.7)',s:rand(2,4),life:.5,max:0,t:'puff'});
+      if(!P.dead&&b.life<b.max-.15&&overlap({x:b.x-b.w/2+6,y:b.y-10,w:b.w-12,h:12},pb))hurt(b.x);
+      return}
+    case 'rubbleWave':{ // a ripple of broken asphalt along the floor; stops at edges and walls
+      b.x+=b.vx*dt;b.life-=dt;b.h=Math.min(1,b.h+dt*6);
+      const c=Math.floor(b.x/TS),r=Math.floor((b.y+2)/TS);
+      if(b.life<=0||!isFloorT(tile(c,r))||solid(c,r-1)){b.dead=true;dust(b.x,b.y-6,4);return}
+      if(Math.random()<.4)parts.push({x:b.x+rand(-10,10),y:b.y-4,vx:rand(-40,40),vy:rand(-160,-60),g:900,c:'#7d7f86',s:rand(2,5),life:.35,max:0,t:'dot'});
+      if(!P.dead&&overlap({x:b.x-16,y:b.y-(b.tall||34),w:32,h:b.tall||34},pb))hurt(b.x);
+      return}
+  }
+}
+function drawCityShot(b){
+  switch(b.k){
+    case 'glob':{ctx.fillStyle='rgba(150,230,60,.35)';ctx.beginPath();ctx.arc(b.x,b.y,b.r*1.7,0,7);ctx.fill();
+      ctx.fillStyle='#a6e83a';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();const a=Math.atan2(b.vy,b.vx);
+      ctx.ellipse(b.x,b.y,b.r*1.25,b.r*.85,a,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='rgba(255,255,255,.75)';ctx.beginPath();ctx.arc(b.x-3,b.y-3,3,0,7);ctx.fill();return}
+    case 'acidPool':{const a=Math.min(1,b.life/.5),w=b.w;ctx.globalAlpha=a;
+      ctx.fillStyle='#8fd43a';ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(b.x,b.y-2,w/2,5,0,0,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#d6ff8a';for(let k=0;k<3;k++){const bx=b.x+Math.sin(time*3+k*2)*w*.3,by=b.y-4-((time*1.5+k*.33)%1)*8;ctx.beginPath();ctx.arc(bx,by,2.4,0,7);ctx.fill()}
+      ctx.globalAlpha=1;return}
+    case 'rubbleWave':{const s=Math.sign(b.vx);ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.lineJoin='round';const T=(b.tall||34)/34;
+      for(const [o,hh,w] of [[-12,20,11],[0,32,13],[12,24,10]]){const h=hh*b.h*T*(1+.1*Math.sin(time*30+o));
+        ctx.fillStyle=o===0?'#9a9ca6':'#6f7280';ctx.beginPath();ctx.moveTo(b.x+o*s-w,b.y);ctx.lineTo(b.x+o*s-w*.4,b.y-h);ctx.lineTo(b.x+o*s+w*.5,b.y-h*.8);ctx.lineTo(b.x+o*s+w,b.y);ctx.closePath();ctx.fill();ctx.stroke()}
+      return}
+  }
+}
+/* ---------- downed power lines ---------- */
+function wireBox(w){return w.k==='arc'?{x:w.x-16,y:w.top,w:32,h:w.y-w.top}:{x:w.x+4,y:w.top,w:w.w-8,h:w.y-w.top}}
+function updateCityWires(dt){
+  const pb={x:P.x+3,y:P.y+6,w:P.w-6,h:P.h-6};
+  for(const w of cityWires){
+    const vis=w.x+w.w>camX-200&&w.x<camX+VW+200;
+    w.t-=dt;
+    if(w.t<=0){if(w.st==='off'){w.st='warn';w.t=w.warn;if(vis)sfx('buzz')}else if(w.st==='warn'){w.st='on';w.t=w.on;if(vis)sfx('zap')}else{w.st='off';w.t=w.off}}
+    if(!vis)continue;
+    const b=wireBox(w);
+    if(w.st==='warn'&&Math.random()<.35)ratSpark(b.x+rand(0,b.w),w.k==='arc'?w.top+rand(0,20):w.y-4,1,'#fff36a');
+    if(w.st==='on'){if(Math.random()<.6)ratSpark(b.x+rand(0,b.w),rand(b.y,b.y+b.h),1,Math.random()<.5?'#fff9c0':'#9fe8ff');
+      if(!P.dead&&overlap(b,pb))hurt(b.x+b.w/2)}
+  }
+}
+function drawWire(w){
+  const b=wireBox(w),on=w.st==='on',warn=w.st==='warn';
+  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+  if(w.k==='arc'){ // a cable dangling from the broken pole down to just above the ground
+    const x=w.x,y0=w.top;
+    ctx.strokeStyle=INK;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x-34,y0-110);ctx.quadraticCurveTo(x-10,y0-40,x,y0);ctx.stroke();
+    ctx.strokeStyle='#3b3f4a';ctx.lineWidth=2.5;ctx.stroke();
+    ctx.fillStyle='#c8a050';ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x-5,y0-4,10,10,2);ctx.fill();ctx.stroke();
+    if(on||warn){const k=on?1:.35;ctx.strokeStyle=on?'rgba(160,230,255,.9)':'rgba(255,240,140,.6)';ctx.lineWidth=on?4:2;
+      for(let j=0;j<(on?3:1);j++){ctx.beginPath();let px=x,py=y0+6;ctx.moveTo(px,py);const n=8,stepY=(w.y-py)/n;
+        for(let i=1;i<=n;i++){const ny=py+stepY;ctx.lineTo(x+rand(-12,12)*k,on||i<3?ny:py);py=ny}ctx.stroke()}
+      if(on){ctx.fillStyle='rgba(180,235,255,.35)';ctx.beginPath();ctx.ellipse(x,w.y-2,26,7,0,0,7);ctx.fill();
+        ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,y0+6);for(let i=1;i<=8;i++)ctx.lineTo(x+rand(-8,8),y0+6+(w.y-y0-6)*i/8);ctx.stroke()}}
+  }else{ // a cable lying across the street, frayed and sparking along its length
+    const y=w.y-5,x0=w.x,x1=w.x+w.w;
+    ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(x0-30,y-14);ctx.quadraticCurveTo(x0,y+2,x0+(x1-x0)/2,y);ctx.quadraticCurveTo(x1-10,y-2,x1+16,y+1);ctx.stroke();
+    ctx.strokeStyle='#3b3f4a';ctx.lineWidth=3;ctx.stroke();
+    if(on||warn){const top=on?b.y:w.y-18;ctx.strokeStyle=on?'rgba(170,235,255,.85)':'rgba(255,240,140,.55)';ctx.lineWidth=on?3:1.6;
+      for(let j=0;j<(on?4:2);j++){const sx=x0+rand(4,x1-x0-4);ctx.beginPath();ctx.moveTo(sx,y);let py=y;while(py>top){py-=rand(6,12);ctx.lineTo(sx+rand(-9,9),py)}ctx.stroke()}
+      if(on){const g=ctx.createLinearGradient(0,b.y,0,w.y);g.addColorStop(0,'rgba(150,220,255,0)');g.addColorStop(1,'rgba(150,220,255,.35)');ctx.fillStyle=g;ctx.fillRect(b.x,b.y,b.w,b.h)}}
+  }
+  ctx.restore();
+}
+/* ---------- ruined city: drawing the mutants ---------- */
+const CITY_EDRAW={
+  mutRat(e){
+    const f=e.face,cx=e.x+e.w/2,by=e.y+e.h,cr=e.state==='crouch',sk=e.state==='skid',run=Math.sin(e.anim*1.6);
+    shadow(cx,by,26);
+    ctx.save();ctx.translate(cx,by);ctx.scale(f,1);ctx.lineJoin='round';ctx.strokeStyle=INK;ctx.lineWidth=2.5;
+    if(cr)ctx.translate(rand(-1,1),3);
+    // tail: long, bald, pink
+    ctx.strokeStyle=INK;ctx.lineWidth=6;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-20,-10);ctx.quadraticCurveTo(-40,-4+run*4,-52,-18+run*6);ctx.stroke();
+    ctx.strokeStyle=col(e,'#e8a3a8');ctx.lineWidth=3;ctx.stroke();
+    // legs
+    ctx.fillStyle=col(e,'#6f5f66');for(const [lx,o] of [[-14,run],[10,-run]]){ctx.beginPath();ctx.ellipse(lx+o*4,-4,6,5,0,0,7);ctx.fill();ctx.lineWidth=2;ctx.stroke()}
+    // body: hunched, with bald patches and glowing pustules
+    const hb=cr?20:sk?22:24;ctx.lineWidth=2.5;
+    ctx.fillStyle=col(e,'#8a7c84');ctx.beginPath();ctx.moveTo(-24,-6);ctx.quadraticCurveTo(-26,-hb-2,-2,-hb);ctx.quadraticCurveTo(18,-hb+2,22,-12);ctx.quadraticCurveTo(10,-2,-24,-6);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle=col(e,'#c99aa2');ctx.beginPath();ctx.ellipse(-8,-hb+8,7,4,-.3,0,7);ctx.fill();
+    ctx.fillStyle='#b8ff5a';for(const [px,py,r] of [[-14,-14,2.6],[2,-hb+4,2],[-2,-10,1.8]]){ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill()}
+    // head with a third eye and long teeth
+    ctx.fillStyle=col(e,'#8a7c84');ctx.beginPath();ctx.moveTo(14,-20);ctx.quadraticCurveTo(30,-24,38,-10);ctx.lineTo(18,-6);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle=col(e,'#e8a3a8');ctx.beginPath();ctx.arc(38,-11,3,0,7);ctx.fill();
+    ctx.beginPath();ctx.ellipse(14,-24,5,7,-.4,0,7);ctx.fill();ctx.stroke();
+    const glow=cr||e.state==='dash'?'#ff3b2e':'#ffe14a';
+    for(const [ex,ey] of [[24,-17],[29,-15],[19,-15]]){ctx.fillStyle=glow;ctx.beginPath();ctx.arc(ex,ey,2.2,0,7);ctx.fill()}
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(32,-7);ctx.lineTo(34,-2);ctx.lineTo(35,-7);ctx.closePath();ctx.fill();
+    if(e.state==='skid'){ctx.fillStyle='#fff3b0';for(let k=0;k<3;k++){const a=time*8+k*2.1;drawStar(18+Math.cos(a)*12,-32+Math.sin(a)*4,3,time)}}
+    ctx.restore();
+  },
+  acidSpitter(e){
+    const f=e.face,cx=e.x+e.w/2,by=e.y+e.h,sw=e.sw||0,wob=Math.sin(e.anim*5)*.04;
+    shadow(cx,by,28);
+    ctx.save();ctx.translate(cx,by);ctx.scale(f,1);ctx.lineJoin='round';ctx.strokeStyle=INK;ctx.lineWidth=2.6;
+    // stubby legs
+    ctx.fillStyle=col(e,'#6e8a3a');for(const lx of [-12,10]){ctx.beginPath();ctx.roundRect(lx-5,-12,10,12,4);ctx.fill();ctx.stroke()}
+    // the bloated body
+    const hw=24*(1+wob+sw*.12),hh=40*(1-wob+sw*.08);
+    blob(0,-6,hw,hh);ctx.fillStyle=col(e,'#9fc94a');ctx.fill();ctx.stroke();
+    ctx.save();blob(0,-6,hw,hh);ctx.clip();ctx.fillStyle='rgba(60,90,20,.25)';ctx.beginPath();ctx.ellipse(8,-10,hw*.9,hh*.5,0,0,7);ctx.fill();
+    ctx.fillStyle=col(e,'#d9ef8a');for(const [px,py,r] of [[-10,-30,4],[6,-20,3],[-4,-14,2.4],[12,-36,2.6]]){ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill()}ctx.restore();
+    // the throat sac swells before it spits
+    ctx.fillStyle=col(e,sw>.1?'#e9ff6a':'#c8e86a');ctx.beginPath();ctx.ellipse(14,-22,7+sw*9,6+sw*8,0,0,7);ctx.fill();ctx.stroke();
+    // a lopsided face
+    ctx.fillStyle=INK;ctx.beginPath();ctx.arc(4,-40,3.5,0,7);ctx.arc(14,-37,2.6,0,7);ctx.fill();
+    ctx.fillStyle='#ff5a3a';ctx.beginPath();ctx.arc(5,-41,1.2,0,7);ctx.fill();
+    ctx.fillStyle='#4a2a1a';ctx.beginPath();ctx.ellipse(18,-30,5,2+sw*4,0,0,7);ctx.fill();
+    ctx.fillStyle='rgba(170,240,70,.9)';const drip=(time*1.3+e.x*.01)%1;ctx.beginPath();ctx.arc(19,-28+drip*16,2,0,7);ctx.fill();
+    ctx.restore();
+  },
+  mutCrow(e){
+    const f=e.face,cx=e.x+e.w/2,cy=e.y+e.h/2,st=e.state,flap=st==='perch'?0:Math.sin(time*(st==='dive'?8:16));
+    ctx.save();ctx.translate(cx,cy);ctx.scale(f,1);ctx.lineJoin='round';ctx.strokeStyle=INK;ctx.lineWidth=2.4;
+    if(st==='dive')ctx.rotate(Math.atan2(Math.abs(e.vy),Math.abs(e.vx))*.6);
+    const spread=st==='caw'?1:st==='perch'?.15:.6+flap*.4;
+    // wings (ragged)
+    ctx.fillStyle=col(e,'#2e2a38');for(const s of [-1,1]){ctx.save();ctx.scale(1,1);ctx.beginPath();ctx.moveTo(-4,-2);
+      ctx.lineTo(-18,-6-spread*20*s*(s>0?1:.6));ctx.lineTo(-26,-2-spread*12);ctx.lineTo(-22,4);ctx.lineTo(-14,6);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+    // body
+    ctx.fillStyle=col(e,'#3a3448');ctx.beginPath();ctx.ellipse(0,4,15,11,0,0,7);ctx.fill();ctx.stroke();
+    // two heads on one neck
+    for(const [hx,hy,a] of [[11,-8,-.3],[16,0,.2]]){ctx.fillStyle=col(e,'#3a3448');ctx.beginPath();ctx.arc(hx,hy,7,0,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#e0b23a';ctx.beginPath();ctx.moveTo(hx+5,hy-2+a*4);ctx.lineTo(hx+16,hy+a*8+(st==='caw'?-3:0));ctx.lineTo(hx+5,hy+3);ctx.closePath();ctx.fill();ctx.stroke();
+      if(st==='caw'){ctx.beginPath();ctx.moveTo(hx+5,hy+3);ctx.lineTo(hx+14,hy+8);ctx.lineTo(hx+5,hy+5);ctx.closePath();ctx.fill();ctx.stroke()}
+      ctx.fillStyle=st==='caw'||st==='dive'?'#ff3be0':'#c77dff';ctx.beginPath();ctx.arc(hx+2,hy-2,2.2,0,7);ctx.fill()}
+    // feet
+    ctx.strokeStyle=INK;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-2,14);ctx.lineTo(-4,19);ctx.moveTo(4,14);ctx.lineTo(4,19);ctx.stroke();
+    ctx.restore();
+  },
+  brute(e){
+    const f=e.face,cx=e.x+e.w/2,by=e.y+e.h,st=e.state,stp=Math.sin(e.anim*Math.PI)*4;
+    shadow(cx,by,40);
+    ctx.save();ctx.translate(cx,by);if(st==='roar')ctx.translate(rand(-1.5,1.5),0);ctx.scale(f,1);ctx.lineJoin='round';ctx.strokeStyle=INK;ctx.lineWidth=3;
+    const lean=st==='charge'?.18:st==='stun'?-.08:0;ctx.rotate(lean);
+    const skin=col(e,'#8f9a7a'),dark=col(e,'#5f6a52'),vein='#c77dff';   // sickly olive grey: it stands out against the violet sky
+    // legs and torn trousers
+    ctx.fillStyle=col(e,'#4a5468');for(const [lx,o] of [[-22,stp],[6,-stp]]){ctx.beginPath();ctx.roundRect(lx,-34+Math.min(0,o),18,34-Math.min(0,o),4);ctx.fill();ctx.stroke()}
+    // the small arm at the back
+    limb(-18,-74,-30,-46,10,dark);
+    // hunched body
+    ctx.fillStyle=skin;ctx.beginPath();ctx.moveTo(-26,-30);ctx.quadraticCurveTo(-36,-80,-6,-92);ctx.quadraticCurveTo(26,-96,32,-64);ctx.quadraticCurveTo(30,-34,18,-30);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.strokeStyle=vein;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-14,-80);ctx.quadraticCurveTo(-6,-66,-12,-50);ctx.moveTo(6,-86);ctx.quadraticCurveTo(14,-70,8,-60);ctx.stroke();
+    ctx.strokeStyle=INK;ctx.lineWidth=3;
+    // the small head sunk between the shoulders
+    ctx.fillStyle=skin;ctx.beginPath();ctx.arc(10,-90,13,0,7);ctx.fill();ctx.stroke();
+    const angry=st==='roar'||st==='charge';ctx.fillStyle=angry?'#ff3b2e':'#ffe14a';ctx.beginPath();ctx.arc(15,-93,2.6,0,7);ctx.fill();
+    ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(8,-99);ctx.lineTo(19,-96);ctx.stroke();
+    if(st==='roar'){ctx.fillStyle='#4a1a2a';ctx.beginPath();ctx.ellipse(17,-84,6,5,0,0,7);ctx.fill()}else{ctx.beginPath();ctx.moveTo(12,-83);ctx.lineTo(21,-84);ctx.stroke()}
+    // the huge arm: forward and low while charging, raised while roaring
+    ctx.lineWidth=3;
+    const [hx,hy]=st==='charge'?[46,-40]:st==='roar'?[30,-118]:st==='stun'?[34,-24]:[34,-30+stp];
+    limb(18,-74,(18+hx)/2+6,(-74+hy)/2,22,skin);limb((18+hx)/2+6,(-74+hy)/2,hx,hy,20,skin);
+    ctx.fillStyle=dark;ctx.beginPath();ctx.arc(hx,hy,15,0,7);ctx.fill();ctx.stroke();
+    ctx.strokeStyle=vein;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(26,-66);ctx.lineTo(32,-52);ctx.stroke();
+    if(st==='stun'){ctx.fillStyle='#fff3b0';for(let k=0;k<3;k++){const a=time*7+k*2.1;drawStar(10+Math.cos(a)*18,-116+Math.sin(a)*5,4,time)}}
+    ctx.restore();
+  },
+  tentacle(e){
+    const st=e.state;if(st==='hide')return;
+    const mx=e.mx,my=e.my,f=e.face;
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    if(st==='warn'){ctx.fillStyle=`rgba(170,90,230,${.25+.25*Math.sin(time*20)})`;ctx.beginPath();ctx.ellipse(mx,my-3,30,8,0,0,7);ctx.fill();ctx.restore();return}
+    // the tentacle as a chain of shrinking circles along a curve
+    const L=st==='up'||st==='sway'||st==='down'?e.len:TENT_LEN,k=st==='slam'?e.k:st==='lie'?1:0,n=14;
+    const pts=[];for(let i=0;i<=n;i++){const u=i/n,ang=k*Math.PI/2*u*(1.2-u*.2)+(st==='sway'?Math.sin(time*9+u*3)*.18*u:0)+(st==='up'?Math.sin(time*14+u*4)*.08:0);
+      const prev=pts[i-1]||{x:mx,y:my};pts.push(i?{x:prev.x+f*Math.sin(ang)*L/n,y:prev.y-Math.cos(ang)*L/n}:{x:mx,y:my})}
+    for(const pass of [0,1])for(let i=0;i<pts.length;i++){const u=i/n,r=15*(1-u*.72)+2,p=pts[i];
+      ctx.beginPath();ctx.arc(p.x,p.y,r+(pass?0:2.6),0,7);ctx.fillStyle=pass?(e.flash>0?'#fff':i%3?'#9b5bd6':'#b57ae8'):INK;ctx.fill()}
+    // suckers along the inside
+    ctx.fillStyle='#f0c8ff';for(let i=2;i<pts.length-2;i+=2){const p=pts[i];ctx.beginPath();ctx.arc(p.x-f*4,p.y+2,2.2,0,7);ctx.fill()}
+    ctx.restore();
+  },
+};
+// ==== levels/city/ratking.js ====
+/* ---------- level 5 mini-boss: the Rat King ---------- */
+// A huge mutant rat with a crown of bottle caps, asleep in a ruined plaza (the generator builds the plaza and tells it
+// where its ends are: e.kx0 / e.kx1). It wakes when the player comes into the plaza. Moves, each announced:
+// - scratch the ground (0.7 s), then charge across the plaza; running into the rubble at the end (or a wrecked car)
+//   leaves it dazed for a while: that is the time to hit it;
+// - crouch (a shadow marks the spot), leap onto the player and send ripples of broken asphalt both ways (jump them);
+// - rear up and squeak: rats come out of the drain pipes at both ends of the plaza (never more than three about).
+// From half its health it is quicker and leaps twice in a row. A stomp on its head hurts it.
+const RK_W=150, RK_H=92;
+function rkHead(e){const cx=e.x+e.w/2;return{x:cx+e.face*28-34,y:e.y-14,w:68,h:36}}
+function rkChoose(e){
+  const cx=e.x+e.w/2,dx=P.x+P.w/2-cx,adx=Math.abs(dx),rage=e.hp<=e.max/2,o=[];
+  e.face=Math.sign(dx)||e.face;
+  const room=e.face>0?e.kx1-(e.x+e.w):e.x-e.kx0;
+  if(room>200)o.push(['charge',adx>140?3:1.5]);
+  o.push(['leap',adx>260?2.6:1.4]);
+  if(enemies.filter(k=>k.type==='mutRat'&&k.kid&&!k.dead).length<3)o.push(['squeak',1.1]);
+  const L=o.filter(q=>q[0]!==e.last).length?o.filter(q=>q[0]!==e.last):o;
+  let s=0;for(const q of L)s+=q[1];let r=Math.random()*s,k=L[0][0];for(const q of L){r-=q[1];if(r<=0){k=q[0];break}}
+  e.last=k;const m=rage?.8:1;
+  if(k==='charge'){e.state='scratch';e.t=.7*m;sfx('rustle')}
+  else if(k==='leap'){e.state='crouch';e.t=.55*m;e.leaps=rage?2:1;rkAim(e)}
+  else{e.state='squeak';e.t=.7;sfx('squeak')}
+}
+function rkAim(e){e.tx=clamp(P.x+P.w/2,e.kx0+RK_W/2+10,e.kx1-RK_W/2-10)}
+function rkCall(e){ // rats pour out of the drain pipes at the ends of the plaza
+  let room=3-enemies.filter(k=>k.kid&&!k.dead).length;
+  for(const side of [0,1]){if(room--<=0)break;const px=side?e.kx1-TS/2:e.kx0+TS/2,r=makeEnemy('mutRat',Math.floor(px/TS),{y:e.y+e.h});
+    if(r){r.kid=true;r.x=px-r.w/2;r.dir=r.face=side?-1:1;r.vx=r.dir*160;r.vy=-260;r.onGround=false;r.cd=.8;enemies.push(r);purpleMist(px,e.y+e.h-20,4)}}
+}
+function updateRatKing(e,dt){
+  enemyGravity(e,dt);
+  const cx=e.x+e.w/2,inPlaza=!P.dead&&P.x+P.w>e.kx0+20&&P.x<e.kx1-20,rage=e.hp<=e.max/2,m=rage?.8:1;
+  e.anim+=dt;
+  // never leaves its plaza
+  if(e.x<e.kx0){e.x=e.kx0;if(e.vx<0)e.vx=0}if(e.x+e.w>e.kx1){e.x=e.kx1-e.w;if(e.vx>0)e.vx=0}
+  switch(e.state){
+    case 'sleep': e.vx=0;if(inPlaza){e.state='wake';e.t=1.1;sfx('roar');shake(.4,6);floater(cx,e.y-50,T('fRatKing'))}break;
+    case 'wake': e.t-=dt;if(e.t<=0){e.state='idle';e.t=.5}break;
+    case 'idle': e.vx=approach(e.vx,0,900*dt);e.t-=dt*(rage?1.25:1);
+      if(Math.abs(P.x+P.w/2-cx)>20)e.face=Math.sign(P.x+P.w/2-cx);
+      if(e.t<=0&&inPlaza)rkChoose(e);break;
+    case 'scratch': e.vx=0;e.t-=dt;if(Math.random()<.5)dust(cx-e.face*40,e.y+e.h,1,-e.face);
+      if(e.t<=0){e.state='charge';e.run=0;sfx('dash')}break;
+    case 'charge':{const sp=rage?620:540;e.vx=e.face*sp;if(Math.random()<.5)dust(cx-e.face*60,e.y+e.h,2,-e.face);
+      const hit=e.face>0?e.x+e.w>=e.kx1-2:e.x<=e.kx0+2;
+      if(hit||wallAhead(e,e.face,6)){e.state='stun';e.t=1.6;e.vx=-e.face*160;e.vy=-260;e.onGround=false;shake(.45,9);sfx('boom');ratSpark(e.face>0?e.x+e.w:e.x,e.y+40,10,'#fff3b0')}
+      break}
+    case 'stun': e.vx=approach(e.vx,0,500*dt);e.t-=dt;if(e.t<=0){e.state='idle';e.t=.4}break;
+    case 'crouch': e.vx=0;e.t-=dt;if(e.t>.15)rkAim(e);
+      if(e.t<=0){const T2=.75,vy=-G*T2/2;e.vy=vy;e.vx=(e.tx-cx)/T2;e.onGround=false;e.state='leap';sfx('jump');dust(cx,e.y+e.h,6)}break;
+    case 'leap': if(e.onGround&&e.vy>=0){e.vx=0;shake(.4,8);sfx('boom');dust(cx,e.y+e.h,10);
+        for(const s of [-1,1])eshots.push({k:'rubbleWave',x:cx+s*70,y:e.y+e.h,vx:s*340,life:1.6,h:0,tall:30});
+        if(--e.leaps>0){e.state='crouch';e.t=.35;rkAim(e)}else{e.state='idle';e.t=.7*m}}break;
+    case 'squeak': e.vx=0;e.t-=dt;if(e.t<=0){rkCall(e);e.state='idle';e.t=.6*m}break;
+  }
+}
+function drawRatKing(e){
+  const f=e.face,cx=e.x+e.w/2,by=e.y+e.h,st=e.state,air=st==='leap',cr=st==='crouch'||st==='scratch',sq=st==='squeak';
+  // where it is about to land
+  if(st==='crouch'&&e.tx!=null){ctx.fillStyle=`rgba(80,30,90,${.18+.15*Math.sin(time*20)})`;ctx.beginPath();ctx.ellipse(e.tx,by-2,70,9,0,0,7);ctx.fill()}
+  shadow(cx,by,air?50:74);
+  ctx.save();ctx.translate(cx,by);if(st==='scratch')ctx.translate(rand(-2,2),0);ctx.scale(f,1);ctx.lineJoin='round';ctx.strokeStyle=INK;ctx.lineWidth=3.5;
+  if(sq)ctx.rotate(-.22);if(cr)ctx.scale(1.06,.9);
+  const fur=col(e,'#7b6d78'),furD=col(e,'#5a4e5a'),pink=col(e,'#e39aa3'),run=st==='charge'?Math.sin(time*30):0;
+  // tail
+  ctx.lineCap='round';ctx.strokeStyle=INK;ctx.lineWidth=11;ctx.beginPath();ctx.moveTo(-64,-30);ctx.bezierCurveTo(-110,-20,-120,-70,-150+Math.sin(time*3)*8,-60);ctx.stroke();ctx.strokeStyle=pink;ctx.lineWidth=6;ctx.stroke();
+  ctx.strokeStyle=INK;ctx.lineWidth=3.5;
+  // legs
+  ctx.fillStyle=furD;for(const [lx,o] of [[-46,run],[-20,-run],[28,run],[50,-run]]){ctx.beginPath();ctx.roundRect(lx-9+o*6,-26,18,26,6);ctx.fill();ctx.stroke()}
+  // the body: a heavy hunched back with bald patches and glowing boils
+  ctx.fillStyle=fur;ctx.beginPath();ctx.moveTo(-70,-22);ctx.bezierCurveTo(-80,-92,10,-110,52,-70);ctx.quadraticCurveTo(64,-40,48,-20);ctx.quadraticCurveTo(-10,-10,-70,-22);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=pink;ctx.beginPath();ctx.ellipse(-20,-80,14,7,-.2,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(-48,-50,9,5,.4,0,7);ctx.fill();
+  ctx.fillStyle='#b8ff5a';for(const [px,py,r] of [[-30,-62,4],[4,-84,3],[-56,-36,3],[20,-50,2.6]]){ctx.beginPath();ctx.arc(px,py,r+Math.sin(time*4+px)*.6,0,7);ctx.fill()}
+  ctx.strokeStyle='rgba(43,26,18,.45)';ctx.lineWidth=2;for(let k=0;k<6;k++){const a=-1.2+k*.4;ctx.beginPath();ctx.moveTo(-10+Math.cos(a)*50,-56+Math.sin(a)*34);ctx.lineTo(-10+Math.cos(a)*58,-58+Math.sin(a)*40);ctx.stroke()}
+  ctx.strokeStyle=INK;ctx.lineWidth=3.5;
+  // head: long snout, three red eyes, yellow teeth
+  ctx.fillStyle=fur;ctx.beginPath();ctx.moveTo(30,-74);ctx.quadraticCurveTo(70,-86,96,-46);ctx.quadraticCurveTo(80,-30,40,-34);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=pink;ctx.beginPath();ctx.arc(96,-48,6,0,7);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.ellipse(36,-86,12,16,-.5,0,7);ctx.fill();ctx.stroke();
+  const eye=st==='scratch'||st==='charge'||st==='crouch'?'#ff3b2e':'#ffd23a',shut=st==='sleep'||st==='stun';
+  for(const [ex,ey] of [[58,-66],[68,-62],[50,-62]]){if(shut){ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(ex-4,ey);ctx.lineTo(ex+4,ey);ctx.stroke()}else{ctx.fillStyle=eye;ctx.beginPath();ctx.arc(ex,ey,3.6,0,7);ctx.fill()}}
+  ctx.lineWidth=3.5;ctx.fillStyle='#f3e08a';for(const tx of [78,86]){ctx.beginPath();ctx.moveTo(tx,-38);ctx.lineTo(tx+3,-28-(sq?6:0));ctx.lineTo(tx+6,-38);ctx.closePath();ctx.fill();ctx.lineWidth=2;ctx.stroke()}
+  // the crown of bottle caps
+  ctx.lineWidth=2.5;ctx.fillStyle='#d9b23a';ctx.beginPath();ctx.moveTo(26,-92);ctx.lineTo(30,-112);ctx.lineTo(38,-100);ctx.lineTo(44,-118);ctx.lineTo(50,-100);ctx.lineTo(58,-110);ctx.lineTo(58,-88);ctx.closePath();ctx.fill();ctx.stroke();
+  for(const [bx,c] of [[34,'#e33b2e'],[44,'#3a8ee8'],[53,'#4fbf4a']]){ctx.fillStyle=c;ctx.beginPath();ctx.arc(bx,-96,3.2,0,7);ctx.fill();ctx.stroke()}
+  if(st==='stun'){ctx.fillStyle='#fff3b0';for(let k=0;k<4;k++){const a=time*6+k*1.6;drawStar(50+Math.cos(a)*30,-128+Math.sin(a)*7,5,time)}}
+  if(st==='sleep'&&Math.sin(time*2)>0){ctx.scale(f,1);ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='20px '+FONT;ctx.textAlign='center';ctx.fillText('z',f*70,-130-Math.sin(time*2)*8)}
+  ctx.restore();
+  // its health, while it is awake
+  if(st!=='sleep'){const w=120,x0=cx-w/2,y0=e.y-48;ctx.fillStyle='rgba(43,26,18,.7)';ctx.fillRect(x0-2,y0-2,w+4,10);ctx.fillStyle='#e33b2e';ctx.fillRect(x0,y0,w*Math.max(0,e.hp/e.max),6)}
+}
+// ==== levels/city/tank.js ====
+/* ---------- boss 5: the Mutank, a tank that something purple has grown into ---------- */
+// It drives, jumps on its tentacles and climbs the walls of the street and the steel girder over it.
+// Every attack is announced and is followed by a moment to hit back:
+//   cannon   - the turret turns, a red sight flickers on the target, then a shell flies straight (1 shot; 2, then 3 later)
+//   ram      - the engine roars and the tracks spin, then it charges to the end of the street and crashes into the wall,
+//              dazed with its hatch open (a stomp on the hatch or any hit then does 50% more). Jump over it or onto it.
+//   tentacles- purple cracks glow in the asphalt, then tentacles burst out of them (2; 3 and 4 later)
+// Phase 2 (from 60% health, after it mutates): it also
+//   leaps    - crouches on its tentacles (a shadow marks the spot), lands on the player, ripples run both ways
+//   climbs   - drives to a wall, climbs it, lobs mortar shells from up there (their landing spots are marked), lets go
+//              and crashes down, dazed.
+// Phase 3 (the last 30%): everything a bit quicker, and it crawls along the girder under the sky, hangs over the
+// player with its tentacles dangling (its shadow grows on the ground) and drops, dazed again after the crash.
+// It can be stomped on while it stands on the ground; its hull hurts to touch, its turret top does not.
+const MT_W=200, MT_H=110, MT_HP=84, MT_GIRDER_Y=5*TS+20;
+function makeMutank(){return{kind:'mutank',x:ARENA_R-320,y:FLOOR-MT_H,w:MT_W,h:MT_H,hp:MT_HP,max:MT_HP,face:-1,state:'sleep',t:0,vx:0,vy:0,phase:1,flash:0,
+  rot:0,mode:'ground',aim:Math.PI,last:'',open:0,tread:0,stompCD:0,shots:0,cd:{ram:0,climb:3,leap:0,ceil:0},rev:0,recoil:0,wiggle:0,dcx:null,dcy:null}}
+const mtCX=()=>B.x+B.w/2, mtSpeed=()=>B.phase===3?.8:1;
+// the turret: pivot and barrel tip in the world (ground pose only)
+function mtPivot(){return{x:mtCX()-B.face*14,y:B.y+22}}
+function mtMuzzle(){const p=mtPivot();return{x:p.x+Math.cos(B.aim)*92,y:p.y+Math.sin(B.aim)*92}}
+function mtAimAt(tx,ty,k){const p=mtPivot();let a=Math.atan2(ty-p.y,tx-p.x);
+  // the barrel cannot point down into its own hull
+  if(B.face>0)a=clamp(a,-1.45,.35);else{if(a>0&&a<Math.PI-.35)a=Math.PI-.35;if(a<0&&a>-Math.PI+1.45)a=-Math.PI+1.45}
+  let d=a-B.aim;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;B.aim+=d*k}
+function mtSetGround(){B.mode='ground';B.w=MT_W;B.h=MT_H;B.rot=0;B.y=FLOOR-MT_H;B.x=clamp(B.x,ARENA_L+4,ARENA_R-4-MT_W)}
+function mtHull(){ // the part that hurts to touch
+  if(B.mode==='ground')return{x:B.x+8,y:B.y+40,w:B.w-16,h:B.h-40};
+  return{x:B.x+6,y:B.y+6,w:B.w-12,h:B.h-12}}
+function mtBox(){return{x:B.x+4,y:B.y,w:B.w-8,h:B.h}}
+function mtChoose(){
+  const cx=mtCX(),pcx=P.x+P.w/2,d=Math.abs(pcx-cx),p2=B.phase>=2,p3=B.phase===3,m=mtSpeed();
+  B.face=pcx>cx?1:-1;
+  const room=B.face>0?ARENA_R-(B.x+B.w):B.x-ARENA_L;
+  const o=[['cannon',d>200?2.4:1.4],['tentacles',1.8]];
+  if(room>240&&B.cd.ram<=0)o.push(['ram',d>160?2.4:1.4]);
+  if(d<200)o.push(['drive',1.2]);
+  if(p2&&B.cd.leap<=0)o.push(['leap',d>240?2.2:1.2]);
+  if(p2&&B.cd.climb<=0)o.push(['climb',2]);
+  if(p3&&B.cd.ceil<=0)o.push(['ceil',2.4]);
+  const f=o.filter(q=>q[0]!==B.last),L=f.length?f:o;
+  let s=0;for(const q of L)s+=q[1];let r=Math.random()*s,k=L[L.length-1][0];for(const q of L){r-=q[1];if(r<=0){k=q[0];break}}
+  B.last=k;
+  switch(k){
+    case 'cannon': B.state='aim';B.t=.8*m;B.shots=p3?3:p2?2:1;sfx('creak');break;
+    case 'ram': B.state='rev';B.t=.75*m;B.cd.ram=4;sfx('engine');break;
+    case 'tentacles': B.state='tentCall';B.t=.35;mtTentacles(p3?4:p2?3:2);break;
+    case 'drive': B.state='drive';B.t=rand(.7,1.1);B.dir=pcx>cx?-1:1;if((B.dir<0&&B.x-ARENA_L<120)||(B.dir>0&&ARENA_R-B.x-B.w<120))B.dir=-B.dir;break;
+    case 'leap': B.state='crouch';B.t=.6*m;B.cd.leap=5;mtLeapAim();sfx('slosh');break;
+    case 'climb': B.state='toWall';B.side=cx<(ARENA_L+ARENA_R)/2?-1:1;B.cd.climb=11;B.ceil=false;break;
+    case 'ceil': B.state='toWall';B.side=cx<(ARENA_L+ARENA_R)/2?-1:1;B.cd.ceil=12;B.cd.climb=Math.max(B.cd.climb,6);B.ceil=true;break;
+  }
+}
+// tentacles out of the asphalt: under the player and spread around, each one announced by glowing cracks
+function mtTentacles(n){
+  const pcx=clamp(P.x+P.w/2,ARENA_L+40,ARENA_R-40),xs=[pcx];
+  for(let i=1;i<n;i++){let x,k=0;do{x=rand(ARENA_L+50,ARENA_R-50);k++}while(k<20&&xs.some(q=>Math.abs(q-x)<110));xs.push(x)}
+  xs.forEach((x,i)=>eshots.push({k:'ftent',x,y:FLOOR,st:'warn',t:.8+i*.12,len:0,ph:rand(0,6)}));
+}
+function mtLeapAim(){B.tx=clamp(P.x+P.w/2,ARENA_L+MT_W/2+6,ARENA_R-MT_W/2-6)}
+function mtFire(){
+  const mz=mtMuzzle(),sp=720;eshots.push({k:'shell',x:mz.x,y:mz.y,vx:Math.cos(B.aim)*sp,vy:Math.sin(B.aim)*sp,r:9,life:3});
+  sfx('boom');shake(.18,5);B.recoil=1;B.x=clamp(B.x-Math.cos(B.aim)*10,ARENA_L+4,ARENA_R-4-B.w);
+  for(let i=0;i<6;i++)parts.push({x:mz.x,y:mz.y,vx:Math.cos(B.aim)*rand(60,200)+rand(-40,40),vy:Math.sin(B.aim)*rand(60,200)+rand(-60,20),g:0,c:'rgba(90,90,100,.7)',s:rand(6,11),life:rand(.3,.6),max:0,t:'puff'});
+}
+function mtMortar(){ // lobbed from up on the wall onto where the player is going
+  const cx=mtCX(),cy=B.y+B.h/2,tx=clamp(P.x+P.w/2+P.vx*.4+rand(-40,40),ARENA_L+30,ARENA_R-30),ty=FLOOR-8,g=1500,T=1.05;
+  eshots.push({k:'mortar',x:cx,y:cy,vx:(tx-cx)/T,vy:(ty-cy-.5*g*T*T)/T,g,r:12,tx});sfx('throwb');sfx('boom');
+}
+function mtBoom(x,y,r){
+  shake(.3,7);sfx('boom');
+  for(let i=0;i<14;i++)parts.push({x:x+rand(-10,10),y:y+rand(-10,10),vx:rand(-260,260),vy:rand(-320,-40),g:900,c:Math.random()<.5?'#ffb03a':'#ff6a2a',s:rand(3,7),life:rand(.25,.5),max:0,t:'dot'});
+  for(let i=0;i<6;i++)parts.push({x:x+rand(-14,14),y:y+rand(-14,6),vx:rand(-60,60),vy:rand(-90,-20),g:0,c:'rgba(80,80,90,.7)',s:rand(8,14),life:rand(.4,.8),max:0,t:'puff'});
+  if(!P.dead&&circleBox(x,y,r,{x:P.x+3,y:P.y+6,w:P.w-6,h:P.h-6}))hurt(x);
+}
+// crashing to the ground (after a ram into the wall, a fall from the wall or the girder): dazed, the hatch open
+function mtCrash(stun){B.state='crash';B.t=stun;B.open=1;B.vx=0;shake(.5,10);sfx('boom');sfx('clang');
+  const cx=mtCX();dust(cx-80,FLOOR,8,-1);dust(cx+80,FLOOR,8,1)}
+function updateMutank(dt){
+  const p2=B.phase>=2,m=mtSpeed(),pcx=P.x+P.w/2;
+  for(const k in B.cd)if(B.cd[k]>0)B.cd[k]-=dt;
+  if(B.stompCD>0)B.stompCD-=dt;
+  B.recoil=approach(B.recoil,0,dt*4);B.wiggle+=dt;
+  if(B.state!=='crash')B.open=approach(B.open,0,dt*2);
+  if(B.state==='dying'){
+    B.t-=dt;B.vx=0;if(Math.random()<.12)mtBoom(B.x+rand(20,B.w-20),B.y+rand(10,B.h-10),0);
+    if(B.mode!=='ground'){ // beaten up on the wall or the girder: it falls down, turning upright
+      if(B.mode==='wall'){const cxw=B.x+B.w/2,cyw=B.y+B.h/2;B.w=MT_W;B.h=MT_H;B.x=clamp(cxw-MT_W/2,ARENA_L+4,ARENA_R-4-MT_W);B.y=cyw-MT_H/2}
+      B.mode='air';B.vy=(B.vy||0)+G*dt;B.y+=B.vy*dt;B.rot=approach(B.rot,0,dt*6);if(B.y+B.h>=FLOOR){mtSetGround();shake(.4,8)}}
+    if(B.t<=0)bossDefeated();return}
+  // stomping on it (on the ground only): the turret top and the hatch
+  if(B.mode==='ground'&&!P.dead&&P.vy>0&&B.stompCD<=0&&bossHittable()&&B.state!=='intro'){
+    const top={x:B.x+18,y:B.y-6,w:B.w-36,h:30};
+    if(P.prevBottom<=B.y+16&&overlap(top,{x:P.x+3,y:P.y+P.h-10,w:P.w-6,h:12})){
+      hitBoss(HERO().stomp*(B.open>.5?1.5:1),pcx,B.y);gainMana(MANA_HIT);B.stompCD=.25;clang(pcx,B.y);
+      const high=inp.j||P.buffer>0;P.vy=high?-HIGH_BOUNCE:-Math.round(560*BOUNCE_K);P.bounceT=high?0:.14;P.bounced=true;P.buffer=0;P.jumpT=0;P.onGround=false;P.airDash=airDashMax();
+      P.vx+=(pcx<mtCX()?-1:1)*140;
+      if(B.state==='dying')return}}
+  const cx=mtCX();
+  switch(B.state){
+    case 'sleep': return;
+    case 'intro': B.t-=dt;B.wiggle+=dt*3;if(Math.random()<.15)purpleMist(cx+rand(-30,30),B.y,1);mtAimAt(pcx,P.y,dt*2);
+      if(B.t<=0){B.state='idle';B.t=.5}break;
+    case 'idle':{B.t-=dt/m;B.vx=approach(B.vx,0,600*dt);mtAimAt(pcx,P.y+P.h/2,dt*3);
+      if(Math.abs(pcx-cx)>30)B.face=pcx>cx?1:-1;
+      if(B.phase===1&&B.hp<=B.max*.6){B.state='mutate';B.t=1.6;sfx('roar');shake(1,8);break}
+      if(B.phase===2&&B.hp<=B.max*.3){B.state='mutate';B.t=1.3;sfx('roar');shake(1,8);break}
+      if(B.t<=0)mtChoose();break}
+    case 'mutate': B.t-=dt;B.wiggle+=dt*4;B.x+=rand(-1.5,1.5);if(Math.random()<.5)purpleMist(cx+rand(-60,60),B.y+rand(0,40),2);
+      if(B.t<=0){B.phase++;B.state='idle';B.t=.4;B.cd.climb=Math.min(B.cd.climb,2);floater(cx,B.y-40,T(B.phase===2?'fMutate':'fMutate2'))}break;
+    case 'drive': B.t-=dt;B.vx=approach(B.vx,B.dir*220,800*dt);B.face=pcx>cx?1:-1;mtAimAt(pcx,P.y,dt*3);
+      if(B.t<=0||(B.dir<0&&B.x<=ARENA_L+10)||(B.dir>0&&B.x+B.w>=ARENA_R-10)){B.state='idle';B.t=.3}break;
+    case 'aim':{B.t-=dt;const k=B.t>.22?dt*6:0;mtAimAt(pcx,P.y+P.h/2,k);   // it stops turning just before it fires
+      if(B.t<=0){mtFire();B.shots--;if(B.shots>0){B.state='aim';B.t=.42*m}else{B.state='idle';B.t=(p2?.7:.95)}}break}
+    case 'rev': B.t-=dt;B.rev=1;B.vx=0;B.face=pcx>cx?1:-1;if(Math.random()<.6)parts.push({x:cx-B.face*(B.w/2+6),y:B.y+44,vx:-B.face*rand(40,120),vy:rand(-60,-10),g:0,c:'rgba(70,70,80,.7)',s:rand(5,10),life:.5,max:0,t:'puff'});
+      if(B.t<=0){B.state='ram';B.rev=0;sfx('dash')}break;
+    case 'ram':{B.vx=B.face*(p2?580:520);if(Math.random()<.5)dust(cx-B.face*90,FLOOR,2,-B.face);if(Math.random()<.1)shake(.08,3);
+      if((B.face<0&&B.x<=ARENA_L+6)||(B.face>0&&B.x+B.w>=ARENA_R-6)){B.x=B.face<0?ARENA_L+6:ARENA_R-6-B.w;mtCrash(p2?1.2:1.4);B.x-=B.face*20;
+        for(let i=0;i<10;i++)parts.push({x:B.face<0?ARENA_L:ARENA_R,y:FLOOR-rand(20,220),vx:-B.face*rand(40,200),vy:rand(-100,100),g:1300,c:'#8a8f99',s:rand(3,7),life:rand(.4,.8),max:0,t:'dot'})}
+      break}
+    case 'crash': B.t-=dt;B.vx=approach(B.vx,0,800*dt);B.open=1;if(Math.random()<.2)purpleMist(cx,B.y+10,1);
+      if(B.t<=0){B.state='idle';B.t=.35}break;
+    case 'tentCall': B.t-=dt;B.wiggle+=dt*2;if(B.t<=0){B.state='idle';B.t=p2?.8:1.1}break;
+    case 'crouch': B.t-=dt;if(B.t>.18)mtLeapAim();
+      if(B.t<=0){const T2=.9;B.vy=-G*T2/2;B.vx=(B.tx-cx)/T2;B.state='leap';sfx('jump');dust(cx,FLOOR,8)}break;
+    case 'leap': B.vy+=G*dt;B.y+=B.vy*dt;
+      if(B.y+B.h>=FLOOR&&B.vy>0){B.y=FLOOR-B.h;B.vy=0;B.vx=0;shake(.5,9);sfx('boom');dust(cx,FLOOR,12);
+        for(const s of [-1,1])eshots.push({k:'rubbleWave',x:cx+s*(MT_W/2+10),y:FLOOR,vx:s*380,life:2.2,h:0,tall:40});
+        B.state='land';B.t=.55}break;
+    case 'land': B.t-=dt;if(B.t<=0){B.state='idle';B.t=.4}break;
+    // climbing: drive to the wall, grab it, climb up; from the wall it lobs mortar shells, then lets go (or goes on up
+    // to the girder in phase 3)
+    case 'toWall':{const s=B.side;B.face=s;B.vx=s*300;
+      if((s<0&&B.x<=ARENA_L+4)||(s>0&&B.x+B.w>=ARENA_R-4)){B.x=s<0?ARENA_L+4:ARENA_R-4-B.w;B.vx=0;B.state='grab';B.t=0;sfx('slosh')}break}
+    case 'grab':{B.t+=dt;const k=Math.min(1,B.t/.45),s=B.side;
+      B.rot=-s*Math.PI/2*k;   // the tracks turn onto the wall
+      if(k>=1){B.mode='wall';B.w=MT_H;B.h=MT_W;B.x=s<0?ARENA_L:ARENA_R-MT_H;B.y=FLOOR-MT_W;B.state='climb';B.goal=B.ceil?MT_GIRDER_Y+MT_H:FLOOR-MT_W-230}break}
+    case 'climb': B.y=approach(B.y,B.goal,dt*250);B.tread+=dt*6;
+      if(B.y<=B.goal+.5){if(B.ceil){B.state='turn';B.t=0;sfx('slosh')}else{B.state='wallFire';B.shots=3;B.t=.5}}break;
+    case 'wallFire': B.t-=dt;B.wiggle+=dt;if(B.t<=0){if(B.shots>0){mtMortar();B.shots--;B.t=.6*m}else{B.state='release';B.vy=0;B.t=0;sfx('creak')}}break;
+    case 'release':{ // lets go and falls; turns upright on the way down
+      B.t+=dt;B.vy+=G*dt;B.y+=B.vy*dt;const s=B.side;B.rot=-s*Math.PI/2*Math.max(0,1-B.t/.35);
+      if(B.t>.12&&B.mode==='wall'){const cxw=B.x+B.w/2,cyw=B.y+B.h/2;B.mode='air';B.w=MT_W;B.h=MT_H;B.x=clamp(cxw-MT_W/2,ARENA_L+4,ARENA_R-4-MT_W);B.y=cyw-MT_H/2}
+      if(B.y+B.h>=FLOOR&&B.mode!=='wall'){mtSetGround();mtCrash(1.5);B.face=pcx>mtCX()?1:-1}break}
+    case 'turn':{B.t+=dt;const k=Math.min(1,B.t/.45),s=B.side;B.rot=-s*Math.PI/2-s*Math.PI/2*k;   // round the corner onto the girder
+      if(k>=1){B.mode='ceil';B.w=MT_W;B.h=MT_H;B.x=s<0?ARENA_L+6:ARENA_R-6-MT_W;B.y=MT_GIRDER_Y;B.rot=Math.PI;B.state='crawl'}break}
+    case 'crawl':{const tx=clamp(pcx-B.w/2,ARENA_L+6,ARENA_R-6-B.w);B.x=approach(B.x,tx,dt*(p2?260:220));B.tread+=dt*6;
+      if(Math.abs(B.x-tx)<6||Math.abs(pcx-mtCX())<30){B.state='dangle';B.t=.75*m;sfx('slosh')}break}
+    case 'dangle': B.t-=dt;B.wiggle+=dt*3;if(B.t<=0){B.state='drop';B.vy=200;B.t=0;sfx('creak')}break;
+    case 'drop': B.t+=dt;B.vy+=G*1.2*dt;B.y+=B.vy*dt;B.rot=Math.PI*Math.max(0,1-B.t/.32);B.mode='air';
+      if(B.y+B.h>=FLOOR){mtSetGround();mtCrash(1.3);dust(mtCX(),FLOOR,14);
+        for(const s of [-1,1])eshots.push({k:'rubbleWave',x:mtCX()+s*(MT_W/2+10),y:FLOOR,vx:s*360,life:2.2,h:0,tall:40})}break;
+  }
+  if(B.mode==='ground'&&B.state!=='leap'){B.x+=B.vx*dt;if(B.x<ARENA_L+4){B.x=ARENA_L+4;B.vx=0}if(B.x+B.w>ARENA_R-4){B.x=ARENA_R-4-B.w;B.vx=0}B.tread+=B.vx*dt/14}
+  if(B.state==='leap'){B.x+=B.vx*dt;B.x=clamp(B.x,ARENA_L+4,ARENA_R-4-B.w)}
+}
+function mtHitMult(test){return test(mtBox())?(B.open>.5?1.5:1):0}
+function mtContact(pb){
+  if(B.state==='dying'||B.state==='sleep')return false;
+  return overlap(mtHull(),pb);
+}
+function mtSprite(){ // the box the camera should see to start the fight
+  return{x:B.x-20,y:B.y-60,w:B.w+40,h:B.h+60}}
+/* ---------- floor tentacles, shells and mortar shells ---------- */
+function updateTankShot(b,dt,pb){
+  switch(b.k){
+    case 'ftent':{b.ph+=dt;
+      if(b.st==='warn'){b.t-=dt;if(Math.random()<.25)purpleMist(b.x,FLOOR-4,1);if(b.t<=0){b.st='up';b.t=.55;sfx('slosh');dust(b.x,FLOOR,5)}}
+      else if(b.st==='up'){b.len=Math.min(150,b.len+dt*1100);b.t-=dt;if(b.t<=0)b.st='down';
+        if(!P.dead&&overlap({x:b.x-16,y:FLOOR-b.len,w:32,h:b.len},pb))hurt(b.x)}
+      else{b.len-=dt*700;if(b.len<=0)b.dead=true}
+      return}
+    case 'shell':{b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
+      if(Math.random()<.6)parts.push({x:b.x,y:b.y,vx:-b.vx*.05,vy:-b.vy*.05,g:0,c:'rgba(110,110,120,.6)',s:rand(3,6),life:.3,max:0,t:'puff'});
+      if(b.life<=0||b.y>=FLOOR-4||b.x<ARENA_L-10||b.x>ARENA_R+10||solid(Math.floor(b.x/TS),Math.floor(b.y/TS))){b.dead=true;mtBoom(b.x,Math.min(b.y,FLOOR-6),46);return}
+      if(!P.dead&&circleBox(b.x,b.y,b.r,pb)){b.dead=true;mtBoom(b.x,b.y,46)}
+      return}
+    case 'mortar':{b.vy+=b.g*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
+      if(Math.random()<.5)parts.push({x:b.x,y:b.y,vx:0,vy:0,g:0,c:'rgba(170,90,230,.5)',s:rand(3,6),life:.3,max:0,t:'puff'});
+      if(b.y+b.r>=FLOOR){b.dead=true;mtBoom(b.x,FLOOR-8,62);for(let i=0;i<4;i++)purpleMist(b.x,FLOOR-10,1);return}
+      if(!P.dead&&circleBox(b.x,b.y,b.r,pb)){b.dead=true;mtBoom(b.x,b.y,50)}
+      return}
+  }
+}
+function drawTankShot(b){
+  switch(b.k){
+    case 'ftent':{
+      if(b.st==='warn'){const a=.4+.4*Math.sin(time*24);ctx.strokeStyle=`rgba(190,110,255,${a})`;ctx.lineWidth=3;ctx.lineCap='round';
+        ctx.beginPath();for(const [dx1,dx2] of [[-22,-6],[-6,8],[8,24],[-4,-14],[4,16]]){ctx.moveTo(b.x+dx1,FLOOR-1);ctx.lineTo(b.x+dx2,FLOOR-1-Math.abs(dx2-dx1)*.2)}ctx.stroke();
+        ctx.fillStyle=`rgba(170,90,230,${a*.4})`;ctx.beginPath();ctx.ellipse(b.x,FLOOR-2,30,6,0,0,7);ctx.fill();return}
+      tentacleDraw(b.x,FLOOR,b.x+Math.sin(b.ph*8)*12,FLOOR-b.len,16,b.ph,false);return}
+    case 'shell':{const a=Math.atan2(b.vy,b.vx);ctx.save();ctx.translate(b.x,b.y);ctx.rotate(a);ctx.fillStyle='#5b6170';ctx.strokeStyle=INK;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.moveTo(-12,-6);ctx.lineTo(6,-6);ctx.quadraticCurveTo(14,0,6,6);ctx.lineTo(-12,6);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle='#ffb03a';ctx.beginPath();ctx.ellipse(-15,0,5+Math.random()*3,3,0,0,7);ctx.fill();ctx.restore();return}
+    case 'mortar':{const a=.25+.2*Math.sin(time*18);ctx.fillStyle=`rgba(255,80,60,${a})`;ctx.beginPath();ctx.ellipse(b.tx,FLOOR-3,40,8,0,0,7);ctx.fill();
+      ctx.fillStyle='#4a3e5c';ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#c77dff';ctx.beginPath();ctx.arc(b.x-3,b.y-3,4,0,7);ctx.fill();return}
+  }
+}
+/* ---------- drawing the Mutank ---------- */
+// a purple tentacle from (x0,y0) to (x1,y1): a chain of shrinking circles along a wavy curve
+function tentacleDraw(x0,y0,x1,y1,r0,ph,fl){
+  const n=12,dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L,pts=[];
+  for(let i=0;i<=n;i++){const u=i/n,w=Math.sin(u*Math.PI*1.5+ph*5)*Math.min(18,L*.12)*u;pts.push([x0+dx*u+nx*w,y0+dy*u+ny*w,r0*(1-u*.7)+1.5])}
+  for(const pass of [0,1])for(let i=0;i<pts.length;i++){const [x,y,r]=pts[i];ctx.beginPath();ctx.arc(x,y,r+(pass?0:2.6),0,7);ctx.fillStyle=pass?(fl?'#fff':i%3?'#9b5bd6':'#b57ae8'):INK;ctx.fill()}
+  ctx.fillStyle='#f0c8ff';for(let i=2;i<pts.length-1;i+=2){const [x,y,r]=pts[i];ctx.beginPath();ctx.arc(x+nx*r*.5,y+ny*r*.5,1.8,0,7);ctx.fill()}
+}
+function drawMutank(){
+  const fl=B.flash>0,st=B.state,f=B.face;
+  // telegraphs in the world
+  if(st==='aim'){const p=mtPivot(),k=clamp(1-B.t/.8,0,1),blink=Math.sin(time*40)>0||B.t>.25;
+    if(blink){ctx.save();ctx.strokeStyle=`rgba(255,40,40,${.25+.5*k})`;ctx.lineWidth=2;ctx.setLineDash([12,8]);ctx.lineDashOffset=-time*80;
+      ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+Math.cos(B.aim)*1400,p.y+Math.sin(B.aim)*1400);ctx.stroke();ctx.restore()}}
+  if(st==='crouch'&&B.tx!=null){ctx.fillStyle=`rgba(80,30,90,${.2+.15*Math.sin(time*20)})`;ctx.beginPath();ctx.ellipse(B.tx,FLOOR-2,MT_W*.55,10,0,0,7);ctx.fill()}
+  if(st==='dangle'||st==='crawl'){const k=st==='dangle'?1-B.t/(.75*mtSpeed()):0;ctx.fillStyle=`rgba(40,20,50,${.15+.25*k})`;ctx.beginPath();ctx.ellipse(mtCX(),FLOOR-2,MT_W*(.3+.3*k),8,0,0,7);ctx.fill()}
+  if(B.mode==='ground'&&st!=='leap')shadow(mtCX(),FLOOR,MT_W*.48);
+  // where to draw: the centre of its box, the rotation of its tracks
+  const cx=B.x+B.w/2,cy=B.y+B.h/2;
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(B.rot);
+  if(st==='rev'||st==='mutate')ctx.translate(rand(-2,2),rand(-1,1));
+  const ground=B.mode==='ground'||B.mode==='air';
+  // in its own frame: tracks at the bottom (y=+55), facing +x
+  ctx.scale(ground?f:1,1);
+  const W=MT_W,H=MT_H,yb=H/2,hullTop=yb-76,turY=-H/2+22,wig=B.wiggle;
+  // tentacles behind the hull: legs when it leaps, grabbing arms on walls and on the girder, a few waving otherwise
+  const legs=st==='crouch'||st==='leap'||st==='land';
+  const clinging=B.mode==='wall'||B.mode==='ceil'||st==='grab'||st==='turn'||st==='climb';
+  if(legs){const sq=st==='crouch'?1-Math.max(0,B.t)/.6:0;for(const s of [-1,-.35,.35,1])tentacleDraw(s*W*.38,yb-30,s*W*.5,yb+(st==='leap'?14:4)-sq*6,14,wig+s,fl)}
+  else if(clinging){for(const s of [-1,-.4,.4,1])tentacleDraw(s*W*.36,yb-28,s*W*.46+Math.sin(wig*6+s*3)*8,yb+12,13,wig+s,fl)}
+  // tracks
+  ctx.lineJoin='round';ctx.strokeStyle=INK;ctx.lineWidth=3.5;
+  ctx.fillStyle='#3a3d45';ctx.beginPath();ctx.roundRect(-W/2,yb-34,W,34,17);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#5b6170';for(let i=0;i<6;i++){const wx=-W/2+20+i*(W-40)/5;ctx.beginPath();ctx.arc(wx,yb-17,10,0,7);ctx.fill();ctx.stroke();
+    ctx.save();ctx.translate(wx,yb-17);ctx.rotate(B.tread);ctx.strokeStyle='rgba(43,26,18,.6)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(6,0);ctx.stroke();ctx.restore()}
+  ctx.strokeStyle='rgba(43,26,18,.55)';ctx.lineWidth=2;const to=((B.tread*6)%12+12)%12;for(let x=-W/2+12-to;x<W/2-6;x+=12){ctx.beginPath();ctx.moveTo(x,yb-34);ctx.lineTo(x,yb-30);ctx.moveTo(x,yb-4);ctx.lineTo(x,yb);ctx.stroke()}
+  ctx.strokeStyle=INK;ctx.lineWidth=3.5;
+  // the hull: rusty olive armour, dented, with purple growths bursting through the seams
+  const hull=fl?'#ffffff':'#6d7350',hullD=fl?'#f0f0f0':'#545a3c';
+  ctx.fillStyle=hull;ctx.beginPath();ctx.moveTo(-W/2+6,yb-32);ctx.lineTo(-W/2+14,hullTop);ctx.lineTo(W/2-22,hullTop);ctx.lineTo(W/2+4,yb-48);ctx.lineTo(W/2-2,yb-32);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=hullD;ctx.fillRect(-W/2+16,yb-44,W-44,8);
+  ctx.fillStyle='rgba(140,70,30,.5)';for(const [rx,ry,rr] of [[-60,hullTop+18,7],[30,hullTop+14,5],[70,hullTop+26,4]]){ctx.beginPath();ctx.arc(rx,ry,rr,0,7);ctx.fill()}
+  ctx.fillStyle='#b57ae8';for(const [gx,gy,gr] of [[-30,hullTop+4,7],[50,yb-38,6],[-78,yb-40,5]]){ctx.beginPath();ctx.arc(gx,gy,gr+Math.sin(wig*4+gx)*1.2,0,7);ctx.fill();ctx.lineWidth=2;ctx.stroke()}
+  ctx.lineWidth=3.5;
+  // the turret, its barrel and the hatch on top
+  const tw=96,tx0=-14-tw/2;
+  let aimL=ground?(f>0?B.aim:Math.PI-B.aim):-.15;   // the barrel angle in the tank's own frame
+  ctx.save();ctx.translate(-14,turY);ctx.rotate(aimL);ctx.translate(-B.recoil*10,0);
+  ctx.fillStyle=hullD;ctx.beginPath();ctx.roundRect(10,-7,82,14,4);ctx.fill();ctx.stroke();ctx.fillStyle=hull;ctx.beginPath();ctx.roundRect(84,-9,14,18,3);ctx.fill();ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle=hull;ctx.beginPath();ctx.moveTo(tx0,hullTop);ctx.lineTo(tx0+10,turY-14);ctx.lineTo(tx0+tw-12,turY-14);ctx.lineTo(tx0+tw,hullTop);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=hullD;ctx.beginPath();ctx.arc(tx0+tw-26,turY-2,6,0,7);ctx.fill();ctx.stroke();
+  // the hatch: open when dazed (the purple core shows), a few tentacles always poking out
+  const hx=-30,hy=turY-14,op=B.open;
+  ctx.fillStyle='#2a1e38';ctx.beginPath();ctx.ellipse(hx,hy,20,6,0,0,7);ctx.fill();ctx.stroke();
+  if(op>.05){ctx.fillStyle=`rgba(220,140,255,${.4+.3*Math.sin(time*10)})`;ctx.beginPath();ctx.ellipse(hx,hy-2,26,12,0,0,7);ctx.fill();
+    ctx.fillStyle='#e6b8ff';ctx.beginPath();ctx.arc(hx,hy-3,8,0,7);ctx.fill()}
+  const nT=B.phase===1?2:B.phase===2?3:5,big=st==='mutate'||st==='intro';
+  for(let i=0;i<nT;i++){const s=(i/(Math.max(1,nT-1))-.5)*1.6,len=(big?70:op>.5?30:44)+Math.sin(wig*3+i*2)*10;
+    tentacleDraw(hx+s*12,hy,hx+s*40+Math.sin(wig*2+i)*14,hy-len,9,wig+i*1.3,fl)}
+  ctx.save();ctx.translate(hx+24,hy-1);ctx.rotate(-1.1*op-.05);ctx.fillStyle=hull;ctx.beginPath();ctx.ellipse(16,0,18,5,0,0,7);ctx.fill();ctx.stroke();ctx.restore();   // the lid
+  // a purple eye peers out of the driver's slit
+  ctx.fillStyle='#1a1424';ctx.beginPath();ctx.roundRect(W/2-46,hullTop+10,26,8,3);ctx.fill();
+  const ey=st==='rev'||st==='ram'||st==='aim'?'#ff3be0':'#c77dff';ctx.fillStyle=ey;ctx.beginPath();ctx.arc(W/2-33+Math.sin(time*2)*5,hullTop+14,3,0,7);ctx.fill();
+  if(st==='crash'){ctx.fillStyle='#fff3b0';for(let k=0;k<4;k++){const a=time*6+k*1.6;drawStar(-14+Math.cos(a)*44,turY-50+Math.sin(a)*8,5,time)}}
+  ctx.restore();
+}
+// ==== levels/city/music.js ====
+/* ---------- level 5 music ---------- */
+Object.assign(SONGS,{
+  // the ruined city: a brooding E minor at a walking pace, a square lead over a dark bass and distant guitar stabs
+  city:compileSong({bpm:112,vol:1.1,order:['intro','A','B','A2','C','B'],variant:{lw:'triangle',lv:.3,arp:'1.5.8.5.3.5.8.5.'},
+    bass:'R...R.O.R...R.O.', arp:'1...5...8...5...', kick:'x.......x.x.....', snare:'....x.......x...', hat:'..x...x...x...x.',
+    lw:'square', lv:.16, av:.03, bv:.46, gtr:'X...............',
+    sections:{
+      intro:{chords:['Em','Em','C','B'],lead:'r:64',kick:'x...............',snare:'................',hat:'........x.......'},
+      A:{chords:['Em','C','Am','B','Em','C','D','B'],
+        lead:`E5:4 G5:2 B5:2 A5:4 G5:4  E5:2 G5:2 C6:4 B5:4 G5:4  A5:4 C6:2 E6:2 D6:4 C6:4  B5:8 D#5:4 F#5:4
+              G5:4 B5:2 E6:2 D6:4 B5:4  C6:4 G5:4 E5:4 G5:4  F#5:4 A5:2 D6:2 C6:4 A5:4  B5:12 r:4`},
+      B:{chords:['Am','Em','C','D','Am','Em','B','B'],gtr:'X.......X.......',
+        lead:`A5:2 B5:2 C6:4 E6:4 C6:4  B5:6 G5:2 E5:8  C6:4 E6:4 G6:4 E6:4  F#6:6 D6:2 A5:8
+              A5:2 C6:2 E6:4 A6:4 E6:4  G6:4 E6:4 B5:4 G5:4  F#5:2 A5:2 B5:2 D#6:2 F#6:4 D#6:4  B5:16`},
+      C:{chords:['Em','C','Am','B'],lw:'sine',lv:.32,arp:'................',kick:'................',snare:'................',hat:'....x.......x...',bass:'R...............',
+        lead:`E5:8 B4:8  C5:8 G5:8  A5:8 E5:8  D#5:16`},
+    }}),
+  // the Mutank: a grinding C minor at full throttle, chugging guitar, tritone stabs
+  mutank:compileSong({bpm:168,vol:1.25,crash:1,order:['intro','A','B','C','A2','B'],variant:{lw:12,lv:.2,hat:'xxxxxxxxxxxxxxxx'},
+    bass:'RR.RRR.ORR.RRFRO', arp:'................', kick:'x.x...x.x.x...x.', snare:'....x.......x...', hat:'x.xxx.xxx.xxx.xx', lw:25, lv:.24, bv:.52, gtr:'X..X..X.X..X..X.',
+    sections:{
+      intro:{chords:['Cm','Cm','Ab','G'],lw:'square',lv:.16,snare:'....x.......x.xx',
+        lead:`C5:1 r:1 C5:1 r:1 Eb5:2 C5:2 F#5:2 G5:2 Eb5:2 C5:2  C5:1 r:1 C5:1 r:1 Eb5:2 C5:2 F#5:2 G5:2 Eb5:2 C5:2
+              Ab4:1 r:1 Ab4:1 r:1 C5:2 Ab4:2 D5:2 Eb5:2 C5:2 Ab4:2  G4:2 B4:2 D5:2 G5:2 Ab5:2 G5:2 F5:2 D5:2`},
+      A:{chords:['Cm','Cm','Ab','G','Cm','Eb','F','G'],
+        lead:`G5:2 C6:2 r:1 C6:1 Bb5:2 C6:2 Eb6:2 D6:2 C6:2  G5:2 C6:2 r:1 C6:1 Bb5:2 G5:4 F5:2 Eb5:2  Ab5:2 C6:2 Eb6:4 D6:2 C6:2 Bb5:2 C6:2  B5:4 D6:4 G6:4 F6:2 D6:2
+              C6:2 Eb6:2 G6:2 Eb6:2 C6:2 G5:2 C6:4  Bb5:2 C6:2 D6:2 Eb6:2 F6:2 Eb6:2 D6:2 Bb5:2  Ab5:2 C6:2 F6:4 Eb6:2 C6:2 Ab5:2 F5:2  G5:1 G5:1 B5:2 D6:2 G6:6 r:4`},
+      B:{chords:['Fm','Cm','Ab','G','Fm','Ab','G','G'],hat:'xxxxxxxxxxxxxxxx',
+        lead:`F6:4 C6:2 Ab5:2 F5:4 Ab5:4  G5:2 C6:2 Eb6:4 G6:4 Eb6:4  F6:2 Eb6:2 C6:2 Ab5:2 C6:4 F6:4  G6:2 F6:2 D6:2 B5:2 G5:4 B5:4
+              Ab5:2 G5:2 F5:2 Ab5:2 C6:2 F6:2 Ab6:4  G6:2 F6:2 Eb6:2 C6:2 Ab5:4 C6:4  D6:2 Eb6:2 F6:2 G6:2 Ab6:4 G6:4  B6:4 G6:4 D6:4 B5:4`},
+      C:{chords:['Cm','Ab','Fm','G'],kick:'x.......x.x.....',snare:'........x.......',hat:'x.x.x.x.x.x.x.x.',bass:'R.......R.R.....',gtr:'X...............',
+        lead:`C6:2 r:6 G5:2 r:6  Ab5:2 r:6 Eb5:2 r:6  F5:2 r:6 C5:2 r:6  G5:1 B5:1 D6:1 G6:1 B6:4 r:8`},
+    }}),
+});
+// ==== levels/city/level.js ====
+/* ---------- level 5: the ruined city — registration ---------- */
+// Everything about level 5 lives in this folder: gen.js (generator, passability check, the barricade), draw.js
+// (sky, tiles, decorations, platform styles), foes.js (the mutants, their shots, the downed power lines),
+// ratking.js (the mini-boss), tank.js (the Mutank, the boss), music.js, and this file, which plugs it all in.
+
+Object.assign(SFX,{
+  squeak:()=>{tone(1800,2600,.07,'square',.03);tone(2400,1500,.09,'square',.025,.07)},
+  gurgle:()=>{tone(140,220,.25,'sawtooth',.03);tone(90,160,.3,'sine',.05,.05)},
+  spit:()=>{tone(600,180,.12,'sawtooth',.035);noise(2000,600,.14,.05)},
+  slosh:()=>{tone(180,80,.3,'sine',.07);noise(500,150,.35,.06,0,2)},
+  zap:()=>{tone(1200,300,.18,'square',.03);noise(5000,2500,.2,.06,0,1)},
+  engine:()=>{tone(60,120,.7,'sawtooth',.05);tone(90,140,.7,'square',.025);noise(300,500,.7,.05,0,3)},
+});
+
+registerLevel(5,{
+  biome:'city', boss:'mutank', song:'city', gen:genCity, validate:validateCity, miniboss:'ratKing',
+  startY:()=>cityStartY,
+  pal:{sky1:'#2a1f3f',sky2:'#5a3a5e',hill:'#46364f',hill2:'#3a2c44',dirt:'#5a4c48',dirt2:'#4a3e3a',stone:'#8f8a92',top:'#3e3e46',top2:'#55555e',sun:'rgba(0,0,0,0)'},
+  dust:'rgba(190,180,185,.9)', debris:'#a8553e',
+  plank:['#8a8f99','#5b6170'],   // fire escapes and broken floors: steel grating
+  openRubble:true,               // a smashed brick wall shows what is behind it
+  update:dt=>{updateCityWires(dt);openCityGate()}, drawBG:drawCityBG,
+  drawSolid:drawCitySolid, drawBack:drawCityBack, drawThorn:drawCityThorn, drawDoor:drawCityDoor,
+  exitRight:true,                // the street goes on past the Mutank's barricade to the bunker
+  i18n:{
+    ru:{lvlName5:'Уровень 5: разрушенный город',lvl5Desc:'Руины города · босс: Мутанк',bossShort5:'Мутанк',boss5:'Мутанк',
+      fRatKing:'Крысиный король!',fMutate:'Мутанк мутирует!',fMutate2:'Мутанк в ярости!',
+      next5Title:'Уровень 5: разрушенный город',next5Text:'Подземный ход выводит наверх, в мёртвый город. Над руинами клубится дым, асфальт вздыблен воронками, по улицам носятся мутанты, а из люков тянется что-то фиолетовое. Где-то впереди, говорят, есть бункер с горящим зелёным фонарём — но дорогу к нему стережёт танк, в котором поселились щупальца.',
+      next5Tip:'Провода искрят по очереди: проходи, пока они молчат. Крыса приседает перед рывком, кислотник раздувается, ворона каркает. Громилу останавливают стены и машины, после удара он оглушён. Мутанк после тарана в стену или падения со стены открывает люк: тогда и бей.'},
+    en:{lvlName5:'Level 5: Ruined City',lvl5Desc:'Ruined city · boss: the Mutank',bossShort5:'Mutank',boss5:'The Mutank',
+      fRatKing:'the Rat King!',fMutate:'the Mutank mutates!',fMutate2:'the Mutank is furious!',
+      next5Title:'Level 5: Ruined City',next5Text:'The tunnel leads up into a dead city. Smoke hangs over the ruins, the streets are torn by craters, mutants roam about and something purple reaches out of the manholes. Somewhere ahead, they say, there is a bunker with a green lamp burning, but a tank that tentacles have grown into guards the way.',
+      next5Tip:'Downed power lines spark by turns: pass while they are quiet. A rat crouches before it dashes, an acid spitter swells, a crow caws. Walls and wrecked cars stop a brute cold and daze it. When the Mutank rams a wall or falls off one, its hatch opens: hit it then.'},
+  },
+});
+
+registerBoss('mutank',{make:makeMutank,update:updateMutank,draw:drawMutank,hitMult:mtHitMult,contact:mtContact,spriteBox:mtSprite,
+  burst:'#b57ae8',nameKey:'boss5',introT:2,camBottom:true,
+  dmgMult:()=>B.state==='mutate'?.25:1});   // mutating: 75% less damage
+
+registerEnemy('mutRat',{size:{w:46,h:30,hp:2},update:CITY_EUPD.mutRat,draw:CITY_EDRAW.mutRat,heart:.1,deathColor:'#8a7c84',
+  init:e=>{e.state='idle';e.cd=RNG()},
+  contact:e=>({hurt:[shrink(e,4)],stomp:e,dmg:2})});
+registerEnemy('acidSpitter',{size:{w:48,h:56,hp:3},update:CITY_EUPD.acidSpitter,draw:CITY_EDRAW.acidSpitter,heart:.2,deathColor:'#9fc94a',
+  init:e=>{e.state='idle';e.cd=1+RNG();e.sw=0},
+  contact:e=>({hurt:[shrink(e,6)],stomp:e,dmg:2})});
+registerEnemy('mutCrow',{size:{w:44,h:34,hp:2},update:CITY_EUPD.mutCrow,draw:CITY_EDRAW.mutCrow,heart:.12,deathColor:'#3a3448',
+  init:e=>{e.state='perch';e.cd=RNG()},
+  contact:e=>({hurt:[shrink(e,6)],stomp:e,dmg:2})});
+registerEnemy('brute',{size:{w:70,h:96,hp:9},update:CITY_EUPD.brute,draw:CITY_EDRAW.brute,heart:.6,deathColor:'#8f9a7a',
+  init:e=>{e.state='walk';e.cd=1+RNG()},
+  blocks:bruteBlocks,   // while it roars or charges, hits from the front bounce off its arm
+  contact:e=>({hurt:[shrink(e,8)],stomp:bruteHead(e),dmg:2})});
+registerEnemy('tentacle',{size:{w:40,h:20,hp:3},update:CITY_EUPD.tentacle,draw:CITY_EDRAW.tentacle,heart:.25,deathColor:'#9b5bd6',
+  blocks:e=>e.state==='hide'||e.state==='warn',   // the lid is down: nothing to hit
+  contact:e=>e.state==='hide'||e.state==='warn'?{hurt:[],stomp:null}:{hurt:[tentBox(e)],stomp:null,dmg:2}});
+registerEnemy('ratKing',{size:{w:RK_W,h:RK_H,hp:36},update:updateRatKing,draw:drawRatKing,heart:1,deathColor:'#7b6d78',
+  init:e=>{e.state='sleep';e.max=e.hp;e.face=-1;e.kx0=e.x-360;e.kx1=e.x+e.w+360},
+  contact:e=>({hurt:e.state==='sleep'?[]:[{x:e.x+12,y:e.y+20,w:e.w-24,h:e.h-20}],stomp:rkHead(e),dmg:2}),
+  onDeath:e=>{const cx=e.x+e.w/2,cy=e.y+e.h/2;items.push({k:'power',x:cx,y:cy-20,ph:0,vy:-420,drop:true});
+    for(let i=0;i<12;i++)items.push({k:'spore',x:cx+rand(-50,50),y:cy,ph:0,vy:rand(-600,-300),vx:rand(-160,160),drop:true,loot:true});
+    sporeTotal+=12;shake(.5,9);sfx('boom')}});
+
+for(const k of ['glob']) registerShot(k,{update:updateCityShot,draw:drawCityShot,deflect:true});   // a punch knocks a glob of acid away
+for(const k of ['acidPool','rubbleWave']) registerShot(k,{update:updateCityShot,draw:drawCityShot});
+for(const k of ['ftent','shell','mortar']) registerShot(k,{update:updateTankShot,draw:drawTankShot});
+
+for(const k of ['pole','stump','tank','antenna','chimney','vent','pillar','liftTop','barrel','pipe','rubble','sign','billboard','scaffold','manhole','car','lamp','wire'])
+  registerDecor(k,d=>drawCityDecor(k,d));
+registerPlatStyle('slab',drawSlab);
+registerPlatStyle('pallet',drawPallet);
+registerPlatStyle('cage',drawCage);
 // ==== debug.js ====
 /* ---------- debug / test hooks (window.__grib) ---------- */
 // Used by the tests in tests/. dbg.freeze() + dbg.sim(seconds) run the game logic as fast as possible with a
@@ -6504,6 +7742,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     get arena(){return[ARENA_L,ARENA_R]},get grid(){return grid},get cam(){return[camX,camY]},get checks(){return checks},get items(){return items},get shops(){return shops},get zones(){return secretZones},get covers(){return covers},get switches(){return switches},buy:id=>buy(id),openShop:()=>openShop(),setSpores:n=>{spores=n},validate:()=>(LV().validate||validateLevel)(),bossPrep:()=>bossPrep(),get flow(){return flow},setPoison:v=>{poisonLvl=v},
     hit:(i,d)=>{B.lastHead=B.heads[i];hitBoss(d,B.heads[i].x,B.heads[i].y)},get state(){return state},get eshots(){return eshots},get poison(){return poisonLvl},get dead(){return bossDead},
     lock:()=>{if(!arenaLocked)startBossFight()},
+    ev:src=>eval(src),   // run code inside the game's closure (tests: call a boss's own functions, e.g. ev('mtTentacles(3)'))
     // ---- for tests: run the game without waiting for real time ----
     freeze:on=>{DBG_FREEZE=on!==false},            // stop the real-time loop from stepping (rendering goes on)
     sim:(sec,each)=>{const n=Math.round(sec*120);for(let i=0;i<n;i++){if(each&&each(i)===false)break;if(state==='play')step(1/120)}},

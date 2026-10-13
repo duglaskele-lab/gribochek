@@ -58,10 +58,11 @@ h2{font-size:24px;font-weight:400;margin:14px 0 8px}
 .hero-row{display:flex;align-items:center;justify-content:center;gap:12px;margin:6px 0 2px;font-size:19px}
 .hero-row .seg{margin:0}.hero-btn[aria-pressed="true"]{background:var(--cap);color:#fff;text-shadow:1px 1px 0 var(--ink)}
 .lvl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
+.lvl-grid .lvl-btn:last-child:nth-child(odd){grid-column:1/-1}
 @media (max-width:560px){.lvl-grid{grid-template-columns:1fr}}
 .boss-row{margin:14px 0 4px;text-align:left}
 .boss-row h2{margin:0 0 2px}.card .boss-row p{font-size:16px;margin:0 0 8px;opacity:.8}
-.boss-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.boss-btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
 @media (max-width:560px){.boss-btns{grid-template-columns:1fr 1fr}}
 .boss-btn{font:inherit;font-size:18px;color:#fff;background:#8a3b2a;border:2px solid var(--ink);border-radius:12px;padding:8px 6px;cursor:pointer;box-shadow:0 3px 0 var(--ink);text-shadow:1px 1px 0 var(--ink)}
 .boss-btn:hover,.boss-btn:focus-visible{background:#b3503a;outline:3px solid var(--cap);outline-offset:2px}

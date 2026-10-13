@@ -63,6 +63,7 @@ function drawTiles(){
       if(tile(c-1,r)!==T_PLANK){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+14);ctx.stroke()}
       if(tile(c+1,r)!==T_PLANK){ctx.beginPath();ctx.moveTo(x+TS,y);ctx.lineTo(x+TS,y+14);ctx.stroke()}
     }else if(t===T_THORN){
+      if(LV().drawThorn){LV().drawThorn(c,r);continue}   // level def drawThorn(c,r): its own spikes (the city's rusty rebar)
       if(BIOME==='forest'||LV().thorn){ctx.fillStyle=LV().thorn||'#5b3a5e';
         for(let k=0;k<4;k++){const sx=x+k*10;ctx.beginPath();ctx.moveTo(sx,y+TS);ctx.lineTo(sx+5,y+14+hash(c,k)*8);ctx.lineTo(sx+10,y+TS);ctx.closePath();ctx.fill();ctx.stroke()}}
       else{ctx.fillStyle='#6a9c4a';ctx.beginPath();ctx.roundRect(x+8,y+14,24,26,10);ctx.fill();ctx.stroke();

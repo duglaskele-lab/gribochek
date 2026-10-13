@@ -276,42 +276,7 @@ function validateIce(){
   for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(grid[r][c]===T_CRACKW){saved.push([r,c]);grid[r][c]=T_EMPTY}
   try{return validateIceGraph()}finally{for(const [r,c] of saved)grid[r][c]=T_CRACKW}
 }
-function validateIceGraph(){
-  const goalC=Math.floor(ARENA_L/TS), nodes=[], byCol=Array.from({length:COLS},()=>[]);
-  const add=(c,y,k)=>{if(c<0||c>=COLS)return null;const n={c,y,k,out:[],inn:[]};nodes.push(n);byCol[c].push(n);return n};
-  const rides=[];   // [top node, bottom node] of every column of a lift
-  const free=t=>!isSolidT(t);
-  for(let c=0;c<COLS;c++)for(let r=2;r<ROWS;r++){const t=grid[r][c],up=grid[r-1][c];
-    if(isFloorT(t)&&free(up)&&up!==T_THORN&&free(grid[r-2][c]))add(c,r*TS,t===T_PLANK?'plank':'floor')}
-  for(const pl of plats){const a=Math.floor(pl.x0/TS),b=Math.floor((pl.x1+pl.w)/TS);
-    if(pl.vy&&pl.y0!==pl.y1){for(let c=a;c<b;c++){const t=add(c,pl.y0,'plat'),d=add(c,pl.y1,'plat');if(t&&d)rides.push([t,d])}continue}
-    for(let c=a;c<b;c++)add(c,pl.hy!=null?pl.hy:pl.y,'plat')}
-  const clearCol=(c,r0,r1)=>{if(c<0||c>=COLS)return false;for(let r=r0;r<=r1;r++){if(r<0)return false;if(isSolidT(grid[r][c]))return false}return true};
-  const oneway=k=>k==='plank'||k==='plat';
-  const canMove=(a,b)=>{
-    const dx=b.c-a.c,dy=b.y-a.y,gap=Math.abs(dx)-1,ra=Math.floor(a.y/TS),rb=Math.floor(b.y/TS);
-    if(dx===0)return dy>0?(oneway(a.k)&&clearCol(a.c,ra,rb-1)):(oneway(b.k)&&-dy<=REACH.rise-12&&clearCol(a.c,rb-2,ra-1));
-    if(-dy>REACH.rise-12)return false;
-    if(gap>0){const r=REACH.reach(dy,true);if(r<0||r*.9<gap*TS)return false}
-    const hi=Math.min(a.y,b.y),hr=Math.floor(hi/TS),extra=gap>=2?90:gap>0?40:(dy<0?10:0);
-    const r0=Math.floor((hi-58-extra)/TS),c0=Math.min(a.c,b.c),c1=Math.max(a.c,b.c);
-    for(let c=c0;c<=c1;c++)if(!clearCol(c,r0,hr-1))return false;
-    if(a.y>hi&&!clearCol(a.c,hr,ra-1))return false;   // jumping up out of a low spot
-    if(b.y>hi&&!clearCol(b.c,hr,rb-1))return false;   // dropping down into one
-    return true;
-  };
-  for(const a of nodes)for(let c=Math.max(0,a.c-4);c<=Math.min(COLS-1,a.c+8);c++)for(const b of byCol[c])if(b!==a&&canMove(a,b)){a.out.push(b);b.inn.push(a)}
-  for(const [t,d] of rides){t.out.push(d);d.inn.push(t);d.out.push(t);t.inn.push(d)}
-  const start=byCol[3].find(n=>n.y===startY)||byCol[3][0];if(!start)return{ok:false,why:'start'};
-  const fw=new Set([start]),q=[start];
-  while(q.length){const a=q.shift();for(const b of a.out)if(!fw.has(b)){fw.add(b);q.push(b)}}
-  const goals=nodes.filter(n=>n.c>=goalC);
-  if(!goals.some(n=>fw.has(n))){let far=0;for(const n of fw)far=Math.max(far,n.c);return{ok:false,why:'unreachable',far}}
-  const bw=new Set(goals),q2=[...goals];
-  while(q2.length){const a=q2.shift();for(const b of a.inn)if(!bw.has(b)){bw.add(b);q2.push(b)}}
-  for(const n of fw)if(!bw.has(n))return{ok:false,why:'trap',c:n.c,y:n.y};
-  return{ok:true,nodes:nodes.length};
-}
+function validateIceGraph(){return graphCheck(startY,Math.floor(ARENA_L/TS),false)}
 // which kind of ice is under the feet: 2 = glassy frozen floor, 1 = ice block, 0 = none
 function iceUnder(b){
   const r=Math.floor((b.y+b.h+1)/TS);if(r<0||r>=ROWS)return 0;let s=0;
