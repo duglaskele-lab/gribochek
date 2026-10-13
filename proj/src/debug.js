@@ -7,6 +7,7 @@ window.__grib={plan:()=>PLAN,info:()=>GEN_INFO,secrets:()=>secretZones.length,
     get arena(){return[ARENA_L,ARENA_R]},get grid(){return grid},get cam(){return[camX,camY]},get checks(){return checks},get items(){return items},get shops(){return shops},get zones(){return secretZones},get covers(){return covers},get switches(){return switches},buy:id=>buy(id),openShop:()=>openShop(),setSpores:n=>{spores=n},validate:()=>(LV().validate||validateLevel)(),bossPrep:()=>bossPrep(),get flow(){return flow},setPoison:v=>{poisonLvl=v},
     hit:(i,d)=>{B.lastHead=B.heads[i];hitBoss(d,B.heads[i].x,B.heads[i].y)},get state(){return state},get eshots(){return eshots},get poison(){return poisonLvl},get dead(){return bossDead},
     lock:()=>{if(!arenaLocked)startBossFight()},
+    ev:src=>eval(src),   // run code inside the game's closure (tests: call a boss's own functions, e.g. ev('mtTentacles(3)'))
     // ---- for tests: run the game without waiting for real time ----
     freeze:on=>{DBG_FREEZE=on!==false},            // stop the real-time loop from stepping (rendering goes on)
     sim:(sec,each)=>{const n=Math.round(sec*120);for(let i=0;i<n;i++){if(each&&each(i)===false)break;if(state==='play')step(1/120)}},

@@ -80,6 +80,7 @@ function drawShop(sh){
 }
 function drawDoor(){
   const d=door, x=d.x, y=d.y; if(x<camX-200||x>camX+VW+200) return;
+  if(LV().drawDoor){LV().drawDoor(d);return}   // level def drawDoor(d): its own way out (the city's bunker door)
   if(BIOME==='swamp'&&!bossDead) return;   // the stump door rises where the hydra sat
   ctx.strokeStyle=INK;ctx.lineWidth=3.5;
   if(BIOME!=='desert'){

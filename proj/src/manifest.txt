@@ -53,6 +53,14 @@ levels/ice/foes.js
 levels/ice/snowman.js
 levels/ice/music.js
 levels/ice/level.js
+# level 5: ruined city
+levels/city/gen.js
+levels/city/draw.js
+levels/city/foes.js
+levels/city/ratking.js
+levels/city/tank.js
+levels/city/music.js
+levels/city/level.js
 
 debug.js
 main.js
